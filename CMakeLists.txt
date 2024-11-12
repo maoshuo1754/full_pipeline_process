@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.27)
 project(reader CUDA CXX)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 # Enable CUDA language
@@ -12,10 +13,11 @@ set(CMAKE_CUDA_ARCHITECTURES 80)
 
 set(SOURCE_FILES
         queue.h
-        reader.cu
-        reader.h
-#        myThreadPool.h
-#        myThreadPool.cu
+#        reader.cu
+#        reader.h
+        myThreadPool.h
+        myThreadPool.cu
+        main.cu
 )
 
 add_executable(reader ${SOURCE_FILES})
@@ -32,8 +34,8 @@ target_link_libraries(reader
 # Include CUDA Toolkit headers
 target_include_directories(reader PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
 
-# Set CUDA separable compilation
-set_target_properties(reader PROPERTIES
-        CUDA_SEPARABLE_COMPILATION ON
-)
+## Set CUDA separable compilation
+#set_target_properties(reader PROPERTIES
+#        CUDA_SEPARABLE_COMPILATION ON
+#)
 

@@ -19,20 +19,14 @@
 
 using namespace std;
 
-// 模式串：要匹配的字节数组
-const unsigned char pattern[] = {
-        0x07, 0x24, 0x95, 0xbc,
-        0x00, 0x09, 0x00, 0x09,
-};
+
 
 class Reader{
 public:
     Reader();
     ~Reader();
     void run();
-    void buildPrefixTable();
     void kmpSearch(int block_index);
-    unsigned int extractSeqNum(const char* data);
 
 private:
     SharedQueue* sharedQueue;
@@ -42,10 +36,7 @@ private:
     char *d_data;
     unsigned int prevSeqNum;
 
-    void kmpSearchOnGPU();
-    int threadsPerBlock;
-    int blocksPerGrid;
-    unsigned int FourChars2Uint(char* startAddr);
+    static unsigned int FourChars2Uint(const char* startAddr);
 };
 
 #endif //READER_READER_H

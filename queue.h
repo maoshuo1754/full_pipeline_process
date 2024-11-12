@@ -10,6 +10,7 @@
 #define QUEUE_SIZE 4                // 队列大小
 #define BLOCK_SIZE (256*1024*1024)  // 256MB
 #define INDEX_SIZE (1024)           // 1KB
+#define SEQ_OFFSET 16               // 序列号相对于包头的偏移是16个Bytes
 
 struct SharedQueue {
     sem_t mutex;
@@ -19,6 +20,12 @@ struct SharedQueue {
     int write_index;
     char buffer[QUEUE_SIZE * BLOCK_SIZE];
     char index_buffer[QUEUE_SIZE * INDEX_SIZE];
+};
+
+// 模式串：要匹配的字节数组
+const unsigned char pattern[] = {
+        0x07, 0x24, 0x95, 0xbc,
+        0x00, 0x09, 0x00, 0x09,
 };
 
 #endif // QUEUE_H
