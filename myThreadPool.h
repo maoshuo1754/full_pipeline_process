@@ -35,14 +35,19 @@ private:
     SharedQueue* sharedQueue;
     unsigned int prevSeqNum;
     bool unEnd;
+    uint64_t uint64Pattern;
 
+    void allocateThreadMemory();
+    void freeThreadMemory();
     void threadLoop(int threadID);
     void copyToThreadMemory();
     void notifyThread(int threadID);
     void waitForProcessingSignal(int threadID);
 //    void processCUDAData(void* cudaMemory, int threadID);
-    void processData(int threadID);
+//    void processData(int threadID);
     static unsigned int FourChars2Uint(const char *startAddr);
+
+    void processData(int threadID, size_t *d_headPositions, bool *d_result);
 };
 
 #endif // THREADPOOL_H
