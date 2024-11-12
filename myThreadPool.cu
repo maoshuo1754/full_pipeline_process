@@ -74,26 +74,28 @@ void ThreadPool::waitForProcessingSignal(int threadID) {
 
 void ThreadPool::copyToThreadMemory() {
     int block_index = sharedQueue->read_index;
-    std::cout << "Block index: " << block_index << std::endl << std::endl;
+//    std::cout << "Block index: " << block_index << std::endl << std::endl;
 
     unsigned int seqNum;
 
-    unsigned int indexValue, nextIndexValue;
+    unsigned int indexValue, nextIndexValue, packetLength;
     unsigned long copyStartAddr = block_index * BLOCK_SIZE; // 相对于1GB的复制起始地址
-    bool startFlag, endFlag;
+    bool startFlag;
 
     for (int i = 0; i < 128; i++) {
         size_t indexOffset = block_index * INDEX_SIZE + i * 4;
         indexValue     = FourChars2Uint(sharedQueue->index_buffer + indexOffset);
         nextIndexValue = FourChars2Uint(sharedQueue->index_buffer + indexOffset + 4);
-        auto packetLength =  nextIndexValue - indexValue;
 
         // 当前包是这个BLOCK的最后一个包，并且到BLOCK末尾都没结束
         if (*(uint64_t *) (sharedQueue->buffer + nextIndexValue) != *(uint64_t *) pattern){
             packetLength = indexValue - FourChars2Uint(sharedQueue->index_buffer + indexOffset - 4);
         }
+        else{
+            packetLength = nextIndexValue - indexValue;
+        }
 
-            // Check pattern match
+        // Check pattern match
         if (*(uint64_t *) (sharedQueue->buffer + indexValue) == *(uint64_t *) pattern) {
             seqNum = FourChars2Uint(sharedQueue->buffer + indexValue + SEQ_OFFSET);
 //            std::cout << "Sequence Number: " << seqNum << std::endl << "Index offset: " << indexOffset << ", Index value: " << indexValue << std::endl;;
@@ -106,16 +108,35 @@ void ThreadPool::copyToThreadMemory() {
             }
             prevSeqNum = seqNum;
 
-            uint8_t flagByte = static_cast<uint8_t>(sharedQueue->buffer[indexValue + 23]);
-            startFlag = flagByte & 0x02;
-            endFlag = flagByte & 0x01;
+            startFlag = static_cast<uint8_t>(sharedQueue->buffer[indexValue + 23]) & 0x02;
 
             if (startFlag) {
+                // 发送上一个脉组的数据
+                if (inPacket) {
+                    size_t copyLength = indexValue - copyStartAddr;
+//                    std::cout << "Copying " << copyLength << " bytes from address " << copyStartAddr << " to thread memory at " << currentAddrOffset[cur_thread_id] << std::endl;
+
+                    if ((currentAddrOffset[cur_thread_id] + copyLength) <= THREADS_MEM_SIZE) {  // Ensure within buffer bounds
+                        memcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id],
+                               sharedQueue->buffer + copyStartAddr,
+                               copyLength);
+                        currentAddrOffset[cur_thread_id] += copyLength;
+                    } else {
+                        std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
+                    }
+
+                    notifyThread(cur_thread_id);
+                    cur_thread_id = (cur_thread_id + 1) % numThreads;
+                    inPacket = false;
+                }
+
+                // 初始化当前脉冲的参数
                 inPacket = true;
                 currentPos[cur_thread_id] = 0;
                 currentAddrOffset[cur_thread_id] = 0;
+                headPositions[cur_thread_id].clear();
                 copyStartAddr = indexValue;
-                std::cout << "Start flag detected, starting at address: " << copyStartAddr << std::endl;
+//                std::cout << "Start flag detected, starting at address: " << copyStartAddr << std::endl;
             }
 
             if (inPacket) {
@@ -123,27 +144,10 @@ void ThreadPool::copyToThreadMemory() {
                 currentPos[cur_thread_id] += packetLength;
             }
 
-            if (endFlag && inPacket) {
-                size_t copyLength = indexValue + packetLength - copyStartAddr;
-                std::cout << "Copying " << copyLength << " bytes from address " << copyStartAddr << " to thread memory at " << currentAddrOffset[cur_thread_id] << std::endl;
-
-                if ((currentAddrOffset[cur_thread_id] + copyLength) <= THREADS_MEM_SIZE) {  // Ensure within buffer bounds
-                    memcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id],
-                           sharedQueue->buffer + copyStartAddr,
-                           copyLength);
-                    currentAddrOffset[cur_thread_id] += copyLength;
-                } else {
-                    std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
-                }
-
-                notifyThread(cur_thread_id);
-                cur_thread_id = (cur_thread_id + 1) % numThreads;
-                inPacket = false;
-            }
         } else {
             if (inPacket) {
                 size_t copyLength = (block_index + 1) * BLOCK_SIZE - copyStartAddr;
-                std::cout << "Copying " << copyLength << " bytes at end of block. to thread memory at " << currentAddrOffset[cur_thread_id] << std::endl;
+//                std::cout << "Copying " << copyLength << " bytes at end of block. to thread memory at " << currentAddrOffset[cur_thread_id] << std::endl;
 
                 if ((currentAddrOffset[cur_thread_id] + copyLength) <= THREADS_MEM_SIZE) {  // Ensure within buffer bounds
                     memcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id],
@@ -170,13 +174,22 @@ unsigned int ThreadPool::FourChars2Uint(const char* startAddr){
 }
 
 void ThreadPool::processData(int threadID) {
-    cout << "thread " << threadID << " start processing" << endl;
+    cout << "thread " << threadID << " start processing ";
     cout << "headPositions[threadID].size()：" << headPositions[threadID].size() << endl;
     char* data = threadsMemory[threadID];
     bool success = true;
     size_t head, prevHead;
+    unsigned int startSeq, endSeq;
     for (int i = 0; i < headPositions[threadID].size(); i++) {
+
         head = headPositions[threadID][i];
+
+        if (i == 0){
+            startSeq = FourChars2Uint(data + head + 16);
+        }
+        if (i == headPositions[threadID].size() - 1){
+            endSeq = FourChars2Uint(data + head + 16);
+        }
         if (i > 0){
             if (FourChars2Uint(data + head + 16) - FourChars2Uint(data + prevHead + 16) != 1){
                 success = false;
@@ -185,11 +198,12 @@ void ThreadPool::processData(int threadID) {
         }
         prevHead = head;
     }
+
     if (!success){
         cerr << "seq num verify failed!" << endl;
     }
     else{
-        cout << "seq num verify success!" << endl;
+        cout << "seq num verify success! From " << startSeq << " to " << endSeq << endl;
     }
     headPositions[threadID].clear();
 }
