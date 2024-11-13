@@ -25,7 +25,7 @@ private:
     std::vector<char*> threadsMemory;
     std::vector<std::vector<size_t>> headPositions;
     std::vector<cudaStream_t> streams;
-    std::vector<size_t> currentPos;
+    std::vector<size_t> currentPos;          // 记录每个包头的位置
     std::vector<size_t> currentAddrOffset;   // 记录当前数据复制的偏移
     int cur_thread_id;
     bool inPacket;  // 记录是否正在一个脉组中
@@ -35,9 +35,8 @@ private:
     bool stop;   //控制所有线程结束
     SharedQueue* sharedQueue;
     unsigned int prevSeqNum;
-    bool unEnd;
+    unsigned int prevIndexValue;
     uint64_t uint64Pattern;
-
 
 
     void allocateThreadMemory();
@@ -51,6 +50,8 @@ private:
     static unsigned int FourChars2Uint(const char *startAddr);
 
     void processData(int threadID, size_t *d_headPositions, bool *d_result);
+
+    void memcpyDataToThread(unsigned int startAddr, unsigned int endAddr);
 };
 
 #endif // THREADPOOL_H
