@@ -9,11 +9,13 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue)
           currentAddrOffset(numThreads, 0), numThreads(numThreads), inPacket(false),
           cur_thread_id(0), prevSeqNum(0), unEnd(false) { // 初始化 conditionVariables 和 mutexes
     // 创建并初始化线程
+    uint64Pattern = *(uint64_t *) pattern;
     for (size_t i = 0; i < numThreads; ++i) {
         threads.emplace_back(&ThreadPool::threadLoop, this, i);
 //        threadsMemory.emplace_back(new char[THREADS_MEM_SIZE]);
     }
     allocateThreadMemory();
+    cout << "Initial Finished" << endl;
 }
 
 ThreadPool::~ThreadPool() {
@@ -39,14 +41,20 @@ void ThreadPool::allocateThreadMemory() {
             return;
         }
         threadsMemory.emplace_back(d_memory);
+
+        cudaStream_t stream;
+        cudaStreamCreate(&stream);
+        streams.push_back(stream);
     }
 }
 
 void ThreadPool::freeThreadMemory() {
-    for (char* d_memory : threadsMemory) {
-        cudaFree(d_memory);  // 释放显存
+    for (size_t i = 0; i < numThreads; ++i) {
+        cudaFree(threadsMemory[i]);
+        cudaStreamDestroy(streams[i]);
     }
     threadsMemory.clear();
+    streams.clear();
 }
 
 void ThreadPool::run() {
@@ -118,7 +126,7 @@ void ThreadPool::copyToThreadMemory() {
         nextIndexValue = FourChars2Uint(sharedQueue->index_buffer + indexOffset + 4);
 
         // 当前包是这个BLOCK的最后一个包，并且到BLOCK末尾都没结束
-        if (*(uint64_t *) (sharedQueue->buffer + nextIndexValue) != *(uint64_t *) pattern){
+        if (*(uint64_t *) (sharedQueue->buffer + nextIndexValue) != uint64Pattern){
             packetLength = indexValue - FourChars2Uint(sharedQueue->index_buffer + indexOffset - 4);
         }
         else{
@@ -126,7 +134,7 @@ void ThreadPool::copyToThreadMemory() {
         }
 
         // Check pattern match
-        if (*(uint64_t *) (sharedQueue->buffer + indexValue) == *(uint64_t *) pattern) {
+        if (*(uint64_t *) (sharedQueue->buffer + indexValue) == uint64Pattern) {
             seqNum = FourChars2Uint(sharedQueue->buffer + indexValue + SEQ_OFFSET);
 //            std::cout << "Sequence Number: " << seqNum << std::endl << "Index offset: " << indexOffset << ", Index value: " << indexValue << std::endl;;
 
@@ -149,7 +157,11 @@ void ThreadPool::copyToThreadMemory() {
 //                        memcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id],
 //                               sharedQueue->buffer + copyStartAddr,
 //                               copyLength);
-                        cudaMemcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id], sharedQueue->buffer + copyStartAddr, copyLength, cudaMemcpyHostToDevice);
+                        cudaMemcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id],
+                                   sharedQueue->buffer + copyStartAddr,
+                                   copyLength,
+                                   cudaMemcpyHostToDevice);
+
                         currentAddrOffset[cur_thread_id] += copyLength;
                     } else {
                         std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
@@ -182,10 +194,15 @@ void ThreadPool::copyToThreadMemory() {
 //                    memcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id],
 //                           sharedQueue->buffer + copyStartAddr,
 //                           copyLength);
+
                     cudaMemcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id],
                                sharedQueue->buffer + copyStartAddr,
                                copyLength,
-                               cudaMemcpyHostToDevice);
+                               cudaMemcpyHostToDevice
+                               //streams[cur_thread_id]
+                               );
+
+
 
                     currentAddrOffset[cur_thread_id] += copyLength;
                 } else {
@@ -232,31 +249,38 @@ __global__ void verifySequenceNumbers(const char* data, const size_t* headPositi
 
 void ThreadPool::processData(int threadID, size_t* d_headPositions, bool* d_result) {
     int numHeads = headPositions[threadID].size();
-    bool result = true;
-    cout << "thread " << threadID << " start processing ";
-    cout << "headPositions[threadID].size()：" << numHeads << endl;
 
-    cudaMemcpy(d_headPositions, headPositions[threadID].data(), numHeads * sizeof(size_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_result, &result, sizeof(bool), cudaMemcpyHostToDevice);
+    cout << "thread " << threadID << " start processing " << endl;
+    cout << headPositions[threadID][0] << endl;
+    cout << headPositions[threadID][1] << endl;
 
-    verifySequenceNumbers<<<1, numHeads-1>>>(threadsMemory[threadID], d_headPositions, numHeads, d_result);
-    cudaMemcpy(&result, d_result, sizeof(bool), cudaMemcpyDeviceToHost);
 
-    if (result) {
-//        cout << "seq num verify success!" << endl;
-        char tmp[4];
-        unsigned int startSeq, endSeq;
-        cudaMemcpy(tmp, threadsMemory[threadID] + headPositions[threadID][0] + 16, sizeof (unsigned int), cudaMemcpyDeviceToHost);
-        startSeq = FourChars2Uint(tmp);
 
-        cudaMemcpy(tmp, threadsMemory[threadID] + headPositions[threadID][numHeads-1] + 16, sizeof (unsigned int), cudaMemcpyDeviceToHost);
-        endSeq = FourChars2Uint(tmp);
-
-        cout << "seq num verify success! From " << startSeq << " to " << endSeq << endl;
-
-    } else {
-        cerr << "seq num verify failed!" << endl;
-    }
+//    bool result = true;
+//    cout << "thread " << threadID << " start processing ";
+//    cout << "headPositions[threadID].size()：" << numHeads << endl;
+//
+//    cudaMemcpy(d_headPositions, headPositions[threadID].data(), numHeads * sizeof(size_t), cudaMemcpyHostToDevice);
+//    cudaMemcpy(d_result, &result, sizeof(bool), cudaMemcpyHostToDevice);
+//
+//    verifySequenceNumbers<<<1, numHeads-1>>>(threadsMemory[threadID], d_headPositions, numHeads, d_result);
+//    cudaMemcpy(&result, d_result, sizeof(bool), cudaMemcpyDeviceToHost);
+//
+//    if (result) {
+////        cout << "seq num verify success!" << endl;
+//        char tmp[4];
+//        unsigned int startSeq, endSeq;
+//        cudaMemcpy(tmp, threadsMemory[threadID] + headPositions[threadID][0] + 16, sizeof (unsigned int), cudaMemcpyDeviceToHost);
+//        startSeq = FourChars2Uint(tmp);
+//
+//        cudaMemcpy(tmp, threadsMemory[threadID] + headPositions[threadID][numHeads-1] + 16, sizeof (unsigned int), cudaMemcpyDeviceToHost);
+//        endSeq = FourChars2Uint(tmp);
+//
+//        cout << "seq num verify success! From " << startSeq << " to " << endSeq << endl;
+//
+//    } else {
+//        cerr << "seq num verify failed!" << endl;
+//    }
 
 
 //    char* data = threadsMemory[threadID];

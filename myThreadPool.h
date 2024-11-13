@@ -24,6 +24,7 @@ private:
     std::vector<std::thread> threads;
     std::vector<char*> threadsMemory;
     std::vector<std::vector<size_t>> headPositions;
+    std::vector<cudaStream_t> streams;
     std::vector<size_t> currentPos;
     std::vector<size_t> currentAddrOffset;   // 记录当前数据复制的偏移
     int cur_thread_id;
@@ -36,6 +37,8 @@ private:
     unsigned int prevSeqNum;
     bool unEnd;
     uint64_t uint64Pattern;
+
+
 
     void allocateThreadMemory();
     void freeThreadMemory();
