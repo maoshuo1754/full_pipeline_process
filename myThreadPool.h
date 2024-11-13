@@ -21,21 +21,21 @@ public:
 
 private:
     size_t numThreads;
-    std::vector<std::thread> threads;
-    std::vector<char*> threadsMemory;
-    std::vector<std::vector<size_t>> headPositions;
-    std::vector<cudaStream_t> streams;
-    std::vector<size_t> currentPos;          // 记录每个包头的位置
-    std::vector<size_t> currentAddrOffset;   // 记录当前数据复制的偏移
+    std::vector<std::thread> threads;           // 线程
+    std::vector<char*> threadsMemory;           // 每个线程独立的显存
+    std::vector<std::vector<size_t>> headPositions; // 每个线程独立空间中，packet的起始地址
+    std::vector<cudaStream_t> streams;          // 异步拷贝的时候用，现在没用
+    std::vector<size_t> currentPos;             // 记录每个包头的位置
+    std::vector<size_t> currentAddrOffset;      // 记录当前数据复制的偏移
     int cur_thread_id;
-    bool inPacket;  // 记录是否正在一个脉组中
+    bool inPacket;                              // 记录是否正在一个脉组中
     std::vector<std::condition_variable> conditionVariables;
     std::vector<std::mutex> mutexes;
     std::vector<bool> processingFlags;
     bool stop;   //控制所有线程结束
     SharedQueue* sharedQueue;
     unsigned int prevSeqNum;
-    unsigned int prevIndexValue;
+    unsigned int prevIndexValue; // 上一个packet相对于1GB的起始地址
     uint64_t uint64Pattern;
 
 

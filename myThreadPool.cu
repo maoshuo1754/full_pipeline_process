@@ -115,9 +115,11 @@ void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr
 //                    std::cout << "Copying " << copyLength << " bytes from address " << copyStartAddr << " to thread memory at " << currentAddrOffset[cur_thread_id] << std::endl;
 
     if ((currentAddrOffset[cur_thread_id] + copyLength) <= THREADS_MEM_SIZE) {  // Ensure within buffer bounds
-//                        memcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id],
-//                               sharedQueue->buffer + copyStartAddr,
-//                               copyLength);
+//        memcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id],
+//               sharedQueue->buffer + copyStartAddr,
+//               copyLength);
+
+        // 内存拷贝到显存
         cudaMemcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id],
                    sharedQueue->buffer + startAddr,
                    copyLength,
@@ -135,8 +137,8 @@ void ThreadPool::copyToThreadMemory() {
 
     unsigned int seqNum;
 
-    unsigned int indexValue;
-    unsigned long copyStartAddr = block_index * BLOCK_SIZE; // 相对于1GB的复制起始地址
+    unsigned int indexValue; // 当前packet相对于1GB的起始地址
+    unsigned long copyStartAddr = block_index * BLOCK_SIZE; // 当前Block相对于1GB的复制起始地址
     bool startFlag;
 
     for (int i = 0; i < 128; i++) {
@@ -175,7 +177,7 @@ void ThreadPool::copyToThreadMemory() {
 
             if (inPacket) {
                 if (block_index == 0 && i == 0){
-                    currentPos[cur_thread_id] += (indexValue + 4 * BLOCK_SIZE - prevIndexValue) % (4 * BLOCK_SIZE);
+                    currentPos[cur_thread_id] += (indexValue + QUEUE_SIZE * BLOCK_SIZE - prevIndexValue) % (QUEUE_SIZE * BLOCK_SIZE);
                 } else {
                     currentPos[cur_thread_id] += (indexValue - prevIndexValue);
                 }
@@ -192,8 +194,6 @@ void ThreadPool::copyToThreadMemory() {
     }
     sharedQueue->read_index = (sharedQueue->read_index + 1) % QUEUE_SIZE;
 }
-
-
 
 unsigned int ThreadPool::FourChars2Uint(const char* startAddr){
     return     static_cast<uint8_t>(startAddr[0]) << 24
