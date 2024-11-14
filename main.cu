@@ -4,7 +4,8 @@
 
 #include "myThreadPool.h"
 
-#define NUM_THREADS 8  // 线程数
+#define NUM_THREADS 8 // 线程数
+
 
 int main(){
     int shmid = shmget(SHM_KEY, sizeof(SharedQueue), 0666 | IPC_CREAT);

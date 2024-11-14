@@ -6,9 +6,11 @@
 #include <condition_variable>
 #include <mutex>
 #include "memory"
-#include "queue.h" // 包含 SharedQueue 的定义
+#include "queue.h"      // 包含 SharedQueue 的定义
+#include "CudaMatrix.h" // 包含 CudaMatrix 的定义
 
-#define THREADS_MEM_SIZE  (2ULL * 1024 * 1024 * 1024)  // 每个线程的空间2GB
+#define THREADS_MEM_SIZE  (2ULL * 768 * 1024 * 1024)  // 每个线程的空间2GB 768
+#define WAVE_NUM 32    // 波束数
 
 using namespace std;
 
@@ -27,7 +29,7 @@ private:
     std::vector<cudaStream_t> streams;          // 异步拷贝的时候用，现在没用
     std::vector<size_t> currentPos;             // 记录每个包头的位置
     std::vector<size_t> currentAddrOffset;      // 记录当前数据复制的偏移
-    int cur_thread_id;
+    int cur_thread_id;                          // 当前线程id (0~numThreads-1)
     bool inPacket;                              // 记录是否正在一个脉组中
     std::vector<std::condition_variable> conditionVariables;
     std::vector<std::mutex> mutexes;
@@ -49,7 +51,7 @@ private:
 //    void processData(int threadID);
     static unsigned int FourChars2Uint(const char *startAddr);
 
-    void processData(int threadID, size_t *d_headPositions, bool *d_result);
+    void processData(int threadID);
 
     void memcpyDataToThread(unsigned int startAddr, unsigned int endAddr);
 };

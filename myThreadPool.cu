@@ -70,17 +70,15 @@ void ThreadPool::run() {
 }
 
 void ThreadPool::threadLoop(int threadID) {
-    size_t* d_headPositions;
-    bool* d_result;
-    cudaMalloc(&d_headPositions, 300 * sizeof(size_t));
-    cudaMalloc(&d_result, sizeof(bool));
+
+
 
     while (!stop) {
         waitForProcessingSignal(threadID);
 
         if (stop) break; // 退出循环
 
-        processData(threadID, d_headPositions, d_result); // 处理 CUDA 内存中的数据
+        processData(threadID); // 处理 CUDA 内存中的数据
 
         // 处理完毕后重置标志
         {
@@ -89,8 +87,7 @@ void ThreadPool::threadLoop(int threadID) {
         }
     }
 
-    cudaFree(d_headPositions);
-    cudaFree(d_result);
+
 }
 
 
@@ -149,7 +146,6 @@ void ThreadPool::copyToThreadMemory() {
         if (*(uint64_t *) (sharedQueue->buffer + indexValue) == uint64Pattern) {
             seqNum = FourChars2Uint(sharedQueue->buffer + indexValue + SEQ_OFFSET);
             if (seqNum != prevSeqNum + 1 && prevSeqNum != 0) {
-                currentAddrOffset[cur_thread_id] = 0;
                 inPacket = false;
                 std::cerr << "Error! Sequence number not continuous!" << std::endl;
             }
@@ -209,6 +205,13 @@ __device__ unsigned int FourChars2Uint(const char* startAddr) {
            | static_cast<uint8_t>(startAddr[3]);
 }
 
+
+
+//float TwoChars2float(const char* startAddr) {
+//    return static_cast<float>(static_cast<uint8_t>(startAddr[0]) << 8
+//                              | static_cast<uint8_t>(startAddr[1]));
+//}
+
 __global__ void verifySequenceNumbers(const char* data, const size_t* headPositions, int numHeads, bool* result) {
     int idx = threadIdx.x;
 
@@ -225,83 +228,99 @@ __global__ void verifySequenceNumbers(const char* data, const size_t* headPositi
     }
 }
 
-void ThreadPool::processData(int threadID, size_t* d_headPositions, bool* d_result) {
-    int numHeads = headPositions[threadID].size();
-
-    cout << "thread " << threadID << " start processing " << numHeads << endl;
-//    cout << headPositions[threadID][0] << endl;
-//    cout << headPositions[threadID][1] << endl;
-    if (headPositions[threadID][0]) {
-        cerr  << "data start wrong!, not 0" << endl;
-    }
-
-    for (int i = 0; i < numHeads - 1; i++){
-        if (headPositions[threadID][i+1] - headPositions[threadID][i] != 3999904){
-            cout << i << endl;
-            cout << headPositions[threadID][i] << " "  << headPositions[threadID][i+1] <<endl;
-            cout << "data unpack failed!" << endl;
-        }
-    }
-
-
-
-    bool result = true;
-    cout << "thread " << threadID << " start processing ";
-    cout << "headPositions[threadID].size()：" << numHeads << endl;
-
-    cudaMemcpy(d_headPositions, headPositions[threadID].data(), numHeads * sizeof(size_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_result, &result, sizeof(bool), cudaMemcpyHostToDevice);
-
-    verifySequenceNumbers<<<1, numHeads-1>>>(threadsMemory[threadID], d_headPositions, numHeads, d_result);
-    cudaMemcpy(&result, d_result, sizeof(bool), cudaMemcpyDeviceToHost);
-
-    if (result) {
-//        cout << "seq num verify success!" << endl;
-        char tmp[4];
-        unsigned int startSeq, endSeq;
-        cudaMemcpy(tmp, threadsMemory[threadID] + headPositions[threadID][0] + 16, sizeof (unsigned int), cudaMemcpyDeviceToHost);
-        startSeq = FourChars2Uint(tmp);
-
-        cudaMemcpy(tmp, threadsMemory[threadID] + headPositions[threadID][numHeads-1] + 16, sizeof (unsigned int), cudaMemcpyDeviceToHost);
-        endSeq = FourChars2Uint(tmp);
-
-        cout << "seq num verify success! From " << startSeq << " to " << endSeq << endl;
-
-    } else {
-        cerr << "seq num verify failed!" << endl;
-    }
-
-
-//    char* data = threadsMemory[threadID];
-//    bool success = true;
-//    size_t head, prevHead;
-//    unsigned int startSeq, endSeq;
-//    for (int i = 0; i < headPositions[threadID].size(); i++) {
-//
-//        head = headPositions[threadID][i];
-//
-//        if (i == 0){
-//            startSeq = FourChars2Uint(data + head + 16);
-//        }
-//        if (i == headPositions[threadID].size() - 1){
-//            endSeq = FourChars2Uint(data + head + 16);
-//        }
-//        if (i > 0){
-//            if (FourChars2Uint(data + head + 16) - FourChars2Uint(data + prevHead + 16) != 1){
-//                success = false;
-//                break;
-//            }
-//        }
-//        prevHead = head;
-//    }
-//
-//    if (!success){
-//        cerr << "seq num verify failed!" << endl;
-//    }
-//    else{
-//        cout << "seq num verify success! From " << startSeq << " to " << endSeq << endl;
-//    }
-    headPositions[threadID].clear();
+// TwoChars2float 函数，将两个字符转换为 float 类型
+__device__ float TwoChars2float(const char* startAddr) {
+    return static_cast<float>(  static_cast<uint8_t>(startAddr[0]) << 8
+                              | static_cast<uint8_t>(startAddr[1]));
 }
 
+// 核函数：unpackDatabuf2CudaMatrices
+// 该核函数用于将数据从字符数组转换为 cufftComplex 数组
+__global__ void unpackDatabuf2CudaMatrices(const char* data, const size_t* headPositions,
+                                           int* d_numHeads, int* d_rangeNum, cufftComplex* pComplex) {
+
+    int idx = threadIdx.x;
+    int numHeads = *d_numHeads;  // 获取头的数量
+
+    if (idx < numHeads) {
+        int rangeNum = *d_rangeNum;  // 获取 rangeNum 的值
+        auto blockIQstartAddr = data + headPositions[idx] + 19 * 4; // 计算数据起始地址
+
+        // 遍历 rangeNum 和 WAVE_NUM，按块处理数据
+        for (int i = 0; i < rangeNum; i++) {
+            for (int j = 0; j < WAVE_NUM; j++) {
+                int blockOffset = i * WAVE_NUM * 4 + j * 4; // 每个数据块的偏移
+                auto newindex = j * numHeads * rangeNum + idx * rangeNum + i;  // 计算新的索引位置
+
+//                // 检查是否越界访问
+//                if (idx < numHeads - 1 && blockOffset + 4 > headPositions[idx + 1] - headPositions[idx] - 19 * 4) {
+//                    printf("Out of range access at thread %d, i=%d, j=%d\n", idx, i, j);
+//                }
+//
+//                if (newindex >= numHeads * rangeNum) {
+//                    printf("Out of range access at thread %d, i=%d, j=%d\n", idx, i, j);
+//                }
+
+                // 将转换后的数据存入 pComplex 数组
+                pComplex[newindex].x = TwoChars2float(blockIQstartAddr + blockOffset);
+                pComplex[newindex].y = TwoChars2float(blockIQstartAddr + blockOffset + 2);
+            }
+        }
+    }
+}
+
+// 检查 CUDA 错误的函数
+void checkCudaErrors(cudaError_t result) {
+    if (result != cudaSuccess) {
+        throw runtime_error(cudaGetErrorString(result));
+    }
+}
+
+// 线程池中的数据处理函数
+void ThreadPool::processData(int threadID) {
+    size_t* d_headPositions;
+    int numHeads = headPositions[threadID].size();
+
+    // 分配并复制 headPositions 数据到设备内存
+    cudaMalloc(&d_headPositions, 300 * sizeof(size_t));
+    cudaMemcpy(d_headPositions, headPositions[threadID].data(), numHeads * sizeof(size_t), cudaMemcpyHostToDevice);
+
+    cout << "thread " << threadID << " start processing " << numHeads << endl;
+
+    // 计算 headLength 和 rangeNum
+    int headLength = headPositions[threadID][1] - headPositions[threadID][0];
+    int rangeNum = floor((headLength - 19 * 4) / 32.0 / 4.0);
+
+    // 将 rangeNum 和 numHeads 复制到设备内存
+    int* d_rangeNum;
+    cudaMalloc(&d_rangeNum, sizeof(int));
+    cudaMemcpy(d_rangeNum, &rangeNum, sizeof(int), cudaMemcpyHostToDevice);
+
+    int* d_numHeads;
+    cudaMalloc(&d_numHeads, sizeof(int));
+    cudaMemcpy(d_numHeads, &numHeads, sizeof(int), cudaMemcpyHostToDevice);
+
+    // 创建 CudaMatrix 对象和 pComplex 指针
+    vector<CudaMatrix> matrices(WAVE_NUM);
+    cufftComplex* pComplex;
+
+    // 分配内存给 pComplex
+    checkCudaErrors(cudaMalloc(&pComplex, WAVE_NUM * sizeof(cufftComplex) * numHeads * rangeNum));
+
+    // 启动 CUDA 核函数进行数据处理
+    unpackDatabuf2CudaMatrices<<<1, numHeads>>>(threadsMemory[threadID], d_headPositions, d_numHeads, d_rangeNum, pComplex);
+
+    // 同步 CUDA 设备
+    checkCudaErrors(cudaDeviceSynchronize());
+
+    // 释放内存
+    checkCudaErrors(cudaFree(pComplex));
+
+    // 清理 headPositions 数据和设备内存
+    headPositions[threadID].clear();
+    cudaFree(d_headPositions);
+    cudaFree(d_rangeNum);
+
+    cout << "thread " << threadID << " process finished" << endl;
+}
 

@@ -13,6 +13,8 @@ set(CMAKE_CUDA_ARCHITECTURES 80)
 
 set(SOURCE_FILES
         queue.h
+        CudaMatrix.cu
+        CudaMatrix.h
 #        reader.cu
 #        reader.h
         myThreadPool.h
