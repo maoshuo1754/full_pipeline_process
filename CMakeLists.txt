@@ -15,8 +15,8 @@ set(SOURCE_FILES
         queue.h
         CudaMatrix.cu
         CudaMatrix.h
-#        reader.cu
-#        reader.h
+        utils.cu
+        utils.h
         myThreadPool.h
         myThreadPool.cu
         main.cu

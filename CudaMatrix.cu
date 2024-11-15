@@ -114,6 +114,16 @@ void CudaMatrix::copyFromHost(const vector<cufftComplex> &hostData) {
     checkCudaErrors(cudaMemcpy(data, hostData.data(), sizeof(cufftComplex) * nrows * ncols, cudaMemcpyHostToDevice));
 }
 
+void CudaMatrix::copyFromHost(int rows, int cols, const cufftComplex* hostData) {
+    if (rows != nrows || cols != nrows) {
+        deallocateMemory();
+        nrows = rows;
+        ncols = cols;
+        allocateMemory();
+    }
+    checkCudaErrors(cudaMemcpy(data, hostData, sizeof(cufftComplex) * nrows * ncols, cudaMemcpyHostToDevice));
+}
+
 // Copy data from device to host
 void CudaMatrix::copyToHost(vector<cufftComplex> &hostData) const {
     hostData.resize(nrows * ncols);
@@ -388,11 +398,22 @@ CudaMatrix CudaMatrix::fft(bool inplace) const{
 
 CudaMatrix CudaMatrix::fft_by_col(bool inplace){
     cufftHandle plan;
-    checkCufftErrors(    cufftPlanMany(&plan, 1, &nrows, // Rank and size of the FFT
-                                       NULL, 1, ncols,   // Input data layout
-                                       NULL, 1, ncols,   // Output data layout
-                                       CUFFT_C2C, ncols)   // FFT type and number of FFTs
-                                       );
+
+    // 按列做FFT
+    int batch = ncols;
+    int inembed[] = {ncols};  // 每行数据的大小
+    int onembed[] = {ncols};  // 每行数据的大小
+    int istride = ncols;          // 每个元素步幅
+    int idist = 1;                // 每行之间的距离
+    int ostride = ncols;          // 每个元素步幅
+    int odist = 1;                // 每行之间的距离
+    int n[] = {nrows};            // 每行数据的FFT大小
+
+    checkCufftErrors(cufftPlanMany(&plan, 1, n, // Rank and size of the FFT
+                           inembed, istride, idist,   // Input data layout
+                           onembed, ostride, odist,   // Output data layout
+                           CUFFT_C2C, batch)   // FFT type and number of FFTs
+    );
     if (inplace) {
         checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_FORWARD));
         checkCufftErrors(cufftDestroy(plan));
@@ -404,6 +425,7 @@ CudaMatrix CudaMatrix::fft_by_col(bool inplace){
         return result;
     }
 }
+
 
 
 __global__ void zeroPadAndCopy(cufftComplex* idata, cufftComplex* odata, int nrows, int ncols, int nPoints) {

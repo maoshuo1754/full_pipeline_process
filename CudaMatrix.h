@@ -15,10 +15,11 @@
 #include <thrust/functional.h>
 
 class CudaMatrix {
-public:
+private:
     int nrows, ncols;
     cufftComplex* data;
 
+public:
     CudaMatrix() : nrows(0), ncols(0), data(nullptr) {}
     CudaMatrix(int rows, int cols);
     CudaMatrix(const std::vector<std::vector<cufftComplex>>& hostData);
@@ -37,6 +38,7 @@ public:
     void setElement(int x, int y, cufftComplex value);
 
     void copyFromHost(const std::vector<cufftComplex>& hostData);
+    void copyFromHost(int rows, int cols, const cufftComplex* hostData);
     void copyToHost(std::vector<cufftComplex>& hostData) const;
     std::vector<std::vector<cufftComplex>> to2DVector() const;
     void fillWithRandomValues();

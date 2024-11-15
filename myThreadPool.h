@@ -10,9 +10,12 @@
 #include "memory"
 #include "queue.h"      // 包含 SharedQueue 的定义
 #include "CudaMatrix.h" // 包含 CudaMatrix 的定义
+#include "utils.h"
 
 #define THREADS_MEM_SIZE  (2ULL * 768 * 1024 * 1024)  // 每个线程的空间2GB 768
 #define WAVE_NUM 32    // 波束数
+
+// TODO: 这里数据更改后需要变
 #define NUM_PULSE 256     // 一个脉组中的脉冲数
 #define RANGE_NUM 31250   // 一个脉冲中的距离单元数
 
@@ -46,10 +49,12 @@ private:
     unsigned int prevIndexValue; // 上一个packet相对于1GB的起始地址
     uint64_t uint64Pattern;
 
-
     char timebuf[100];
     ofstream logFile;
 
+    CudaMatrix PCcoefMatrix;    // 脉压系数矩阵
+    int NFFT;                   // 脉压时做fft的点数
+    int numSamples;             // 脉压采样点数
 
     void allocateThreadMemory();
     void freeThreadMemory();
@@ -61,9 +66,13 @@ private:
 //    void processData(int threadID);
     static unsigned int FourChars2Uint(const char *startAddr);
 
-    void processData(int threadID, cufftComplex* pComplex);
+    void processData(int threadID, cufftComplex* pComplex, vector<CudaMatrix>& matrices);
 
     void memcpyDataToThread(unsigned int startAddr, unsigned int endAddr);
+
+    void initPCcoefMatrix();
+
+    void processPulseGroupData(vector<CudaMatrix> &matrices);
 };
 
 void checkCudaErrors(cudaError_t result);
