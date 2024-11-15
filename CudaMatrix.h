@@ -23,6 +23,7 @@ public:
     CudaMatrix(int rows, int cols);
     CudaMatrix(const std::vector<std::vector<cufftComplex>>& hostData);
     CudaMatrix(int rows, int cols, std::vector<cufftComplex> hostData);
+    CudaMatrix(int rows, int cols, cufftComplex* hostData);
     CudaMatrix(const CudaMatrix& other); // Copy constructor
     CudaMatrix(CudaMatrix&& other) noexcept; // Move constructor
     ~CudaMatrix();

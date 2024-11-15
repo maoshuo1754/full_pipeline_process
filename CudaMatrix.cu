@@ -80,6 +80,11 @@ CudaMatrix::CudaMatrix(int rows, int cols, std::vector<cufftComplex> hostData) :
     checkCudaErrors(cudaMemcpy(data, hostData.data(), sizeof(cufftComplex) * nrows * ncols, cudaMemcpyHostToDevice));
 }
 
+CudaMatrix::CudaMatrix(int rows, int cols, cufftComplex* hostData) : nrows(rows), ncols(cols) {
+    checkCudaErrors(cudaMalloc(&data, sizeof(cufftComplex) * nrows * ncols));
+    checkCudaErrors(cudaMemcpy(data, hostData, sizeof(cufftComplex) * nrows * ncols, cudaMemcpyHostToDevice));
+}
+
 // Copy constructor
 CudaMatrix::CudaMatrix(const CudaMatrix& other) : nrows(other.nrows), ncols(other.ncols), data(nullptr) {
 //    cout <<"copy constructor" << endl;

@@ -4,7 +4,7 @@
 
 #include "myThreadPool.h"
 
-#define NUM_THREADS 8 // 线程数
+#define NUM_THREADS 10// 线程数
 
 
 int main(){
