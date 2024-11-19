@@ -379,24 +379,14 @@ CudaMatrix& CudaMatrix::operator=(CudaMatrix&& other) noexcept {
     return *this;
 }
 
-CudaMatrix CudaMatrix::fft(bool inplace) const{
-    if (inplace) {
-        cufftHandle plan;
-        checkCufftErrors(cufftPlan1d(&plan, ncols, CUFFT_C2C, nrows));
-        checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_FORWARD));
-        checkCufftErrors(cufftDestroy(plan));
-        return {};
-    } else {
-        CudaMatrix result(nrows, ncols);
-        cufftHandle plan;
-        checkCufftErrors(cufftPlan1d(&plan, ncols, CUFFT_C2C, nrows));
-        checkCufftErrors(cufftExecC2C(plan, data, result.data, CUFFT_FORWARD));
-        checkCufftErrors(cufftDestroy(plan));
-        return result;
-    }
+void CudaMatrix::fft() const{
+    cufftHandle plan;
+    checkCufftErrors(cufftPlan1d(&plan, ncols, CUFFT_C2C, nrows));
+    checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_FORWARD));
+    checkCufftErrors(cufftDestroy(plan));
 }
 
-CudaMatrix CudaMatrix::fft_by_col(bool inplace){
+void CudaMatrix::fft_by_col(){
     cufftHandle plan;
 
     // 按列做FFT
@@ -414,16 +404,10 @@ CudaMatrix CudaMatrix::fft_by_col(bool inplace){
                            onembed, ostride, odist,   // Output data layout
                            CUFFT_C2C, batch)   // FFT type and number of FFTs
     );
-    if (inplace) {
-        checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_FORWARD));
-        checkCufftErrors(cufftDestroy(plan));
-        return {};
-    } else {
-        CudaMatrix result(nrows, ncols);
-        checkCufftErrors(cufftExecC2C(plan, data, result.data, CUFFT_FORWARD));
-        checkCufftErrors(cufftDestroy(plan));
-        return result;
-    }
+
+    checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_FORWARD));
+    checkCufftErrors(cufftDestroy(plan));
+
 }
 
 
@@ -443,7 +427,7 @@ __global__ void zeroPadAndCopy(cufftComplex* idata, cufftComplex* odata, int nro
     }
 }
 
-CudaMatrix CudaMatrix::fft_N(int nPoints, bool inplace) {
+void CudaMatrix::fft_N(int nPoints) {
     if (nPoints < ncols) {
         throw std::runtime_error(
                 "Number of FFT points must be greater than or equal to the number of columns in the matrix.");
@@ -471,11 +455,7 @@ CudaMatrix CudaMatrix::fft_N(int nPoints, bool inplace) {
     // Clean up
     checkCufftErrors(cufftDestroy(plan));
 
-    if(inplace){
-        *this = std::move(result);
-        return {};
-    }
-    return result;
+    *this = std::move(result);
 }
 
 
@@ -489,30 +469,17 @@ struct ScaleFunctor {
     }
 };
 
-CudaMatrix CudaMatrix::ifft(bool inplace) const {
+void CudaMatrix::ifft() const {
     cufftHandle plan;
     checkCufftErrors(cufftPlan1d(&plan, ncols, CUFFT_C2C, nrows));
 
+    checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_INVERSE));
+    checkCufftErrors(cufftDestroy(plan));
+    // Scale the result by 1/ncols to get the correct IFFT result
+    float scale = 1.0f / ncols;
+    thrust::device_ptr<cufftComplex> thrust_data(data);
+    thrust::transform(thrust_data, thrust_data + nrows * ncols, thrust_data, ScaleFunctor(scale));
 
-    if (inplace) {
-        checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_INVERSE));
-        checkCufftErrors(cufftDestroy(plan));
-        // Scale the result by 1/ncols to get the correct IFFT result
-        float scale = 1.0f / ncols;
-        thrust::device_ptr<cufftComplex> thrust_data(data);
-        thrust::transform(thrust_data, thrust_data + nrows * ncols, thrust_data, ScaleFunctor(scale));
-        return {};
-    } else {
-        CudaMatrix result(nrows, ncols);
-        checkCufftErrors(cufftExecC2C(plan, data, result.data, CUFFT_INVERSE));
-        checkCufftErrors(cufftDestroy(plan));
-        // Scale the result by 1/ncols to get the correct IFFT result
-        float scale = 1.0f / ncols;
-        thrust::device_ptr<cufftComplex> thrust_result(result.data);
-        thrust::transform(thrust_result, thrust_result + nrows * ncols, thrust_result, ScaleFunctor(scale));
-
-        return result;
-    }
 }
 
 
@@ -572,67 +539,78 @@ void CudaMatrix::writeMatTxt(const std::string &filePath) const {
     outfile.close();
 }
 
-__global__ void cfarKernel(const cufftComplex* data, cufftComplex* cfar_signal, int nrows, int ncols, double alpha, int numGuardCells, int numRefCells) {
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void cfarKernel(const cufftComplex *data, cufftComplex *cfar_signal, int nrows, int ncols, double alpha, int numGuardCells, int numRefCells) {
+    int row = blockIdx.y;
+    double noise_level = 0.0;
+    int total_training_cells = numGuardCells + numRefCells;
+    int num_ref_cells;
 
-    if (row < nrows && col < ncols) {
-        int total_training_cells = numGuardCells + numRefCells;
-
-        double noise_level = 0.0;
-        int num_ref_cells;
-
-        if (col < total_training_cells) {
-            for (int i = col + numGuardCells + 1; i <= col + numGuardCells + numRefCells; ++i) {
-                if (i < ncols) {
+    if (row < nrows) {
+        for (int col = 0; col < ncols; ++col) {
+            if (col == 0) {
+                for (int i = numGuardCells + 1; i <= total_training_cells; ++i) {
                     noise_level += data[row * ncols + i].x;
                 }
+                num_ref_cells = numRefCells;
             }
-            num_ref_cells = numRefCells;
-        } else if (col >= ncols - total_training_cells) {
-            for (int i = col - numRefCells - numGuardCells; i < col - numGuardCells; ++i) {
-                if (i >= 0) {
+            else if (col < total_training_cells) {
+                noise_level = noise_level + data[row * ncols + col + total_training_cells].x
+                              - data[row * ncols + col + numGuardCells].x;
+
+            }
+            else if (col == total_training_cells) {
+                for (int i = 0; i < numRefCells; ++i) {
                     noise_level += data[row * ncols + i].x;
                 }
+                noise_level = noise_level + data[row * ncols + col + total_training_cells].x
+                              - data[row * ncols + col + numGuardCells].x;
+                num_ref_cells = 2 * numRefCells;
             }
-            num_ref_cells = numRefCells;
-        } else {
-            for (int i = col - total_training_cells; i < col - total_training_cells + numRefCells; ++i) {
-                noise_level += data[row * ncols + i].x;
+            else if (col < ncols - total_training_cells) {
+                noise_level = noise_level + data[row * ncols + col - 1 - numGuardCells].x
+                              + data[row * ncols + col + total_training_cells].x
+                              - data[row * ncols + col - total_training_cells - 1].x
+                              - data[row * ncols + col + numGuardCells].x;
             }
-            for (int i = col + numGuardCells + 1; i <= col + numGuardCells + numRefCells; ++i) {
-                noise_level += data[row * ncols + i].x;
+            else if (col == ncols - total_training_cells) {
+                noise_level = 0.0;
+                for (int i = col - total_training_cells; i < col - numGuardCells; ++i) {
+                    noise_level += data[row * ncols + i].x;
+                }
+                num_ref_cells = numRefCells;
+            } else {
+                noise_level = noise_level + data[row * ncols + col - 1 - numGuardCells].x
+                              - data[row * ncols + col - total_training_cells - 1].x;
             }
-            num_ref_cells = numRefCells * 2;
-        }
 
-        double threshold = alpha * noise_level / num_ref_cells;
+            double threshold = alpha * noise_level / num_ref_cells;
 
-        if (data[row * ncols + col].x > threshold) {
-            cfar_signal[row * ncols + col].x = sqrt(data[row * ncols + col].x);
+            if (data[row * ncols + col].x > threshold) {
+                cfar_signal[row * ncols + col].x = sqrt(data[row * ncols + col].x);
+            }
         }
     }
 }
 
+
 CudaMatrix CudaMatrix::cfar(double Pfa, int numGuardCells, int numRefCells) const {
     double alpha = (numRefCells * 2 * (pow(Pfa, -1.0 / (numRefCells * 2)) - 1));
-
     // Compute the absolute values
     CudaMatrix absData = this->abs(false);
 
-    // Compute the squared absolute values
-    absData.elementWiseSquare();
-
+    CudaMatrix squareData = absData.elementWiseSquare(false);
     // Initialize the CFAR result matrix
     CudaMatrix cfar_signal(nrows, ncols);
 
     // Configure the CUDA kernel launch parameters
-    dim3 blockDim(16, 16);
-    dim3 gridDim((ncols + blockDim.x - 1) / blockDim.x, (nrows + blockDim.y - 1) / blockDim.y);
+    dim3 blockDim(1, 1);  // One thread per row
+    dim3 gridDim(1, nrows);
 
     // Launch the CFAR kernel
-    cfarKernel<<<gridDim, blockDim>>>(absData.data, cfar_signal.data, nrows, ncols, alpha, numGuardCells, numRefCells);
+    cfarKernel<<<gridDim, blockDim>>>(squareData.data, cfar_signal.data, nrows, ncols, alpha, numGuardCells,
+                                      numRefCells);
     cudaDeviceSynchronize();
+
     return cfar_signal;
 }
 

@@ -57,10 +57,10 @@ public:
     CudaMatrix elementWiseSquare(bool inplace = true) const;
     CudaMatrix abs(bool inplace = true) const;
 
-    CudaMatrix fft(bool inplace = true) const;
-    CudaMatrix fft_by_col(bool inplace = true);
-    CudaMatrix ifft(bool inplace = true) const;
-    CudaMatrix fft_N(int nPoints, bool inplace = true);
+    void fft() const;
+    void fft_by_col();
+    void ifft() const;
+    void fft_N(int nPoints);
 
     CudaMatrix extractSegment(int startInd, int rangeNumber) const;
     CudaMatrix cfar(double Pfa, int numGuardCells, int numRefCells) const;

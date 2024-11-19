@@ -79,6 +79,7 @@ void ThreadPool::initPCcoefMatrix() {
     PCcoef = repmat(PCcoef, NUM_PULSE, 1);
 
     PCcoefMatrix = CudaMatrix(NUM_PULSE, numSamples, PCcoef);
+    PCcoefMatrix.fft_N(NFFT);   // 提前做fft
 }
 
 void ThreadPool::run() {
@@ -98,6 +99,8 @@ void ThreadPool::threadLoop(int threadID) {
 
     // 创建 CudaMatrix 对象和 pComplex 指针， 存放解包完后的脉组数据
     cufftComplex* pComplex = new cufftComplex[WAVE_NUM * NUM_PULSE * RANGE_NUM];
+
+//    cout << "buffer size:" << WAVE_NUM * NUM_PULSE * RANGE_NUM * sizeof (cufftComplex) << endl;
 
     // 提前在显存分配好内存，将上述脉组数据拷贝进来处理
     vector<CudaMatrix> matrices(WAVE_NUM, CudaMatrix(NUM_PULSE, RANGE_NUM));
@@ -277,8 +280,10 @@ void ThreadPool::processData(int threadID, cufftComplex* pComplex, vector<CudaMa
     int numHeads = headPositions[threadID].size();
     int headLength = headPositions[threadID][1] - headPositions[threadID][0];
     int rangeNum = floor((headLength - 33 * 4) / WAVE_NUM / 4.0);
-//    cout << numHeads << " " << rangeNum << endl;
+//    cout << numHeads << " " << numHeads << endl;
+//    cout << sizeof(cufftComplex) << endl;
 
+//    cout << headPositions[threadID][1] - headPositions[threadID][0] << endl;
 
     for (int idx = 0; idx < numHeads; ++idx) {
         auto blockIQstartAddr = threadsMemory[threadID] + headPositions[threadID][idx] + 33 * 4; // 计算数据起始地址
@@ -298,7 +303,7 @@ void ThreadPool::processData(int threadID, cufftComplex* pComplex, vector<CudaMa
         matrices[i].copyFromHost(NUM_PULSE, RANGE_NUM, pComplex + i * NUM_PULSE * RANGE_NUM);
     }
 
-    processPulseGroupData(matrices);
+//    processPulseGroupData(matrices);
 
     // 清理 headPositions 数据和设备内存
     // headPositions[threadID].clear();
@@ -309,14 +314,14 @@ void ThreadPool::processPulseGroupData(vector<CudaMatrix>& matrices) {
     for (int i = 0; i < WAVE_NUM; i++) {
 
         /*Pulse Compression*/
-        auto PCcoefMatrixFFT = PCcoefMatrix.fft_N(NFFT, false);
+
 //        PCcoefMatrixFFT.print(0);
-        auto echoMatrixFFT = matrices[i].fft_N(NFFT, false);
+        matrices[i].fft_N(NFFT);
 
-        PCcoefMatrixFFT.elementWiseMul(echoMatrixFFT);
-        PCcoefMatrixFFT.ifft();
+        matrices[i].elementWiseMul(PCcoefMatrix);
+        matrices[i].ifft();
 
-        auto PCres_Segment = PCcoefMatrixFFT.extractSegment(numSamples-2, RANGE_NUM);
+        auto PCres_Segment = matrices[i].extractSegment(numSamples-2, RANGE_NUM);
 
         /*coherent integration*/
         PCres_Segment.fft_by_col();
