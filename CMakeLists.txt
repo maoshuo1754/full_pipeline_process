@@ -26,11 +26,14 @@ add_executable(reader ${SOURCE_FILES})
 
 # Find and link CUDA Toolkit libraries
 find_package(CUDAToolkit REQUIRED)
+#find_package(OpenMP REQUIRED)
+
 target_link_libraries(reader
         pthread
         rt
         CUDA::cublas
         CUDA::cufft
+#        OpenMP::OpenMP_CXX
 )
 
 # Include CUDA Toolkit headers
@@ -39,5 +42,5 @@ target_include_directories(reader PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
 ## Set CUDA separable compilation
 #set_target_properties(reader PROPERTIES
 #        CUDA_SEPARABLE_COMPILATION ON
-#)
+#) 
 

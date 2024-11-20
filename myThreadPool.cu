@@ -18,8 +18,8 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue)
     }
 
     initPCcoefMatrix();
+    circleStartTime = high_resolution_clock::now();
 
-//    allocateThreadMemory();
     cout << "Initial Finished" << endl;
 }
 
@@ -35,34 +35,8 @@ ThreadPool::~ThreadPool() {
     }
 
     logFile.close();
-//    freeThreadMemory();
 }
 
-void ThreadPool::allocateThreadMemory() {
-    for (size_t i = 0; i < numThreads; ++i) {
-        char* d_memory = nullptr;
-        cudaError_t err = cudaMalloc((void**)&d_memory, THREADS_MEM_SIZE);  // 在显存中分配内存
-        if (err != cudaSuccess) {
-            std::cerr << "CUDA memory allocation failed for thread " << i
-                      << ": " << cudaGetErrorString(err) << std::endl;
-            return;
-        }
-        threadsMemory.emplace_back(d_memory);
-
-        cudaStream_t stream;
-        cudaStreamCreate(&stream);
-        streams.push_back(stream);
-    }
-}
-
-void ThreadPool::freeThreadMemory() {
-    for (size_t i = 0; i < numThreads; ++i) {
-        cudaFree(threadsMemory[i]);
-        cudaStreamDestroy(streams[i]);
-    }
-    threadsMemory.clear();
-    streams.clear();
-}
 
 void ThreadPool::initPCcoefMatrix() {
 //    double C = 3e8;
@@ -95,12 +69,8 @@ void ThreadPool::run() {
 }
 
 void ThreadPool::threadLoop(int threadID) {
-
-
     // 创建 CudaMatrix 对象和 pComplex 指针， 存放解包完后的脉组数据
     cufftComplex* pComplex = new cufftComplex[WAVE_NUM * NUM_PULSE * RANGE_NUM];
-
-//    cout << "buffer size:" << WAVE_NUM * NUM_PULSE * RANGE_NUM * sizeof (cufftComplex) << endl;
 
     // 提前在显存分配好内存，将上述脉组数据拷贝进来处理
     vector<CudaMatrix> matrices(WAVE_NUM, CudaMatrix(NUM_PULSE, RANGE_NUM));
@@ -174,6 +144,12 @@ void ThreadPool::copyToThreadMemory() {
             startFlag = static_cast<uint8_t>(sharedQueue->buffer[indexValue + 23]) & 0x02;
 
             if (startFlag) {
+
+//                auto startTime = high_resolution_clock::now();
+//                cout << "Total processing time for pulse group data: "
+//                     << duration_cast<microseconds>(startTime - circleStartTime).count() << " us" << endl;
+//                circleStartTime = startTime;
+
                 // 发送上一个脉组的数据
                 if (inPacket) {
                     memcpyDataToThread(copyStartAddr, indexValue);
@@ -234,14 +210,7 @@ void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr
 
 
 unsigned int ThreadPool::FourChars2Uint(const char* startAddr){
-    return     static_cast<uint8_t>(startAddr[0]) << 24
-               | static_cast<uint8_t>(startAddr[1]) << 16
-               | static_cast<uint8_t>(startAddr[2]) << 8
-               | static_cast<uint8_t>(startAddr[3]);
-}
-
-__device__ unsigned int FourChars2Uint(const char* startAddr) {
-    return static_cast<uint8_t>(startAddr[0]) << 24
+    return   static_cast<uint8_t>(startAddr[0]) << 24
            | static_cast<uint8_t>(startAddr[1]) << 16
            | static_cast<uint8_t>(startAddr[2]) << 8
            | static_cast<uint8_t>(startAddr[3]);
@@ -251,7 +220,6 @@ float TwoChars2float(const char* startAddr) {
     return static_cast<float>(static_cast<uint8_t>(startAddr[0]) << 8
                               | static_cast<uint8_t>(startAddr[1]));
 }
-
 
 // 检查 CUDA 错误的函数
 void checkCudaErrors(cudaError_t result) {
@@ -275,64 +243,175 @@ void printHex(const char *data, size_t dataSize) {
 }
 
 // 线程池中的数据处理函数
+//void ThreadPool::processData(int threadID, cufftComplex* pComplex, vector<CudaMatrix>& matrices) {
+//    cout << "thread " << threadID << " start" << endl;
+//    int numHeads = headPositions[threadID].size();
+//    int headLength = headPositions[threadID][1] - headPositions[threadID][0];
+//    int rangeNum = floor((headLength - 33 * 4) / WAVE_NUM / 4.0);
+//
+//    for (int idx = 0; idx < numHeads; ++idx) {
+//        auto blockIQstartAddr = threadsMemory[threadID] + headPositions[threadID][idx] + 33 * 4; // 计算数据起始地址
+////        if (idx == 1 &&threadID == 1) printHex(blockIQstartAddr, 4*50);
+//        for (int i = 0; i < rangeNum; i++) {
+//            for (int j = 0; j < WAVE_NUM; j++) {
+//                int blockOffset = i * WAVE_NUM * 4 + j * 4; // 每个数据块的偏移
+//                auto newindex = j * NUM_PULSE * RANGE_NUM + idx * RANGE_NUM + i;  // 计算新的索引位置
+//                pComplex[newindex].x = TwoChars2float(blockIQstartAddr + blockOffset);
+//                pComplex[newindex].y = TwoChars2float(blockIQstartAddr + blockOffset + 2);
+//            }
+//        }
+//    }
+//
+//
+//    for (int i = 0; i < WAVE_NUM; i++) {
+//        matrices[i].copyFromHost(NUM_PULSE, RANGE_NUM, pComplex + i * NUM_PULSE * RANGE_NUM);
+//    }
+//
+//    processPulseGroupData(matrices);
+//
+//    // 清理 headPositions 数据和设备内存
+//    // headPositions[threadID].clear();
+//    cout << "thread " << threadID << " process finished" << endl;
+//}
+
+
+// 线程池中的数据处理函数
 void ThreadPool::processData(int threadID, cufftComplex* pComplex, vector<CudaMatrix>& matrices) {
+//    if (threadID) return;
+    // 开始计时
+    auto startTime = high_resolution_clock::now();
     cout << "thread " << threadID << " start" << endl;
+
+    // 计算 rangeNum
     int numHeads = headPositions[threadID].size();
     int headLength = headPositions[threadID][1] - headPositions[threadID][0];
     int rangeNum = floor((headLength - 33 * 4) / WAVE_NUM / 4.0);
-//    cout << numHeads << " " << numHeads << endl;
-//    cout << sizeof(cufftComplex) << endl;
 
-//    cout << headPositions[threadID][1] - headPositions[threadID][0] << endl;
+    // 数据填充
+
+    auto dataFillStart = high_resolution_clock::now();
 
     for (int idx = 0; idx < numHeads; ++idx) {
-        auto blockIQstartAddr = threadsMemory[threadID] + headPositions[threadID][idx] + 33 * 4; // 计算数据起始地址
-//        if (idx == 1 &&threadID == 1) printHex(blockIQstartAddr, 4*50);
+        auto blockIQstartAddr = threadsMemory[threadID] + headPositions[threadID][idx] + 33 * 4;
         for (int i = 0; i < rangeNum; i++) {
             for (int j = 0; j < WAVE_NUM; j++) {
-                int blockOffset = i * WAVE_NUM * 4 + j * 4; // 每个数据块的偏移
-                auto newindex = j * NUM_PULSE * RANGE_NUM + idx * RANGE_NUM + i;  // 计算新的索引位置
+                int blockOffset = i * WAVE_NUM * 4 + j * 4;
+                auto newindex = j * NUM_PULSE * RANGE_NUM + idx * RANGE_NUM + i;
                 pComplex[newindex].x = TwoChars2float(blockIQstartAddr + blockOffset);
                 pComplex[newindex].y = TwoChars2float(blockIQstartAddr + blockOffset + 2);
             }
         }
     }
+    auto dataFillEnd = high_resolution_clock::now();
 
-
+    // 数据复制到设备
+    auto copyToDeviceStart = high_resolution_clock::now();
     for (int i = 0; i < WAVE_NUM; i++) {
         matrices[i].copyFromHost(NUM_PULSE, RANGE_NUM, pComplex + i * NUM_PULSE * RANGE_NUM);
     }
+    auto copyToDeviceEnd = high_resolution_clock::now();
 
-//    processPulseGroupData(matrices);
+    // 数据处理
+    auto processPulseStart = high_resolution_clock::now();
+    processPulseGroupData(matrices);
+    auto processPulseEnd = high_resolution_clock::now();
+
+    // 记录结束时间
+    auto endTime = high_resolution_clock::now();
+
+    // 输出时间统计
+//    cout << "thread " << threadID << " timing details:" << endl;
+//    cout << "  Data fill: "
+//         << duration_cast<milliseconds>(dataFillEnd - dataFillStart).count() << " ms" << endl;
+//    cout << "  Copy to device: "
+//         << duration_cast<milliseconds>(copyToDeviceEnd - copyToDeviceStart).count() << " ms" << endl;
+//    cout << "  Pulse group processing: "
+//         << duration_cast<milliseconds>(processPulseEnd - processPulseStart).count() << " ms" << endl;
+//    cout << "  Total: "
+//         << duration_cast<milliseconds>(endTime - startTime).count() << " ms" << endl;
 
     // 清理 headPositions 数据和设备内存
     // headPositions[threadID].clear();
-    cout << "thread " << threadID << " process finished" << endl;
+    cout << "thread " << threadID << " process finished" << "  Total: "
+                                                         << duration_cast<milliseconds>(endTime - startTime).count() << " ms" << endl;;
 }
 
+
+//void ThreadPool::processPulseGroupData(vector<CudaMatrix>& matrices) {
+//    for (int i = 0; i < WAVE_NUM; i++) {
+//
+//        /*Pulse Compression*/
+//        matrices[i].fft_N(NFFT);
+//        matrices[i].elementWiseMul(PCcoefMatrix);
+//        matrices[i].ifft();
+//        auto PCres_Segment = matrices[i].extractSegment(numSamples-2, RANGE_NUM);
+//
+//
+//        /*coherent integration*/
+//        PCres_Segment.fft_by_col();
+//
+//        /*cfar*/
+//        double Pfa = 1e-6;
+//        int numGuardCells = 4;
+//        int numRefCells = 20;
+//        auto cfar_signal = PCres_Segment.cfar(Pfa, numGuardCells, numRefCells);
+//        auto res_cfar = cfar_signal.max();
+////        res_cfar.printLargerThan0();
+//    }
+//}
+
 void ThreadPool::processPulseGroupData(vector<CudaMatrix>& matrices) {
+    using namespace std::chrono;
+
+    auto startTime = high_resolution_clock::now();
+//    cout << "Processing pulse group data..." << endl;
+
     for (int i = 0; i < WAVE_NUM; i++) {
+        auto waveStartTime = high_resolution_clock::now();
 
-        /*Pulse Compression*/
-
-//        PCcoefMatrixFFT.print(0);
+        /* Pulse Compression */
+        auto pulseCompressionStart = high_resolution_clock::now();
         matrices[i].fft_N(NFFT);
-
         matrices[i].elementWiseMul(PCcoefMatrix);
         matrices[i].ifft();
+        auto PCres_Segment = matrices[i].extractSegment(numSamples - 2, RANGE_NUM);
+        auto pulseCompressionEnd = high_resolution_clock::now();
 
-        auto PCres_Segment = matrices[i].extractSegment(numSamples-2, RANGE_NUM);
-
-        /*coherent integration*/
+        /* Coherent Integration */
+        auto coherentIntegrationStart = high_resolution_clock::now();
         PCres_Segment.fft_by_col();
+        auto coherentIntegrationEnd = high_resolution_clock::now();
 
-        /*cfar*/
+        /* CFAR */
+        auto cfarStart = high_resolution_clock::now();
         double Pfa = 1e-6;
         int numGuardCells = 4;
         int numRefCells = 20;
         auto cfar_signal = PCres_Segment.cfar(Pfa, numGuardCells, numRefCells);
         auto res_cfar = cfar_signal.max();
-//        res_cfar.printLargerThan0();
+        auto cfarEnd = high_resolution_clock::now();
+
+        auto waveEndTime = high_resolution_clock::now();
+
+        if (i == 0) {
+            // 输出单波形处理的时间统计
+            cout << "Wave " << i << " timing details:" << endl;
+            cout << "  Pulse Compression: "
+                 << duration_cast<microseconds >(pulseCompressionEnd - pulseCompressionStart).count() << " us" << endl;
+            cout << "  Coherent Integration: "
+                 << duration_cast<microseconds>(coherentIntegrationEnd - coherentIntegrationStart).count() << " us" << endl;
+            cout << "  CFAR: "
+                 << duration_cast<microseconds>(cfarEnd - cfarStart).count() << " us" << endl;
+            cout << "  Total: "
+                 << duration_cast<microseconds>(waveEndTime - waveStartTime).count() << " us" << endl;
+        }
     }
+
+//    auto endTime = high_resolution_clock::now();
+//
+//    // 输出总处理时间
+//    cout << "Total processing time for pulse group data: "
+//         << duration_cast<microseconds>(endTime - startTime).count() << " us" << endl;
 }
+
 

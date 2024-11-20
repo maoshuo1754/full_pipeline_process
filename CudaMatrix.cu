@@ -539,80 +539,144 @@ void CudaMatrix::writeMatTxt(const std::string &filePath) const {
     outfile.close();
 }
 
-__global__ void cfarKernel(const cufftComplex *data, cufftComplex *cfar_signal, int nrows, int ncols, double alpha, int numGuardCells, int numRefCells) {
-    int row = blockIdx.y;
-    double noise_level = 0.0;
-    int total_training_cells = numGuardCells + numRefCells;
-    int num_ref_cells;
+__global__ void cfarKernel(const cufftComplex* data, cufftComplex* cfar_signal, int nrows, int ncols, double alpha, int numGuardCells, int numRefCells) {
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if (row < nrows) {
-        for (int col = 0; col < ncols; ++col) {
-            if (col == 0) {
-                for (int i = numGuardCells + 1; i <= total_training_cells; ++i) {
+    if (row < nrows && col < ncols) {
+        int total_training_cells = numGuardCells + numRefCells;
+
+        double noise_level = 0.0;
+        int num_ref_cells;
+
+        if (col < total_training_cells) {
+            for (int i = col + numGuardCells + 1; i <= col + numGuardCells + numRefCells; ++i) {
+                if (i < ncols) {
                     noise_level += data[row * ncols + i].x;
                 }
-                num_ref_cells = numRefCells;
             }
-            else if (col < total_training_cells) {
-                noise_level = noise_level + data[row * ncols + col + total_training_cells].x
-                              - data[row * ncols + col + numGuardCells].x;
-
-            }
-            else if (col == total_training_cells) {
-                for (int i = 0; i < numRefCells; ++i) {
+            num_ref_cells = numRefCells;
+        } else if (col >= ncols - total_training_cells) {
+            for (int i = col - numRefCells - numGuardCells; i < col - numGuardCells; ++i) {
+                if (i >= 0) {
                     noise_level += data[row * ncols + i].x;
                 }
-                noise_level = noise_level + data[row * ncols + col + total_training_cells].x
-                              - data[row * ncols + col + numGuardCells].x;
-                num_ref_cells = 2 * numRefCells;
             }
-            else if (col < ncols - total_training_cells) {
-                noise_level = noise_level + data[row * ncols + col - 1 - numGuardCells].x
-                              + data[row * ncols + col + total_training_cells].x
-                              - data[row * ncols + col - total_training_cells - 1].x
-                              - data[row * ncols + col + numGuardCells].x;
+            num_ref_cells = numRefCells;
+        } else {
+            for (int i = col - total_training_cells; i < col - total_training_cells + numRefCells; ++i) {
+                noise_level += data[row * ncols + i].x;
             }
-            else if (col == ncols - total_training_cells) {
-                noise_level = 0.0;
-                for (int i = col - total_training_cells; i < col - numGuardCells; ++i) {
-                    noise_level += data[row * ncols + i].x;
-                }
-                num_ref_cells = numRefCells;
-            } else {
-                noise_level = noise_level + data[row * ncols + col - 1 - numGuardCells].x
-                              - data[row * ncols + col - total_training_cells - 1].x;
+            for (int i = col + numGuardCells + 1; i <= col + numGuardCells + numRefCells; ++i) {
+                noise_level += data[row * ncols + i].x;
             }
+            num_ref_cells = numRefCells * 2;
+        }
 
-            double threshold = alpha * noise_level / num_ref_cells;
+        double threshold = alpha * noise_level / num_ref_cells;
 
-            if (data[row * ncols + col].x > threshold) {
-                cfar_signal[row * ncols + col].x = sqrt(data[row * ncols + col].x);
-            }
+        if (data[row * ncols + col].x > threshold) {
+            cfar_signal[row * ncols + col].x = sqrt(data[row * ncols + col].x);
         }
     }
 }
 
-
 CudaMatrix CudaMatrix::cfar(double Pfa, int numGuardCells, int numRefCells) const {
     double alpha = (numRefCells * 2 * (pow(Pfa, -1.0 / (numRefCells * 2)) - 1));
+
     // Compute the absolute values
     CudaMatrix absData = this->abs(false);
 
-    CudaMatrix squareData = absData.elementWiseSquare(false);
+    // Compute the squared absolute values
+    absData.elementWiseSquare();
+
     // Initialize the CFAR result matrix
     CudaMatrix cfar_signal(nrows, ncols);
 
     // Configure the CUDA kernel launch parameters
-    dim3 blockDim(1, 1);  // One thread per row
-    dim3 gridDim(1, nrows);
+    dim3 blockDim(16, 16);
+    dim3 gridDim((ncols + blockDim.x - 1) / blockDim.x, (nrows + blockDim.y - 1) / blockDim.y);
 
     // Launch the CFAR kernel
-    cfarKernel<<<gridDim, blockDim>>>(squareData.data, cfar_signal.data, nrows, ncols, alpha, numGuardCells,
-                                      numRefCells);
+    cfarKernel<<<gridDim, blockDim>>>(absData.data, cfar_signal.data, nrows, ncols, alpha, numGuardCells, numRefCells);
     cudaDeviceSynchronize();
-
     return cfar_signal;
 }
+
+//__global__ void cfarKernel(const cufftComplex *data, cufftComplex *cfar_signal, int nrows, int ncols, double alpha, int numGuardCells, int numRefCells) {
+//    int row = blockIdx.y;
+//    double noise_level = 0.0;
+//    int total_training_cells = numGuardCells + numRefCells;
+//    int num_ref_cells;
+//
+//    if (row < nrows) {
+//        for (int col = 0; col < ncols; ++col) {
+//            if (col == 0) {
+//                for (int i = numGuardCells + 1; i <= total_training_cells; ++i) {
+//                    noise_level += data[row * ncols + i].x;
+//                }
+//                num_ref_cells = numRefCells;
+//            }
+//            else if (col < total_training_cells) {
+//                noise_level = noise_level + data[row * ncols + col + total_training_cells].x
+//                              - data[row * ncols + col + numGuardCells].x;
+//
+//            }
+//            else if (col == total_training_cells) {
+//                for (int i = 0; i < numRefCells; ++i) {
+//                    noise_level += data[row * ncols + i].x;
+//                }
+//                noise_level = noise_level + data[row * ncols + col + total_training_cells].x
+//                              - data[row * ncols + col + numGuardCells].x;
+//                num_ref_cells = 2 * numRefCells;
+//            }
+//            else if (col < ncols - total_training_cells) {
+//                noise_level = noise_level + data[row * ncols + col - 1 - numGuardCells].x
+//                              + data[row * ncols + col + total_training_cells].x
+//                              - data[row * ncols + col - total_training_cells - 1].x
+//                              - data[row * ncols + col + numGuardCells].x;
+//            }
+//            else if (col == ncols - total_training_cells) {
+//                noise_level = 0.0;
+//                for (int i = col - total_training_cells; i < col - numGuardCells; ++i) {
+//                    noise_level += data[row * ncols + i].x;
+//                }
+//                num_ref_cells = numRefCells;
+//            } else {
+//                noise_level = noise_level + data[row * ncols + col - 1 - numGuardCells].x
+//                              - data[row * ncols + col - total_training_cells - 1].x;
+//            }
+//
+//            double threshold = alpha * noise_level / num_ref_cells;
+//
+//            if (data[row * ncols + col].x > threshold) {
+//                cfar_signal[row * ncols + col].x = sqrt(data[row * ncols + col].x);
+//            }
+//        }
+//    }
+//}
+//
+//
+//CudaMatrix CudaMatrix::cfar(double Pfa, int numGuardCells, int numRefCells) const {
+//    double alpha = (numRefCells * 2 * (pow(Pfa, -1.0 / (numRefCells * 2)) - 1));
+//    // Compute the absolute values
+//    CudaMatrix absData = this->abs(false);
+//
+//    CudaMatrix squareData = absData.elementWiseSquare(false);
+//    // Initialize the CFAR result matrix
+//    CudaMatrix cfar_signal(nrows, ncols);
+//
+//    // Configure the CUDA kernel launch parameters
+//    dim3 blockDim(1, 1);  // One thread per row
+//    dim3 gridDim(1, nrows);
+//
+//    // Launch the CFAR kernel
+//    cfarKernel<<<gridDim, blockDim>>>(squareData.data, cfar_signal.data, nrows, ncols, alpha, numGuardCells,
+//                                      numRefCells);
+//    cudaDeviceSynchronize();
+//
+//    return cfar_signal;
+//}
 
 // Helper kernels
 __global__ void maxKernelDim1(cufftComplex *data, cufftComplex *maxValues, int nrows, int ncols) {
