@@ -15,6 +15,10 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue)
     for (size_t i = 0; i < numThreads; ++i) {
         threads.emplace_back(&ThreadPool::threadLoop, this, i);
         threadsMemory.emplace_back(new char[THREADS_MEM_SIZE]);
+
+        cudaStream_t stream;
+        cudaStreamCreate(&stream);
+        streams.push_back(stream);
     }
 
     initPCcoefMatrix();
@@ -28,6 +32,10 @@ ThreadPool::~ThreadPool() {
     for (auto &cv: conditionVariables) cv.notify_all(); // 通知所有线程退出
     for (std::thread &thread: threads) {
         if (thread.joinable()) thread.join();
+    }
+
+    for (auto& stream: streams) {
+        cudaStreamDestroy(stream);
     }
 
     for (auto ptr: threadsMemory) {

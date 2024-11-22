@@ -585,10 +585,10 @@ CudaMatrix CudaMatrix::cfar(double Pfa, int numGuardCells, int numRefCells) cons
     double alpha = (numRefCells * 2 * (pow(Pfa, -1.0 / (numRefCells * 2)) - 1));
 
     // Compute the absolute values
-    CudaMatrix absData = this->abs(false);
+    this->abs();
 
     // Compute the squared absolute values
-    absData.elementWiseSquare();
+    this->elementWiseSquare();
 
     // Initialize the CFAR result matrix
     CudaMatrix cfar_signal(nrows, ncols);
@@ -598,7 +598,7 @@ CudaMatrix CudaMatrix::cfar(double Pfa, int numGuardCells, int numRefCells) cons
     dim3 gridDim((ncols + blockDim.x - 1) / blockDim.x, (nrows + blockDim.y - 1) / blockDim.y);
 
     // Launch the CFAR kernel
-    cfarKernel<<<gridDim, blockDim>>>(absData.data, cfar_signal.data, nrows, ncols, alpha, numGuardCells, numRefCells);
+    cfarKernel<<<gridDim, blockDim>>>(data, cfar_signal.data, nrows, ncols, alpha, numGuardCells, numRefCells);
     cudaDeviceSynchronize();
     return cfar_signal;
 }
@@ -678,18 +678,20 @@ CudaMatrix CudaMatrix::cfar(double Pfa, int numGuardCells, int numRefCells) cons
 //    return cfar_signal;
 //}
 
-// Helper kernels
+// 现在是对实部选大，而不是abs
 __global__ void maxKernelDim1(cufftComplex *data, cufftComplex *maxValues, int nrows, int ncols) {
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     if (col < ncols) {
-        cufftComplex maxVal = data[col];
+        float maxVal = data[col].x;
         for (int row = 1; row < nrows; ++row) {
             cufftComplex val = data[row * ncols + col];
-            if (sqrt(val.x * val.x + val.y * val.y) > sqrt(maxVal.x * maxVal.x + maxVal.y * maxVal.y)) {
-                maxVal = val;
+//            if (sqrt(val.x * val.x + val.y * val.y) > sqrt(maxVal.x * maxVal.x + maxVal.y * maxVal.y)) {
+            if (val.x > maxVal) {
+                maxVal = val.x;
             }
         }
-        maxValues[col] = maxVal;
+        maxValues[col].x = maxVal;
+        maxValues[col].y = 0;
     }
 }
 
@@ -710,34 +712,25 @@ __global__ void maxKernelDim2(cufftComplex *data, cufftComplex *maxValues, int n
 CudaMatrix CudaMatrix::max(int dim) {
     assert(dim == 1 || dim == 2); // Ensure valid dimension
 
-
     if (dim == 1) {
         auto result = CudaMatrix(1, ncols); // Result will be 1 row, ncols columns
-        cufftComplex *d_maxValues;
-        cudaMalloc(&d_maxValues, ncols * sizeof(cufftComplex));
 
         dim3 blockDim(256);
         dim3 gridDim((ncols + blockDim.x - 1) / blockDim.x);
 
-        maxKernelDim1<<<gridDim, blockDim>>>(data, d_maxValues, nrows, ncols);
+        maxKernelDim1<<<gridDim, blockDim>>>(data, result.data, nrows, ncols);
         cudaDeviceSynchronize();
 
-        cudaMemcpy(result.data, d_maxValues, ncols * sizeof(cufftComplex), cudaMemcpyDeviceToDevice);
-        cudaFree(d_maxValues);
         return result;
     } else {
         auto result = CudaMatrix(nrows, 1); // Result will be nrows rows, 1 column
-        cufftComplex *d_maxValues;
-        cudaMalloc(&d_maxValues, nrows * sizeof(cufftComplex));
 
         dim3 blockDim(256);
         dim3 gridDim((nrows + blockDim.x - 1) / blockDim.x);
 
-        maxKernelDim2<<<gridDim, blockDim>>>(data, d_maxValues, nrows, ncols);
+        maxKernelDim2<<<gridDim, blockDim>>>(data, result.data, nrows, ncols);
         cudaDeviceSynchronize();
 
-        cudaMemcpy(result.data, d_maxValues, nrows * sizeof(cufftComplex), cudaMemcpyDeviceToDevice);
-        cudaFree(d_maxValues);
         return result;
     }
 
