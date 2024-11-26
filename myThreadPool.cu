@@ -6,7 +6,7 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue)
         : stop(false), sharedQueue(sharedQueue), processingFlags(numThreads, false),
           conditionVariables(numThreads), mutexes(numThreads),
           headPositions(numThreads, std::vector<size_t>()), currentPos(numThreads, 0),
-          currentAddrOffset(numThreads, 0), numThreads(numThreads), inPacket(false),
+          currentAddrOffset(0), numThreads(numThreads), inPacket(false),
           cur_thread_id(0), prevSeqNum(0) { // 初始化 conditionVariables 和 mutexes
     // 创建并初始化线程
 
@@ -172,20 +172,7 @@ ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix>
     cudaMemcpy(d_headPositions, headPositions[threadID].data(), numHeads * sizeof(size_t), cudaMemcpyHostToDevice);
     unpackDatabuf2CudaMatrices<<<1, numHeads>>>(threadsMemory[threadID], d_headPositions, numHeads, rangeNum, pComplex);
 
-
-//    for (int idx = 0; idx < numHeads; ++idx) {
-//        char* blockIQstartAddr = threadsMemory[threadID] + headPositions[threadID][idx] + 33 * 4; // 计算数据起始地址
-//        for (int i = 0; i < rangeNum; i++) {
-//            for (int j = 0; j < WAVE_NUM; j++) {
-//                int blockOffset = i * WAVE_NUM * 4 + j * 4; // 每个数据块的偏移
-//                auto newindex = j * NUM_PULSE * RANGE_NUM + idx * RANGE_NUM + i;  // 计算新的索引位置
-//                pComplex[newindex].x = TwoChars2float(blockIQstartAddr + blockOffset);
-//                pComplex[newindex].y = TwoChars2float(blockIQstartAddr + blockOffset + 2);
-//            }
-//        }
-//    }
-
-
+    matrices[0].print(255);
 //    for (int i = 0; i < CAL_WAVE_NUM; i++) {
 //        matrices[i].copyFromHost(NUM_PULSE, RANGE_NUM, pComplex + i * NUM_PULSE * RANGE_NUM);
 //    }
@@ -282,7 +269,6 @@ void ThreadPool::copyToThreadMemory() {
                 if (inPacket) {
                     memcpyDataToThread(copyStartAddr, indexValue);
                     notifyThread(cur_thread_id);
-//                    cout << currentAddrOffset[cur_thread_id] / 1024 / 1024 << " MB " << endl;
                     cur_thread_id = (cur_thread_id + 1) % numThreads;
                 }
 
@@ -290,7 +276,7 @@ void ThreadPool::copyToThreadMemory() {
                 inPacket = true;
                 currentPos[cur_thread_id] = 0;
                 prevIndexValue = indexValue;
-                currentAddrOffset[cur_thread_id] = 0;
+                currentAddrOffset = 0;
                 headPositions[cur_thread_id].clear();
                 copyStartAddr = indexValue;
 //                std::cout << "Start flag detected, starting at address: " << copyStartAddr << std::endl;
@@ -318,22 +304,22 @@ void ThreadPool::copyToThreadMemory() {
 
 void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr){
     size_t copyLength = endAddr - startAddr;
-//                    std::cout << "Copying " << copyLength << " bytes from address " << copyStartAddr << " to thread memory at " << currentAddrOffset[cur_thread_id] << std::endl;
+//    std::cout << "Copying " << copyLength / 1024 / 1024 << " MB from address " << startAddr << " to thread memory at " << currentAddrOffset << std::endl;
 
-    if ((currentAddrOffset[cur_thread_id] + copyLength) <= THREADS_MEM_SIZE) {  // Ensure within buffer bounds
+    if ((currentAddrOffset + copyLength) <= THREADS_MEM_SIZE) {  // Ensure within buffer bounds
 //        memcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id],
 //               sharedQueue->buffer + startAddr,
 //               copyLength);
 
-        // 内存拷贝到显存
-        cudaMemcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id],
+//        // 内存拷贝到显存
+        cudaMemcpy(threadsMemory[cur_thread_id] + currentAddrOffset,
                    sharedQueue->buffer + startAddr,
                    copyLength,
                    cudaMemcpyHostToDevice);
 
-        currentAddrOffset[cur_thread_id] += copyLength;
+        currentAddrOffset += copyLength;
     } else {
-        cout << (currentAddrOffset[cur_thread_id] + copyLength) / 1024 / 1024 << " MB !!!!" << endl;
+//        cout << (currentAddrOffset + copyLength) / 1024 / 1024 << " MB !!!!" << endl;
         std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
     }
 }

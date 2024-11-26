@@ -39,7 +39,7 @@ private:
     std::vector<std::vector<size_t>> headPositions; // 每个线程独立空间中，packet的起始地址
     std::vector<cudaStream_t> streams;          // 异步拷贝的时候用，现在没用
     std::vector<size_t> currentPos;             // 记录每个包头的位置
-    std::vector<size_t> currentAddrOffset;      // 记录当前数据复制的偏移
+    size_t currentAddrOffset;      // 记录当前数据复制的偏移
     int cur_thread_id;                          // 当前线程id (0~numThreads-1)
     std::vector<bool> processingFlags;          // 线程是否正在运行
     bool stop;                                  //控制所有线程结束
