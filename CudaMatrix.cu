@@ -56,13 +56,13 @@ void CudaMatrix::checkCufftErrors(cufftResult result) {
 }
 
 // Constructor
-CudaMatrix::CudaMatrix(int rows, int cols) : nrows(rows), ncols(cols), data(nullptr) {
+CudaMatrix::CudaMatrix(int rows, int cols) : nrows(rows), ncols(cols), data(nullptr), initFromDevice(false)  {
     allocateMemory();
 }
 
 // Constructor for creating a matrix from host data
 CudaMatrix::CudaMatrix(const std::vector<std::vector<cufftComplex>>& hostData)
-        : nrows(hostData.size()), ncols(hostData[0].size()), data(nullptr) {
+        : nrows(hostData.size()), ncols(hostData[0].size()), data(nullptr), initFromDevice(false) {
     allocateMemory();
     // Copy data from host to device
     std::vector<cufftComplex> flattenedData(nrows * ncols);
@@ -72,7 +72,7 @@ CudaMatrix::CudaMatrix(const std::vector<std::vector<cufftComplex>>& hostData)
     checkCudaErrors(cudaMemcpy(data, flattenedData.data(), sizeof(cufftComplex) * nrows * ncols, cudaMemcpyHostToDevice));
 }
 
-CudaMatrix::CudaMatrix(int rows, int cols, std::vector<cufftComplex> hostData) : nrows(rows), ncols(cols) {
+CudaMatrix::CudaMatrix(int rows, int cols, std::vector<cufftComplex> hostData) : nrows(rows), ncols(cols), data(nullptr), initFromDevice(false)  {
     if (hostData.size() != nrows * ncols) {
         throw std::runtime_error("Host data size does not match matrix dimensions.");
     }
@@ -80,20 +80,23 @@ CudaMatrix::CudaMatrix(int rows, int cols, std::vector<cufftComplex> hostData) :
     checkCudaErrors(cudaMemcpy(data, hostData.data(), sizeof(cufftComplex) * nrows * ncols, cudaMemcpyHostToDevice));
 }
 
-CudaMatrix::CudaMatrix(int rows, int cols, cufftComplex* hostData) : nrows(rows), ncols(cols) {
+CudaMatrix::CudaMatrix(int rows, int cols, cufftComplex* hostData) : nrows(rows), ncols(cols), data(nullptr), initFromDevice(false)  {
     checkCudaErrors(cudaMalloc(&data, sizeof(cufftComplex) * nrows * ncols));
     checkCudaErrors(cudaMemcpy(data, hostData, sizeof(cufftComplex) * nrows * ncols, cudaMemcpyHostToDevice));
 }
 
+CudaMatrix::CudaMatrix(int rows, int cols, cufftComplex* hostData, bool deviceFlag) : nrows(rows), ncols(cols), data(hostData), initFromDevice(true)  {
+}
+
 // Copy constructor
-CudaMatrix::CudaMatrix(const CudaMatrix& other) : nrows(other.nrows), ncols(other.ncols), data(nullptr) {
+CudaMatrix::CudaMatrix(const CudaMatrix& other) : nrows(other.nrows), ncols(other.ncols), data(nullptr), initFromDevice(false) {
 //    cout <<"copy constructor" << endl;
     allocateMemory();
     checkCudaErrors(cudaMemcpy(data, other.data, sizeof(cufftComplex) * nrows * ncols, cudaMemcpyDeviceToDevice));
 }
 
 // Move constructor
-CudaMatrix::CudaMatrix(CudaMatrix&& other) noexcept : nrows(other.nrows), ncols(other.ncols), data(other.data) {
+CudaMatrix::CudaMatrix(CudaMatrix&& other) noexcept : nrows(other.nrows), ncols(other.ncols), data(other.data), initFromDevice(false)  {
     other.data = nullptr;
     other.nrows = 0;
     other.ncols = 0;
@@ -102,8 +105,9 @@ CudaMatrix::CudaMatrix(CudaMatrix&& other) noexcept : nrows(other.nrows), ncols(
 
 // Destructor
 CudaMatrix::~CudaMatrix() {
-    deallocateMemory();
-//    cout << "Destructor" << endl;
+    if (!initFromDevice) {
+        deallocateMemory();
+    }
 }
 
 // Copy data from host to device

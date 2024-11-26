@@ -14,13 +14,8 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue)
     uint64Pattern = *(uint64_t *) pattern;
     for (size_t i = 0; i < numThreads; ++i) {
         threads.emplace_back(&ThreadPool::threadLoop, this, i);
-        threadsMemory.emplace_back(new char[THREADS_MEM_SIZE]);
-
-        cudaStream_t stream;
-        cudaStreamCreate(&stream);
-        streams.push_back(stream);
     }
-
+    allocateThreadMemory();
     initPCcoefMatrix();
     circleStartTime = high_resolution_clock::now();
 
@@ -33,19 +28,31 @@ ThreadPool::~ThreadPool() {
     for (std::thread &thread: threads) {
         if (thread.joinable()) thread.join();
     }
-
-    for (auto& stream: streams) {
-        cudaStreamDestroy(stream);
-    }
-
-    for (auto ptr: threadsMemory) {
-        delete[] ptr;
-    }
-
+    freeThreadMemory();
     logFile.close();
 }
 
+void ThreadPool::allocateThreadMemory() {
+    for (size_t i = 0; i < numThreads; ++i) {
+        char* d_memory = nullptr;
+        cudaError_t err = cudaMalloc((void**)&d_memory, THREADS_MEM_SIZE);  // 在显存中分配内存
+        if (err != cudaSuccess) {
+            std::cerr << "CUDA memory allocation failed for thread " << i
+                      << ": " << cudaGetErrorString(err) << std::endl;
+            return;
+        }
+        threadsMemory.emplace_back(d_memory);
+    }
+}
 
+void ThreadPool::freeThreadMemory() {
+    for (size_t i = 0; i < numThreads; ++i) {
+        cudaFree(threadsMemory[i]);
+    }
+    threadsMemory.clear();
+}
+
+// TODO: 这里要做可更改系数的
 void ThreadPool::initPCcoefMatrix() {
 //    double C = 3e8;
     double BandWidth = 15e6;
@@ -78,17 +85,25 @@ void ThreadPool::run() {
 
 void ThreadPool::threadLoop(int threadID) {
     // 创建 CudaMatrix 对象和 pComplex 指针， 存放解包完后的脉组数据
-    cufftComplex* pComplex = new cufftComplex[WAVE_NUM * NUM_PULSE * RANGE_NUM];
+//    cufftComplex* pComplex = new cufftComplex[WAVE_NUM * NUM_PULSE * RANGE_NUM];
+    cufftComplex* pComplex;
+    cudaMalloc(&pComplex, sizeof(cufftComplex) * WAVE_NUM * NUM_PULSE * RANGE_NUM);
 
     // 提前在显存分配好内存，将上述脉组数据拷贝进来处理
-    vector<CudaMatrix> matrices(WAVE_NUM, CudaMatrix(NUM_PULSE, RANGE_NUM));
+    vector<CudaMatrix> matrices;
+    for (int i = 0; i < WAVE_NUM; i++) {
+        matrices.emplace_back(NUM_PULSE, RANGE_NUM, pComplex + i * NUM_PULSE * RANGE_NUM, true);
+    }
+
+    size_t* d_headPositions;
+    cudaMalloc(&d_headPositions, 300 * sizeof(size_t));
 
     while (!stop) {
         waitForProcessingSignal(threadID);
 
         if (stop) break; // 退出循环
 
-        processData(threadID, pComplex, matrices); // 处理 CUDA 内存中的数据
+        processData(threadID, pComplex, matrices, d_headPositions); // 处理 CUDA 内存中的数据
 
         // 处理完毕后重置标志
         {
@@ -98,7 +113,112 @@ void ThreadPool::threadLoop(int threadID) {
     }
 
     // 释放内存
-    delete[] pComplex;
+    cudaFree(d_headPositions);
+//    delete[] pComplex;
+    cudaFree(pComplex);
+}
+
+
+// TwoChars2float 函数，将两个字符转换为 float 类型
+__device__ float TwoChars2float(const char* startAddr) {
+    return static_cast<float>(  static_cast<uint8_t>(startAddr[0]) << 8
+                                | static_cast<uint8_t>(startAddr[1]));
+}
+
+// 核函数：unpackDatabuf2CudaMatrices
+// 该核函数用于将数据从字符数组转换为 cufftComplex 数组
+__global__ void unpackDatabuf2CudaMatrices(const char* data, const size_t* headPositions,
+                                           int numHeads, int rangeNum, cufftComplex* pComplex) {
+    int idx = threadIdx.x;
+
+    if (idx < numHeads) {
+        auto blockIQstartAddr = data + headPositions[idx] + 33 * 4; // 计算数据起始地址
+
+        // 遍历 rangeNum 和 WAVE_NUM，按块处理数据
+        for (int i = 0; i < rangeNum; i++) {
+            for (int j = 0; j < WAVE_NUM; j++) {
+                int blockOffset = i * WAVE_NUM * 4 + j * 4; // 每个数据块的偏移
+                auto newindex = j * NUM_PULSE * RANGE_NUM + idx * RANGE_NUM + i;  // 计算新的索引位置
+
+//                // 检查是否越界访问
+//                if (idx < numHeads - 1 && blockOffset + 4 > headPositions[idx + 1] - headPositions[idx] - 19 * 4) {
+//                    printf("Out of range access at thread %d, i=%d, j=%d\n", idx, i, j);
+//                }
+//
+//                if (newindex >= numHeads * rangeNum) {
+//                    printf("Out of range access at thread %d, i=%d, j=%d\n", idx, i, j);
+//                }
+
+                // 将转换后的数据存入 pComplex 数组
+                pComplex[newindex].x = TwoChars2float(blockIQstartAddr + blockOffset);
+                pComplex[newindex].y = TwoChars2float(blockIQstartAddr + blockOffset + 2);
+            }
+        }
+    }
+}
+
+// 线程池中的数据处理函数
+// #define WAVE_NUM 32    // 波束数
+// #define NUM_PULSE 256     // 一个脉组中的脉冲数
+// #define RANGE_NUM 8192   // 一个脉冲中的距离单元数
+void
+ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, size_t *d_headPositions) {
+    cout << "thread " << threadID << " start" << endl;
+
+    int numHeads = headPositions[threadID].size();       // 256
+    int headLength = headPositions[threadID][1] - headPositions[threadID][0];
+    int rangeNum = floor((headLength - 33 * 4) / WAVE_NUM / 4.0);
+
+    cudaMemcpy(d_headPositions, headPositions[threadID].data(), numHeads * sizeof(size_t), cudaMemcpyHostToDevice);
+    unpackDatabuf2CudaMatrices<<<1, numHeads>>>(threadsMemory[threadID], d_headPositions, numHeads, rangeNum, pComplex);
+
+
+//    for (int idx = 0; idx < numHeads; ++idx) {
+//        char* blockIQstartAddr = threadsMemory[threadID] + headPositions[threadID][idx] + 33 * 4; // 计算数据起始地址
+//        for (int i = 0; i < rangeNum; i++) {
+//            for (int j = 0; j < WAVE_NUM; j++) {
+//                int blockOffset = i * WAVE_NUM * 4 + j * 4; // 每个数据块的偏移
+//                auto newindex = j * NUM_PULSE * RANGE_NUM + idx * RANGE_NUM + i;  // 计算新的索引位置
+//                pComplex[newindex].x = TwoChars2float(blockIQstartAddr + blockOffset);
+//                pComplex[newindex].y = TwoChars2float(blockIQstartAddr + blockOffset + 2);
+//            }
+//        }
+//    }
+
+
+//    for (int i = 0; i < CAL_WAVE_NUM; i++) {
+//        matrices[i].copyFromHost(NUM_PULSE, RANGE_NUM, pComplex + i * NUM_PULSE * RANGE_NUM);
+//    }
+
+//    processPulseGroupData(matrices);
+
+    // 清理 headPositions 数据和设备内存
+    // headPositions[threadID].clear();
+    cout << "thread " << threadID << " process finished" << endl;
+}
+
+
+void ThreadPool::processPulseGroupData(vector<CudaMatrix>& matrices) {
+    for (int i = 0; i < CAL_WAVE_NUM; i++) {
+
+        /*Pulse Compression*/
+        matrices[i].fft();
+        matrices[i].elementWiseMul(PCcoefMatrix);
+        matrices[i].ifft();
+        auto& PCres_Segment = matrices[i];
+
+
+        /*coherent integration*/
+        PCres_Segment.fft_by_col();
+
+        /*cfar*/
+        double Pfa = 1e-6;
+        int numGuardCells = 4;
+        int numRefCells = 20;
+        auto cfar_signal = PCres_Segment.cfar(Pfa, numGuardCells, numRefCells);
+        auto res_cfar = cfar_signal.max();
+//        res_cfar.printLargerThan0();
+    }
 }
 
 
@@ -162,6 +282,7 @@ void ThreadPool::copyToThreadMemory() {
                 if (inPacket) {
                     memcpyDataToThread(copyStartAddr, indexValue);
                     notifyThread(cur_thread_id);
+//                    cout << currentAddrOffset[cur_thread_id] / 1024 / 1024 << " MB " << endl;
                     cur_thread_id = (cur_thread_id + 1) % numThreads;
                 }
 
@@ -200,18 +321,19 @@ void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr
 //                    std::cout << "Copying " << copyLength << " bytes from address " << copyStartAddr << " to thread memory at " << currentAddrOffset[cur_thread_id] << std::endl;
 
     if ((currentAddrOffset[cur_thread_id] + copyLength) <= THREADS_MEM_SIZE) {  // Ensure within buffer bounds
-        memcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id],
-               sharedQueue->buffer + startAddr,
-               copyLength);
+//        memcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id],
+//               sharedQueue->buffer + startAddr,
+//               copyLength);
 
-//        // 内存拷贝到显存
-//        cudaMemcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id],
-//                   sharedQueue->buffer + startAddr,
-//                   copyLength,
-//                   cudaMemcpyHostToDevice);
+        // 内存拷贝到显存
+        cudaMemcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id],
+                   sharedQueue->buffer + startAddr,
+                   copyLength,
+                   cudaMemcpyHostToDevice);
 
         currentAddrOffset[cur_thread_id] += copyLength;
     } else {
+        cout << (currentAddrOffset[cur_thread_id] + copyLength) / 1024 / 1024 << " MB !!!!" << endl;
         std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
     }
 }
@@ -224,7 +346,7 @@ unsigned int ThreadPool::FourChars2Uint(const char* startAddr){
            | static_cast<uint8_t>(startAddr[3]);
 }
 
-float TwoChars2float(const char* startAddr) {
+float ThreadPool::TwoChars2float(const char* startAddr) {
     return static_cast<float>(static_cast<uint8_t>(startAddr[0]) << 8
                               | static_cast<uint8_t>(startAddr[1]));
 }
@@ -250,37 +372,6 @@ void printHex(const char *data, size_t dataSize) {
     std::cout << std::endl;
 }
 
-// 线程池中的数据处理函数
-void ThreadPool::processData(int threadID, cufftComplex* pComplex, vector<CudaMatrix>& matrices) {
-    cout << "thread " << threadID << " start" << endl;
-    int numHeads = headPositions[threadID].size();
-    int headLength = headPositions[threadID][1] - headPositions[threadID][0];
-    int rangeNum = floor((headLength - 33 * 4) / WAVE_NUM / 4.0);
-
-    for (int idx = 0; idx < numHeads; ++idx) {
-        auto blockIQstartAddr = threadsMemory[threadID] + headPositions[threadID][idx] + 33 * 4; // 计算数据起始地址
-//        if (idx == 1 &&threadID == 1) printHex(blockIQstartAddr, 4*50);
-        for (int i = 0; i < rangeNum; i++) {
-            for (int j = 0; j < CAL_WAVE_NUM; j++) {
-                int blockOffset = i * WAVE_NUM * 4 + j * 4; // 每个数据块的偏移
-                auto newindex = j * NUM_PULSE * RANGE_NUM + idx * RANGE_NUM + i;  // 计算新的索引位置
-                pComplex[newindex].x = TwoChars2float(blockIQstartAddr + blockOffset);
-                pComplex[newindex].y = TwoChars2float(blockIQstartAddr + blockOffset + 2);
-            }
-        }
-    }
-
-
-    for (int i = 0; i < CAL_WAVE_NUM; i++) {
-        matrices[i].copyFromHost(NUM_PULSE, RANGE_NUM, pComplex + i * NUM_PULSE * RANGE_NUM);
-    }
-
-    processPulseGroupData(matrices);
-
-    // 清理 headPositions 数据和设备内存
-    // headPositions[threadID].clear();
-    cout << "thread " << threadID << " process finished" << endl;
-}
 
 
 // 线程池中的数据处理函数
@@ -345,28 +436,7 @@ void ThreadPool::processData(int threadID, cufftComplex* pComplex, vector<CudaMa
 //}
 
 
-void ThreadPool::processPulseGroupData(vector<CudaMatrix>& matrices) {
-    for (int i = 0; i < CAL_WAVE_NUM; i++) {
 
-        /*Pulse Compression*/
-        matrices[i].fft();
-        matrices[i].elementWiseMul(PCcoefMatrix);
-        matrices[i].ifft();
-        auto& PCres_Segment = matrices[i];
-
-
-        /*coherent integration*/
-        PCres_Segment.fft_by_col();
-
-        /*cfar*/
-        double Pfa = 1e-6;
-        int numGuardCells = 4;
-        int numRefCells = 20;
-        auto cfar_signal = PCres_Segment.cfar(Pfa, numGuardCells, numRefCells);
-        auto res_cfar = cfar_signal.max();
-//        res_cfar.printLargerThan0();
-    }
-}
 
 //void ThreadPool::processPulseGroupData(vector<CudaMatrix>& matrices) {
 //    using namespace std::chrono;

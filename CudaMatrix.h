@@ -16,8 +16,10 @@
 
 class CudaMatrix {
 private:
+
     int nrows, ncols;
     cufftComplex* data;
+    bool initFromDevice; // 1表示从显存初始化，不用析构函数的时候free
 
 public:
     CudaMatrix() : nrows(0), ncols(0), data(nullptr) {}
@@ -25,8 +27,11 @@ public:
     CudaMatrix(const std::vector<std::vector<cufftComplex>>& hostData);
     CudaMatrix(int rows, int cols, std::vector<cufftComplex> hostData);
     CudaMatrix(int rows, int cols, cufftComplex* hostData);
+    CudaMatrix(int rows, int cols, cufftComplex *hostData, bool deviceFlag);
+
     CudaMatrix(const CudaMatrix& other); // Copy constructor
     CudaMatrix(CudaMatrix&& other) noexcept; // Move constructor
+
     ~CudaMatrix();
 
     size_t size() const { return nrows * ncols; }

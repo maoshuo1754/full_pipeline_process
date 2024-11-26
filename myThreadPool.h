@@ -14,9 +14,9 @@
 #include <chrono>
 
 
-#define THREADS_MEM_SIZE  (2ULL * 768 * 1024 * 1024)  // 每个线程的空间2GB 768
+#define THREADS_MEM_SIZE  (512 * 1024 * 1024)  // 存放未解包数据
 #define WAVE_NUM 32    // 波束数
-#define CAL_WAVE_NUM 20
+#define CAL_WAVE_NUM 16
 
 // TODO: 这里数据更改后需要变
 #define NUM_PULSE 256     // 一个脉组中的脉冲数
@@ -67,13 +67,19 @@ private:
 
     static unsigned int FourChars2Uint(const char *startAddr);
 
-    void processData(int threadID, cufftComplex* pComplex, vector<CudaMatrix>& matrices);
+    void processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, size_t *d_headPositions);
 
     void memcpyDataToThread(unsigned int startAddr, unsigned int endAddr);
 
     void initPCcoefMatrix();
 
     void processPulseGroupData(vector<CudaMatrix> &matrices);
+
+    void allocateThreadMemory();
+
+    void freeThreadMemory();
+
+    float TwoChars2float(const char *startAddr);
 };
 
 void checkCudaErrors(cudaError_t result);
