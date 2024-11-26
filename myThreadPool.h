@@ -14,9 +14,9 @@
 #include <chrono>
 
 
-#define THREADS_MEM_SIZE  (512 * 1024 * 1024)  // 存放未解包数据
+#define THREADS_MEM_SIZE  (300 * 1024 * 1024)  // 存放未解包数据
 #define WAVE_NUM 32    // 波束数
-#define CAL_WAVE_NUM 16
+#define CAL_WAVE_NUM 32
 
 // TODO: 这里数据更改后需要变
 #define NUM_PULSE 256     // 一个脉组中的脉冲数
@@ -36,7 +36,7 @@ private:
     size_t numThreads;
     std::vector<std::thread> threads;           // 线程
     std::vector<char*> threadsMemory;           // 每个线程独立的显存
-    std::vector<std::vector<size_t>> headPositions; // 每个线程独立空间中，packet的起始地址
+    std::vector<std::vector<int>> headPositions; // 每个线程独立空间中，packet的起始地址
     std::vector<cudaStream_t> streams;          // 异步拷贝的时候用，现在没用
     std::vector<size_t> currentPos;             // 记录每个包头的位置
     size_t currentAddrOffset;      // 记录当前数据复制的偏移
@@ -67,13 +67,14 @@ private:
 
     static unsigned int FourChars2Uint(const char *startAddr);
 
-    void processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, size_t *d_headPositions);
+    void processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, int *d_headPositions, vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res);
 
     void memcpyDataToThread(unsigned int startAddr, unsigned int endAddr);
 
     void initPCcoefMatrix();
 
-    void processPulseGroupData(vector<CudaMatrix> &matrices);
+    void processPulseGroupData(int threadID, vector<CudaMatrix> &matrices, vector<CudaMatrix> &CFAR_res,
+                               vector<CudaMatrix> &Max_res);
 
     void allocateThreadMemory();
 

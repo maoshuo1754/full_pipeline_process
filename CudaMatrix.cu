@@ -56,7 +56,7 @@ void CudaMatrix::checkCufftErrors(cufftResult result) {
 }
 
 // Constructor
-CudaMatrix::CudaMatrix(int rows, int cols) : nrows(rows), ncols(cols), data(nullptr), initFromDevice(false)  {
+CudaMatrix::CudaMatrix(int rows, int cols) : nrows(rows), ncols(cols), data(nullptr), initFromDevice(false) {
     allocateMemory();
 }
 
@@ -72,7 +72,7 @@ CudaMatrix::CudaMatrix(const std::vector<std::vector<cufftComplex>>& hostData)
     checkCudaErrors(cudaMemcpy(data, flattenedData.data(), sizeof(cufftComplex) * nrows * ncols, cudaMemcpyHostToDevice));
 }
 
-CudaMatrix::CudaMatrix(int rows, int cols, std::vector<cufftComplex> hostData) : nrows(rows), ncols(cols), data(nullptr), initFromDevice(false)  {
+CudaMatrix::CudaMatrix(int rows, int cols, std::vector<cufftComplex> hostData) : nrows(rows), ncols(cols), data(nullptr), initFromDevice(false) {
     if (hostData.size() != nrows * ncols) {
         throw std::runtime_error("Host data size does not match matrix dimensions.");
     }
@@ -80,12 +80,9 @@ CudaMatrix::CudaMatrix(int rows, int cols, std::vector<cufftComplex> hostData) :
     checkCudaErrors(cudaMemcpy(data, hostData.data(), sizeof(cufftComplex) * nrows * ncols, cudaMemcpyHostToDevice));
 }
 
-CudaMatrix::CudaMatrix(int rows, int cols, cufftComplex* hostData) : nrows(rows), ncols(cols), data(nullptr), initFromDevice(false)  {
+CudaMatrix::CudaMatrix(int rows, int cols, cufftComplex* hostData) : nrows(rows), ncols(cols), data(nullptr), initFromDevice(false) {
     checkCudaErrors(cudaMalloc(&data, sizeof(cufftComplex) * nrows * ncols));
     checkCudaErrors(cudaMemcpy(data, hostData, sizeof(cufftComplex) * nrows * ncols, cudaMemcpyHostToDevice));
-}
-
-CudaMatrix::CudaMatrix(int rows, int cols, cufftComplex* hostData, bool deviceFlag) : nrows(rows), ncols(cols), data(hostData), initFromDevice(true)  {
 }
 
 // Copy constructor
@@ -96,18 +93,20 @@ CudaMatrix::CudaMatrix(const CudaMatrix& other) : nrows(other.nrows), ncols(othe
 }
 
 // Move constructor
-CudaMatrix::CudaMatrix(CudaMatrix&& other) noexcept : nrows(other.nrows), ncols(other.ncols), data(other.data), initFromDevice(false)  {
+CudaMatrix::CudaMatrix(CudaMatrix&& other) noexcept : nrows(other.nrows), ncols(other.ncols), data(other.data), initFromDevice(false) {
     other.data = nullptr;
     other.nrows = 0;
     other.ncols = 0;
 }
 
+CudaMatrix::CudaMatrix(int rows, int cols, cufftComplex* hostData, bool deviceFlag) : nrows(rows), ncols(cols), data(hostData), initFromDevice(true)  {
+}
+
 
 // Destructor
 CudaMatrix::~CudaMatrix() {
-    if (!initFromDevice) {
-        deallocateMemory();
-    }
+    deallocateMemory();
+//    cout << "Destructor" << endl;
 }
 
 // Copy data from host to device
@@ -118,14 +117,18 @@ void CudaMatrix::copyFromHost(const vector<cufftComplex> &hostData) {
     checkCudaErrors(cudaMemcpy(data, hostData.data(), sizeof(cufftComplex) * nrows * ncols, cudaMemcpyHostToDevice));
 }
 
-void CudaMatrix::copyFromHost(int rows, int cols, const cufftComplex* hostData) {
-    if (rows != nrows || cols != nrows) {
+void CudaMatrix::copyFromHost(cudaStream_t _stream, int rows, int cols, const cufftComplex *hostData) {
+//    cout << rows << " " << nrows << "  " << cols << " " << ncols << endl;
+    if (rows != nrows || cols != ncols) {
         deallocateMemory();
         nrows = rows;
         ncols = cols;
         allocateMemory();
+        cout << "3333333333333333333333333333333333333333333333333" << endl;
     }
-    checkCudaErrors(cudaMemcpy(data, hostData, sizeof(cufftComplex) * nrows * ncols, cudaMemcpyHostToDevice));
+//    checkCudaErrors(cudaMemcpy(data, hostData, sizeof(cufftComplex) * nrows * ncols, cudaMemcpyHostToDevice));
+    // 异步拷贝
+    checkCudaErrors(cudaMemcpyAsync(data, hostData, sizeof(cufftComplex) * nrows * ncols, cudaMemcpyHostToDevice, _stream));
 }
 
 // Copy data from device to host
@@ -182,6 +185,24 @@ void CudaMatrix::print() const {
         cout << endl;
     }
     cout << "])" << endl;
+}
+
+void CudaMatrix::print(int row, float des) const {
+    if (row >= nrows || row < 0) {
+        throw runtime_error("Index out of bounds.");
+    }
+
+    vector<cufftComplex> hostData;
+    copyToHost(hostData);
+    int i = row;
+    int count = 0;
+    for (int j = 0; j < ncols; ++j) {
+        if (fabs(hostData[i * ncols + j].x - des) < 1e-5 && fabs(hostData[i * ncols + j].y - des - 4096.0) < 1e-5) {
+            count ++;
+        } else { break; }
+    }
+
+    cout << "count:" << count << endl;
 }
 
 void CudaMatrix::print(int row) const {
@@ -247,7 +268,7 @@ __global__ void elementWiseMulKernel(cufftComplex *d_a, cufftComplex *d_b, cufft
 }
 
 // Element-wise multiplication method
-CudaMatrix CudaMatrix::elementWiseMul(const CudaMatrix &other, bool inplace) const {
+void CudaMatrix::elementWiseMul(const CudaMatrix &other, cudaStream_t _stream) const {
     if (nrows != other.nrows || ncols != other.ncols) {
         throw std::runtime_error("Matrix dimensions must match for element-wise multiplication.");
     }
@@ -256,16 +277,7 @@ CudaMatrix CudaMatrix::elementWiseMul(const CudaMatrix &other, bool inplace) con
     int blockSize = 256;
     int gridSize = (size + blockSize - 1) / blockSize;
 
-    if (inplace) {
-        elementWiseMulKernel<<<gridSize, blockSize>>>(data, other.data, data, size);
-        cudaDeviceSynchronize();
-        return {};
-    } else {
-        CudaMatrix result(nrows, ncols);
-        elementWiseMulKernel<<<gridSize, blockSize>>>(data, other.data, result.data, size);
-        cudaDeviceSynchronize();
-        return result;
-    }
+    elementWiseMulKernel<<<gridSize, blockSize, 0, _stream>>>(data, other.data, data, size);
 }
 
 
@@ -383,35 +395,36 @@ CudaMatrix& CudaMatrix::operator=(CudaMatrix&& other) noexcept {
     return *this;
 }
 
-void CudaMatrix::fft() const{
+void CudaMatrix::fft(cudaStream_t _stream) const{
     cufftHandle plan;
     checkCufftErrors(cufftPlan1d(&plan, ncols, CUFFT_C2C, nrows));
+    cufftSetStream(plan, _stream);
     checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_FORWARD));
     checkCufftErrors(cufftDestroy(plan));
 }
 
-void CudaMatrix::fft_by_col(){
+void CudaMatrix::fft_by_col(cudaStream_t _stream) {
     cufftHandle plan;
 
     // 按列做FFT
-    int batch = ncols;
-    int inembed[] = {ncols};  // 每行数据的大小
-    int onembed[] = {ncols};  // 每行数据的大小
-    int istride = ncols;          // 每个元素步幅
-    int idist = 1;                // 每行之间的距离
-    int ostride = ncols;          // 每个元素步幅
-    int odist = 1;                // 每行之间的距离
-    int n[] = {nrows};            // 每行数据的FFT大小
+//    int batch = ncols;
+//    int inembed[] = {ncols};  // 每行数据的大小
+//    int onembed[] = {ncols};  // 每行数据的大小
+//    int istride = ncols;          // 每个元素步幅
+//    int idist = 1;                // 每行之间的距离
+//    int ostride = ncols;          // 每个元素步幅
+//    int odist = 1;                // 每行之间的距离
+//    int n[] = {nrows};            // 每行数据的FFT大小
 
-    checkCufftErrors(cufftPlanMany(&plan, 1, n, // Rank and size of the FFT
-                           inembed, istride, idist,   // Input data layout
-                           onembed, ostride, odist,   // Output data layout
-                           CUFFT_C2C, batch)   // FFT type and number of FFTs
+    checkCufftErrors(cufftPlanMany(&plan, 1, &nrows, // Rank and size of the FFT
+                           &ncols, ncols, 1,   // Input data layout
+                           &ncols, ncols, 1,   // Output data layout
+                           CUFFT_C2C, ncols)   // FFT type and number of FFTs
     );
 
+    cufftSetStream(plan, _stream);
     checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_FORWARD));
     checkCufftErrors(cufftDestroy(plan));
-
 }
 
 
@@ -473,10 +486,10 @@ struct ScaleFunctor {
     }
 };
 
-void CudaMatrix::ifft() const {
+void CudaMatrix::ifft(cudaStream_t _stream) const {
     cufftHandle plan;
     checkCufftErrors(cufftPlan1d(&plan, ncols, CUFFT_C2C, nrows));
-
+    cufftSetStream(plan, _stream);
     checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_INVERSE));
     checkCufftErrors(cufftDestroy(plan));
     // Scale the result by 1/ncols to get the correct IFFT result
@@ -585,26 +598,21 @@ __global__ void cfarKernel(const cufftComplex* data, cufftComplex* cfar_signal, 
     }
 }
 
-CudaMatrix CudaMatrix::cfar(double Pfa, int numGuardCells, int numRefCells) const {
+void CudaMatrix::cfar(CudaMatrix& output, cudaStream_t _stream, double Pfa, int numGuardCells, int numRefCells) const {
     double alpha = (numRefCells * 2 * (pow(Pfa, -1.0 / (numRefCells * 2)) - 1));
 
     // Compute the absolute values
-    this->abs();
+    this->abs(_stream);
 
     // Compute the squared absolute values
-    this->elementWiseSquare();
-
-    // Initialize the CFAR result matrix
-    CudaMatrix cfar_signal(nrows, ncols);
+    this->elementWiseSquare(_stream);
 
     // Configure the CUDA kernel launch parameters
     dim3 blockDim(16, 16);
     dim3 gridDim((ncols + blockDim.x - 1) / blockDim.x, (nrows + blockDim.y - 1) / blockDim.y);
 
     // Launch the CFAR kernel
-    cfarKernel<<<gridDim, blockDim>>>(data, cfar_signal.data, nrows, ncols, alpha, numGuardCells, numRefCells);
-    cudaDeviceSynchronize();
-    return cfar_signal;
+    cfarKernel<<<gridDim, blockDim, 0, _stream>>>(data, output.data, nrows, ncols, alpha, numGuardCells, numRefCells);
 }
 
 //__global__ void cfarKernel(const cufftComplex *data, cufftComplex *cfar_signal, int nrows, int ncols, double alpha, int numGuardCells, int numRefCells) {
@@ -661,37 +669,34 @@ CudaMatrix CudaMatrix::cfar(double Pfa, int numGuardCells, int numRefCells) cons
 //}
 //
 //
-//CudaMatrix CudaMatrix::cfar(double Pfa, int numGuardCells, int numRefCells) const {
+//void CudaMatrix::cfar(CudaMatrix& output, cudaStream_t _stream, double Pfa, int numGuardCells, int numRefCells) const {
 //    double alpha = (numRefCells * 2 * (pow(Pfa, -1.0 / (numRefCells * 2)) - 1));
 //    // Compute the absolute values
-//    CudaMatrix absData = this->abs(false);
+//    this->abs(_stream);
 //
-//    CudaMatrix squareData = absData.elementWiseSquare(false);
-//    // Initialize the CFAR result matrix
-//    CudaMatrix cfar_signal(nrows, ncols);
+//    // Compute the squared absolute values
+//    this->elementWiseSquare(_stream);
 //
 //    // Configure the CUDA kernel launch parameters
 //    dim3 blockDim(1, 1);  // One thread per row
 //    dim3 gridDim(1, nrows);
 //
 //    // Launch the CFAR kernel
-//    cfarKernel<<<gridDim, blockDim>>>(squareData.data, cfar_signal.data, nrows, ncols, alpha, numGuardCells,
+//    cfarKernel<<<gridDim, blockDim, 0, _stream>>>(data, output.data, nrows, ncols, alpha, numGuardCells,
 //                                      numRefCells);
-//    cudaDeviceSynchronize();
-//
-//    return cfar_signal;
 //}
 
 // 现在是对实部选大，而不是abs
 __global__ void maxKernelDim1(cufftComplex *data, cufftComplex *maxValues, int nrows, int ncols) {
     int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int ind;
     if (col < ncols) {
         float maxVal = data[col].x;
         for (int row = 1; row < nrows; ++row) {
-            cufftComplex val = data[row * ncols + col];
+            ind = row * ncols + col;
 //            if (sqrt(val.x * val.x + val.y * val.y) > sqrt(maxVal.x * maxVal.x + maxVal.y * maxVal.y)) {
-            if (val.x > maxVal) {
-                maxVal = val.x;
+            if (data[ind].x > maxVal) {
+                maxVal = data[ind].x;
             }
         }
         maxValues[col].x = maxVal;
@@ -713,31 +718,11 @@ __global__ void maxKernelDim2(cufftComplex *data, cufftComplex *maxValues, int n
     }
 }
 
-CudaMatrix CudaMatrix::max(int dim) {
-    assert(dim == 1 || dim == 2); // Ensure valid dimension
+void CudaMatrix::max(CudaMatrix &output, cudaStream_t _stream, int dim) {
+    dim3 blockDim(256);
+    dim3 gridDim((ncols + blockDim.x - 1) / blockDim.x);
 
-    if (dim == 1) {
-        auto result = CudaMatrix(1, ncols); // Result will be 1 row, ncols columns
-
-        dim3 blockDim(256);
-        dim3 gridDim((ncols + blockDim.x - 1) / blockDim.x);
-
-        maxKernelDim1<<<gridDim, blockDim>>>(data, result.data, nrows, ncols);
-        cudaDeviceSynchronize();
-
-        return result;
-    } else {
-        auto result = CudaMatrix(nrows, 1); // Result will be nrows rows, 1 column
-
-        dim3 blockDim(256);
-        dim3 gridDim((nrows + blockDim.x - 1) / blockDim.x);
-
-        maxKernelDim2<<<gridDim, blockDim>>>(data, result.data, nrows, ncols);
-        cudaDeviceSynchronize();
-
-        return result;
-    }
-
+    maxKernelDim1<<<gridDim, blockDim, 0, _stream>>>(data, output.data, nrows, ncols);
 }
 
 __global__ void elementWiseSquareKernel(cufftComplex *idata, cufftComplex *odata, int size) {
@@ -749,21 +734,12 @@ __global__ void elementWiseSquareKernel(cufftComplex *idata, cufftComplex *odata
     }
 }
 
-CudaMatrix CudaMatrix::elementWiseSquare(bool inplace) const {
+void CudaMatrix::elementWiseSquare(cudaStream_t _stream) const {
     int blockSize = 256;
     int size = ncols * nrows;
     int gridSize = (size + blockSize - 1) / blockSize;
 
-    if (inplace) {
-        elementWiseSquareKernel<<<gridSize, blockSize>>>(data, data, size);
-        cudaDeviceSynchronize();
-        return {};
-    } else {
-        CudaMatrix result(this->nrows, this->ncols);
-        elementWiseSquareKernel<<<gridSize, blockSize>>>(data, result.data, size);
-        cudaDeviceSynchronize();
-        return result;
-    }
+    elementWiseSquareKernel<<<gridSize, blockSize, 0, _stream>>>(data, data, size);
 }
 
 __global__ void absCufftComplexKernel(cufftComplex *idata, cufftComplex *odata, int size) {
@@ -775,21 +751,11 @@ __global__ void absCufftComplexKernel(cufftComplex *idata, cufftComplex *odata, 
 }
 
 
-CudaMatrix CudaMatrix::abs(bool inplace) const {
+void CudaMatrix::abs(cudaStream_t _stream) const {
     int blockSize = 256;
     int size = ncols * nrows;
     int gridSize = (size + blockSize - 1) / blockSize;
-
-    if (inplace) {
-        absCufftComplexKernel<<<gridSize, blockSize>>>(data, data, size);
-        cudaDeviceSynchronize();
-        return {};
-    } else {
-        CudaMatrix result(this->nrows, this->ncols);
-        absCufftComplexKernel<<<gridSize, blockSize>>>(data, result.data, size);
-        cudaDeviceSynchronize();
-        return result;
-    }
+    absCufftComplexKernel<<<gridSize, blockSize, 0, _stream>>>(data, data, size);
 }
 
 // Allocate memory on the device
@@ -801,7 +767,7 @@ void CudaMatrix::allocateMemory() {
 
 // Deallocate memory on the device
 void CudaMatrix::deallocateMemory() {
-    if (data) {
+    if (data && !initFromDevice) {
         checkCudaErrors(cudaFree(data));
         data = nullptr;
     }
@@ -819,3 +785,4 @@ void CudaMatrix::setSize(int _nrows, int _ncols) {
         checkCudaErrors(cudaMalloc(&data, sizeof(cufftComplex) * nrows * ncols));
     }
 }
+

@@ -5,7 +5,7 @@
 ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue)
         : stop(false), sharedQueue(sharedQueue), processingFlags(numThreads, false),
           conditionVariables(numThreads), mutexes(numThreads),
-          headPositions(numThreads, std::vector<size_t>()), currentPos(numThreads, 0),
+          headPositions(numThreads, std::vector<int>()), currentPos(numThreads, 0),
           currentAddrOffset(0), numThreads(numThreads), inPacket(false),
           cur_thread_id(0), prevSeqNum(0) { // 初始化 conditionVariables 和 mutexes
     // 创建并初始化线程
@@ -23,6 +23,7 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue)
 }
 
 ThreadPool::~ThreadPool() {
+
     stop = true;
     for (auto &cv: conditionVariables) cv.notify_all(); // 通知所有线程退出
     for (std::thread &thread: threads) {
@@ -42,13 +43,22 @@ void ThreadPool::allocateThreadMemory() {
             return;
         }
         threadsMemory.emplace_back(d_memory);
+
+        cudaStream_t stream;
+        if (cudaStreamCreate(&stream) != cudaSuccess) {
+            cerr << "Failed to create stream" << endl;
+        }
+        streams.push_back(stream);
     }
 }
 
 void ThreadPool::freeThreadMemory() {
     for (size_t i = 0; i < numThreads; ++i) {
         cudaFree(threadsMemory[i]);
+        cudaStreamSynchronize(streams[i]); // 等待流中的所有操作完成
+        cudaStreamDestroy(streams[i]);
     }
+
     threadsMemory.clear();
 }
 
@@ -89,21 +99,26 @@ void ThreadPool::threadLoop(int threadID) {
     cufftComplex* pComplex;
     cudaMalloc(&pComplex, sizeof(cufftComplex) * WAVE_NUM * NUM_PULSE * RANGE_NUM);
 
-    // 提前在显存分配好内存，将上述脉组数据拷贝进来处理
+    int* d_headPositions;
+    cudaMalloc(&d_headPositions, 300 * sizeof(size_t));
+
+    // 原始IQ
     vector<CudaMatrix> matrices;
     for (int i = 0; i < WAVE_NUM; i++) {
         matrices.emplace_back(NUM_PULSE, RANGE_NUM, pComplex + i * NUM_PULSE * RANGE_NUM, true);
     }
 
-    size_t* d_headPositions;
-    cudaMalloc(&d_headPositions, 300 * sizeof(size_t));
+    // CFAR结果
+    vector<CudaMatrix> CFAR_res(WAVE_NUM, CudaMatrix(NUM_PULSE, RANGE_NUM));
+    // 选大结果
+    vector<CudaMatrix> Max_res(WAVE_NUM, CudaMatrix(1, RANGE_NUM));
 
     while (!stop) {
         waitForProcessingSignal(threadID);
 
         if (stop) break; // 退出循环
 
-        processData(threadID, pComplex, matrices, d_headPositions); // 处理 CUDA 内存中的数据
+        processData(threadID, pComplex, matrices, d_headPositions, CFAR_res, Max_res); // 处理 CUDA 内存中的数据
 
         // 处理完毕后重置标志
         {
@@ -127,7 +142,7 @@ __device__ float TwoChars2float(const char* startAddr) {
 
 // 核函数：unpackDatabuf2CudaMatrices
 // 该核函数用于将数据从字符数组转换为 cufftComplex 数组
-__global__ void unpackDatabuf2CudaMatrices(const char* data, const size_t* headPositions,
+__global__ void unpackDatabuf2CudaMatrices(const char* data, const int* headPositions,
                                            int numHeads, int rangeNum, cufftComplex* pComplex) {
     int idx = threadIdx.x;
 
@@ -157,53 +172,89 @@ __global__ void unpackDatabuf2CudaMatrices(const char* data, const size_t* headP
     }
 }
 
+
+__global__ void processKernel(char* threadsMemory, cufftComplex* pComplex,
+                              const int* headPositions, int numHeads, int rangeNum) {
+    // 获取线程和网格索引
+    int headIdx = blockIdx.z;  // 每个block.z处理一个头位置
+    int rangeIdx = blockIdx.y * blockDim.x + threadIdx.x; // 每个线程处理一个距离单元
+    int beamIdx = blockIdx.x;  // 每个block.x处理一个波束
+
+    // 检查索引是否越界
+    if (headIdx < numHeads && rangeIdx < rangeNum && beamIdx < WAVE_NUM) {
+        // 计算头位置的起始地址
+        int headOffset = headPositions[headIdx];
+        char* blockIQstartAddr = threadsMemory + headOffset + 33 * 4;
+
+        // 计算当前数据块的偏移和新索引
+        int blockOffset = rangeIdx * WAVE_NUM * 4 + beamIdx * 4;
+        int newIndex = beamIdx * NUM_PULSE * RANGE_NUM + headIdx * RANGE_NUM + rangeIdx;
+
+        // 提取IQ数据并存储到结果数组
+        pComplex[newIndex].x = TwoChars2float(blockIQstartAddr + blockOffset);
+        pComplex[newIndex].y = TwoChars2float(blockIQstartAddr + blockOffset + 2);
+    }
+}
+
 // 线程池中的数据处理函数
 // #define WAVE_NUM 32    // 波束数
 // #define NUM_PULSE 256     // 一个脉组中的脉冲数
 // #define RANGE_NUM 8192   // 一个脉冲中的距离单元数
-void
-ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, size_t *d_headPositions) {
+void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices,
+                             int *d_headPositions, vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res) {
+
     cout << "thread " << threadID << " start" << endl;
 
     int numHeads = headPositions[threadID].size();       // 256
     int headLength = headPositions[threadID][1] - headPositions[threadID][0];
     int rangeNum = floor((headLength - 33 * 4) / WAVE_NUM / 4.0);
 
-    cudaMemcpy(d_headPositions, headPositions[threadID].data(), numHeads * sizeof(size_t), cudaMemcpyHostToDevice);
-    unpackDatabuf2CudaMatrices<<<1, numHeads>>>(threadsMemory[threadID], d_headPositions, numHeads, rangeNum, pComplex);
+    cudaMemcpyAsync(d_headPositions, headPositions[threadID].data(), numHeads * sizeof(size_t), cudaMemcpyHostToDevice, streams[threadID]);
 
-    matrices[0].print(255);
-//    for (int i = 0; i < CAL_WAVE_NUM; i++) {
-//        matrices[i].copyFromHost(NUM_PULSE, RANGE_NUM, pComplex + i * NUM_PULSE * RANGE_NUM);
+//    unpackDatabuf2CudaMatrices<<<1, numHeads, 0, streams[threadID]>>>(threadsMemory[threadID], d_headPositions, numHeads, rangeNum, pComplex);
+
+    // 定义 blockDim 的大小
+    const int threadsPerBlock = 256; // 每个block的线程数，根据硬件性能选择
+
+    // 计算 gridDim 的大小
+    dim3 gridDim1(WAVE_NUM, (rangeNum + threadsPerBlock - 1) / threadsPerBlock, numHeads);
+
+    processKernel<<<gridDim1, threadsPerBlock, 0, streams[threadID]>>>(threadsMemory[threadID], pComplex, d_headPositions, numHeads, rangeNum);
+
+//    cudaStreamSynchronize(streams[threadID]);
+//    if (!threadID) {
+//        for (int i = 0; i < WAVE_NUM; i++) {
+//            matrices[i].print(i, i+1);
+//        }
+//
 //    }
 
-//    processPulseGroupData(matrices);
+    processPulseGroupData(threadID, matrices, CFAR_res, Max_res);
 
-    // 清理 headPositions 数据和设备内存
-    // headPositions[threadID].clear();
     cout << "thread " << threadID << " process finished" << endl;
 }
 
 
-void ThreadPool::processPulseGroupData(vector<CudaMatrix>& matrices) {
+void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrices, vector<CudaMatrix> &CFAR_res,
+                                       vector<CudaMatrix> &Max_res) {
     for (int i = 0; i < CAL_WAVE_NUM; i++) {
 
         /*Pulse Compression*/
-        matrices[i].fft();
-        matrices[i].elementWiseMul(PCcoefMatrix);
-        matrices[i].ifft();
+        matrices[i].fft(streams[threadID]);
+        matrices[i].elementWiseMul(PCcoefMatrix, streams[threadID]);
+        matrices[i].ifft(streams[threadID]);
         auto& PCres_Segment = matrices[i];
 
 
         /*coherent integration*/
-        PCres_Segment.fft_by_col();
+        PCres_Segment.fft_by_col(streams[threadID]);
 
         /*cfar*/
         double Pfa = 1e-6;
         int numGuardCells = 4;
         int numRefCells = 20;
-        auto cfar_signal = PCres_Segment.cfar(Pfa, numGuardCells, numRefCells);
-        auto res_cfar = cfar_signal.max();
+        PCres_Segment.cfar(CFAR_res[i], streams[threadID], Pfa, numGuardCells, numRefCells);
+        CFAR_res[i].max(Max_res[i], streams[threadID], 1);
 //        res_cfar.printLargerThan0();
     }
 }
@@ -312,10 +363,12 @@ void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr
 //               copyLength);
 
 //        // 内存拷贝到显存
-        cudaMemcpy(threadsMemory[cur_thread_id] + currentAddrOffset,
+        cudaMemcpyAsync(threadsMemory[cur_thread_id] + currentAddrOffset,
                    sharedQueue->buffer + startAddr,
                    copyLength,
-                   cudaMemcpyHostToDevice);
+                   cudaMemcpyHostToDevice,
+                   streams[cur_thread_id]
+                   );
 
         currentAddrOffset += copyLength;
     } else {

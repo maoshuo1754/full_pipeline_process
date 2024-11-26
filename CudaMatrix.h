@@ -16,14 +16,14 @@
 
 class CudaMatrix {
 private:
-
     int nrows, ncols;
     cufftComplex* data;
-    bool initFromDevice; // 1表示从显存初始化，不用析构函数的时候free
+    bool initFromDevice;
 
 public:
     CudaMatrix() : nrows(0), ncols(0), data(nullptr) {}
     CudaMatrix(int rows, int cols);
+    CudaMatrix(int rows, int cols, cudaStream_t& stream);
     CudaMatrix(const std::vector<std::vector<cufftComplex>>& hostData);
     CudaMatrix(int rows, int cols, std::vector<cufftComplex> hostData);
     CudaMatrix(int rows, int cols, cufftComplex* hostData);
@@ -31,7 +31,6 @@ public:
 
     CudaMatrix(const CudaMatrix& other); // Copy constructor
     CudaMatrix(CudaMatrix&& other) noexcept; // Move constructor
-
     ~CudaMatrix();
 
     size_t size() const { return nrows * ncols; }
@@ -43,32 +42,33 @@ public:
     void setElement(int x, int y, cufftComplex value);
 
     void copyFromHost(const std::vector<cufftComplex>& hostData);
-    void copyFromHost(int rows, int cols, const cufftComplex* hostData);
+    void copyFromHost(cudaStream_t _stream, int rows, int cols, const cufftComplex *hostData);
     void copyToHost(std::vector<cufftComplex>& hostData) const;
     std::vector<std::vector<cufftComplex>> to2DVector() const;
     void fillWithRandomValues();
     void print() const;
     void print(int row) const;
+    void print(int row, float des) const;
     void printLargerThan0() const;
 
-    CudaMatrix max(int dim = 1);
+    void max(CudaMatrix &output, cudaStream_t _stream, int dim=1);
 
     CudaMatrix T(bool inplace = true);
     CudaMatrix operator*(const CudaMatrix& other) const;
     CudaMatrix& operator=(const CudaMatrix& other);     // Copy assignment
     CudaMatrix& operator=(CudaMatrix&& other) noexcept; // Move assignment
     bool operator==(const CudaMatrix& other) const;
-    CudaMatrix elementWiseMul(const CudaMatrix& other, bool inplace = true) const;
-    CudaMatrix elementWiseSquare(bool inplace = true) const;
-    CudaMatrix abs(bool inplace = true) const;
+    void elementWiseMul(const CudaMatrix &other, cudaStream_t _stream) const;
+    void elementWiseSquare(cudaStream_t _stream) const;
+    void abs(cudaStream_t _stream) const;
 
-    void fft() const;
-    void fft_by_col();
-    void ifft() const;
+    void fft(cudaStream_t _stream) const;
+    void fft_by_col(cudaStream_t _stream);
+    void ifft(cudaStream_t _stream) const;
     void fft_N(int nPoints);
 
     CudaMatrix extractSegment(int startInd, int rangeNumber) const;
-    CudaMatrix cfar(double Pfa, int numGuardCells, int numRefCells) const;
+    void cfar(CudaMatrix& output, cudaStream_t stream, double Pfa, int numGuardCells, int numRefCells) const;
     void writeMatTxt(const std::string &filePath) const;
 
 private:
@@ -77,6 +77,8 @@ private:
     static void checkCudaErrors(cudaError_t result);
     static void checkCublasErrors(cublasStatus_t result);
     static void checkCufftErrors(cufftResult result);
+
+
 };
 
 #endif // CUDA_MATRIX_H
