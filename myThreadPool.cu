@@ -209,7 +209,7 @@ void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMa
     int headLength = headPositions[threadID][1] - headPositions[threadID][0];
     int rangeNum = floor((headLength - 33 * 4) / WAVE_NUM / 4.0);
 
-    cudaMemcpyAsync(d_headPositions, headPositions[threadID].data(), numHeads * sizeof(size_t), cudaMemcpyHostToDevice, streams[threadID]);
+    cudaMemcpyAsync(d_headPositions, headPositions[threadID].data(), numHeads * sizeof(int), cudaMemcpyHostToDevice, streams[threadID]);
 
 //    unpackDatabuf2CudaMatrices<<<1, numHeads, 0, streams[threadID]>>>(threadsMemory[threadID], d_headPositions, numHeads, rangeNum, pComplex);
 
@@ -229,14 +229,14 @@ void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMa
 //
 //    }
 
-    processPulseGroupData(threadID, matrices, CFAR_res, Max_res);
+    processPulseGroupData(threadID, matrices, CFAR_res, Max_res, rangeNum);
 
     cout << "thread " << threadID << " process finished" << endl;
 }
 
 
 void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrices, vector<CudaMatrix> &CFAR_res,
-                                       vector<CudaMatrix> &Max_res) {
+                                       vector<CudaMatrix> &Max_res, int rangeNum) {
     for (int i = 0; i < CAL_WAVE_NUM; i++) {
 
         /*Pulse Compression*/
@@ -253,7 +253,7 @@ void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrice
         double Pfa = 1e-6;
         int numGuardCells = 4;
         int numRefCells = 20;
-        PCres_Segment.cfar(CFAR_res[i], streams[threadID], Pfa, numGuardCells, numRefCells);
+        PCres_Segment.cfar(CFAR_res[i], streams[threadID], Pfa, numGuardCells, numRefCells, numSamples-1, numSamples-1+rangeNum);
         CFAR_res[i].max(Max_res[i], streams[threadID], 1);
 //        res_cfar.printLargerThan0();
     }

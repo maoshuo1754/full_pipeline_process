@@ -68,7 +68,8 @@ public:
     void fft_N(int nPoints);
 
     CudaMatrix extractSegment(int startInd, int rangeNumber) const;
-    void cfar(CudaMatrix& output, cudaStream_t stream, double Pfa, int numGuardCells, int numRefCells) const;
+    void cfar(CudaMatrix &output, cudaStream_t stream, double Pfa, int numGuardCells, int numRefCells,
+              int leftBoundary, int rightBoundary) const;
     void writeMatTxt(const std::string &filePath) const;
 
 private:

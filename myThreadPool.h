@@ -74,7 +74,7 @@ private:
     void initPCcoefMatrix();
 
     void processPulseGroupData(int threadID, vector<CudaMatrix> &matrices, vector<CudaMatrix> &CFAR_res,
-                               vector<CudaMatrix> &Max_res);
+                               vector<CudaMatrix> &Max_res, int rangeNum);
 
     void allocateThreadMemory();
 
