@@ -20,6 +20,7 @@ int main(){
     sharedQueue->read_index = 0;
     sharedQueue->write_index = 0;
 
-    auto thread_pool = ThreadPool(NUM_THREADS, sharedQueue);
+    ThreadPool thread_pool(NUM_THREADS, sharedQueue);
+//    cout << sizeof(thread_pool) << endl;
     thread_pool.run();
 }

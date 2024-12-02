@@ -136,6 +136,7 @@ void CudaMatrix::copyToHost(vector<cufftComplex> &hostData) const {
     checkCudaErrors(cudaMemcpy(hostData.data(), data, sizeof(cufftComplex) * nrows * ncols, cudaMemcpyDeviceToHost));
 }
 
+// 将显存的数据拷贝回内存，hostData需要提前new好
 void CudaMatrix::copyToHost(cufftComplex* hostData) const {
     checkCudaErrors(cudaMemcpy(hostData, data, sizeof(cufftComplex) * nrows * ncols, cudaMemcpyDeviceToHost));
 }

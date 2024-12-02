@@ -145,12 +145,6 @@ void ThreadPool::threadLoop(int threadID) {
     }
 }
 
-// TwoChars2float 函数，将两个字符转换为 float 类型
-__device__ float TwoChars2float(const char *startAddr) {
-    return static_cast<float>(  static_cast<uint8_t>(startAddr[0]) << 8
-                                | static_cast<uint8_t>(startAddr[1]));
-}
-
 __global__ void processKernel(char *threadsMemory, cufftComplex *pComplex,
                               const int *headPositions, int numHeads, int rangeNum) {
     // 获取线程和网格索引
@@ -187,6 +181,7 @@ void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMa
     int headLength = headPositions[threadID][1] - headPositions[threadID][0];
     int rangeNum = floor((headLength - 33 * 4) / WAVE_NUM / 4.0);
 
+    // 头的位置拷贝到显存
     cudaMemcpyAsync(d_headPositions, headPositions[threadID].data(), numHeads * sizeof(int), cudaMemcpyHostToDevice,
                     streams[threadID]);
 
@@ -196,6 +191,7 @@ void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMa
     // 计算 gridDim 的大小
     dim3 gridDim1(WAVE_NUM, (rangeNum + threadsPerBlock - 1) / threadsPerBlock, numHeads);
 
+    // 在gpu解包
     processKernel<<<gridDim1, threadsPerBlock, 0, streams[threadID]>>>(threadsMemory[threadID], pComplex,
                                                                        d_headPositions, numHeads, rangeNum);
 
@@ -205,16 +201,18 @@ void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMa
 //            matrices[i].print(i, i+1);
 //        }
 //    }
-
     processPulseGroupData(threadID, matrices, CFAR_res, Max_res, rangeNum);
 
+    // 选大结果拷贝回内存
     for (int i = 0; i < CAL_WAVE_NUM; i++) {
         Max_res[i].copyToHost(Max_res_host[i]);
     }
 
+
     cout << "thread " << threadID << " process finished" << endl;
 }
 
+// 在GPU处理一个脉组的所有波束的数据，全流程处理，包括脉压、积累、CFAR、选大。
 void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrices, vector<CudaMatrix> &CFAR_res,
                                        vector<CudaMatrix> &Max_res, int rangeNum) {
     for (int i = 0; i < CAL_WAVE_NUM; i++) {
@@ -229,8 +227,6 @@ void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrice
             PCres_Segment.fft_by_col(streams[threadID]);
         }
 
-
-
         /*cfar*/
         double Pfa = 1e-6;
         int numGuardCells = 4;
@@ -241,7 +237,7 @@ void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrice
     }
 }
 
-
+// 通知线程池里的线程开始干活
 void ThreadPool::notifyThread(int threadID) {
     bool currenState = processingFlags[threadID];
     if (currenState) {
@@ -263,6 +259,7 @@ void ThreadPool::waitForProcessingSignal(int threadID) {
     });
 }
 
+// 循环将内存的数据拷贝到显存(未解包)，每个线程对应一个脉组的数据
 void ThreadPool::copyToThreadMemory() {
     int block_index = sharedQueue->read_index;
 //    std::cout << "Block index: " << block_index << std::endl << std::endl;
@@ -336,6 +333,7 @@ void ThreadPool::copyToThreadMemory() {
     sharedQueue->read_index = (sharedQueue->read_index + 1) % QUEUE_SIZE;
 }
 
+// 从startAddr到endAddr的数据拷贝给线程的独立空间，Addr是相对于共享内存的起始地址
 void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr) {
     size_t copyLength = endAddr - startAddr;
 //    std::cout << "Copying " << copyLength / 1024 / 1024 << " MB from address " << startAddr << " to thread memory at " << currentAddrOffset << std::endl;
@@ -368,28 +366,9 @@ unsigned int ThreadPool::FourChars2Uint(const char *startAddr) {
            | static_cast<uint8_t>(startAddr[3]);
 }
 
-float ThreadPool::TwoChars2float(const char *startAddr) {
-    return static_cast<float>(static_cast<uint8_t>(startAddr[0]) << 8
-                              | static_cast<uint8_t>(startAddr[1]));
-}
 
-// 检查 CUDA 错误的函数
-void checkCudaErrors(cudaError_t result) {
-    if (result != cudaSuccess) {
-        throw runtime_error(cudaGetErrorString(result));
-    }
-}
-
-void printHex(const char *data, size_t dataSize) {
-    for (int i = 0; i < dataSize; ++i) {
-        if (i % 4 == 0) {
-            cout << endl;
-            printf("%d: ", i / 4);
-        }
-
-        std::cout << std::hex << std::setw(2) << std::setfill('0') << (static_cast<unsigned int>(data[i]) & (0xFF))
-                  << " ";
-    }
-    std::cout << std::dec;
-    std::cout << std::endl;
+// TwoChars2float 函数，将两个字符转换为 float 类型
+__device__ float TwoChars2float(const char *startAddr) {
+    return static_cast<float>(  static_cast<uint8_t>(startAddr[0]) << 8
+                                | static_cast<uint8_t>(startAddr[1]));
 }
