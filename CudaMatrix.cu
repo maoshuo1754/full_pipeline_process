@@ -124,7 +124,6 @@ void CudaMatrix::copyFromHost(cudaStream_t _stream, int rows, int cols, const cu
         nrows = rows;
         ncols = cols;
         allocateMemory();
-        cout << "3333333333333333333333333333333333333333333333333" << endl;
     }
 //    checkCudaErrors(cudaMemcpy(data, hostData, sizeof(cufftComplex) * nrows * ncols, cudaMemcpyHostToDevice));
     // 异步拷贝
@@ -135,6 +134,10 @@ void CudaMatrix::copyFromHost(cudaStream_t _stream, int rows, int cols, const cu
 void CudaMatrix::copyToHost(vector<cufftComplex> &hostData) const {
     hostData.resize(nrows * ncols);
     checkCudaErrors(cudaMemcpy(hostData.data(), data, sizeof(cufftComplex) * nrows * ncols, cudaMemcpyDeviceToHost));
+}
+
+void CudaMatrix::copyToHost(cufftComplex* hostData) const {
+    checkCudaErrors(cudaMemcpy(hostData, data, sizeof(cufftComplex) * nrows * ncols, cudaMemcpyDeviceToHost));
 }
 
 // Get matrix data as 2D vector
@@ -556,11 +559,12 @@ void CudaMatrix::writeMatTxt(const std::string &filePath) const {
     outfile.close();
 }
 
-//__global__ void cfarKernel(const cufftComplex* data, cufftComplex* cfar_signal, int nrows, int ncols, double alpha, int numGuardCells, int numRefCells) {
+//__global__ void cfarKernel(const cufftComplex* data, cufftComplex* cfar_signal, int nrows, int ncols, double alpha,
+//                           int numGuardCells, int numRefCells, int leftBoundary, int rightBoundary) {
 //    int row = blockIdx.y * blockDim.y + threadIdx.y;
 //    int col = blockIdx.x * blockDim.x + threadIdx.x;
 //
-//    if (row < nrows && col < ncols) {
+//    if (row < nrows && col < ncols && col >= leftBoundary && col < rightBoundary) {
 //        int total_training_cells = numGuardCells + numRefCells;
 //
 //        double noise_level = 0.0;
@@ -613,7 +617,7 @@ void CudaMatrix::writeMatTxt(const std::string &filePath) const {
 //    dim3 gridDim((ncols + blockDim.x - 1) / blockDim.x, (nrows + blockDim.y - 1) / blockDim.y);
 //
 //    // Launch the CFAR kernel
-//    cfarKernel<<<gridDim, blockDim, 0, _stream>>>(data, output.data, nrows, ncols, alpha, numGuardCells, numRefCells);
+//    cfarKernel<<<gridDim, blockDim, 0, _stream>>>(data, output.data, nrows, ncols, alpha, numGuardCells, numRefCells, leftBoundary, rightBoundary);
 //}
 
 __global__ void cfarKernel(const cufftComplex* data, cufftComplex* cfar_signal, int nrows, int ncols,
@@ -623,8 +627,8 @@ __global__ void cfarKernel(const cufftComplex* data, cufftComplex* cfar_signal, 
     int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
 
     int totalTrainingCells = numGuardCells + numRefCells;
-    int col_start = max(thread_id * 256, leftBoundary + totalTrainingCells);
-    int col_end = min(col_start + 256, rightBoundary - totalTrainingCells);
+    int col_start = max(thread_id * CFAR_LENGTH, leftBoundary + totalTrainingCells);
+    int col_end = min(col_start + CFAR_LENGTH, rightBoundary - totalTrainingCells);
 
     if (col_start >= ncols || row >= nrows) return;
 
@@ -662,8 +666,8 @@ void CudaMatrix::cfar(CudaMatrix &output, cudaStream_t _stream, double Pfa, int 
     this->elementWiseSquare(_stream);
 
     // Configure the CUDA kernel launch parameters
-    int threadsPerBlock = 32; // 每个线程块中的线程数
-    int colsPerThread = 256; // 每个线程处理的列数
+    int colsPerThread = CFAR_LENGTH; // 每个线程处理的列数
+    int threadsPerBlock = RANGE_NUM / colsPerThread; // 每个线程块中的线程数
     int blocksPerRow = (ncols + colsPerThread - 1) / colsPerThread / threadsPerBlock; // 每行的线程块数
     dim3 blockDim(threadsPerBlock, 1); // 线程块大小：1 行 x 32 列
     dim3 gridDim(blocksPerRow, nrows); // 网格大小：每行 block 数 x 总行数

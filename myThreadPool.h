@@ -19,7 +19,7 @@
 #define CAL_WAVE_NUM 32
 
 // TODO: 这里数据更改后需要变
-#define NUM_PULSE 256     // 一个脉组中的脉冲数
+#define NUM_PULSE 256     // 一个波束中的脉冲数
 #define RANGE_NUM 8192   // 一个脉冲中的距离单元数
 
 using namespace std;
@@ -27,7 +27,8 @@ using namespace std::chrono;
 
 class ThreadPool {
 public:
-    ThreadPool(size_t numThreads, SharedQueue* sharedQueue);
+    ThreadPool(size_t numThreads, SharedQueue *sharedQueue);
+
     ~ThreadPool();
 
     void run();
@@ -35,7 +36,7 @@ public:
 private:
     size_t numThreads;
     std::vector<std::thread> threads;           // 线程
-    std::vector<char*> threadsMemory;           // 每个线程独立的显存
+    std::vector<char *> threadsMemory;           // 每个线程独立的显存
     std::vector<std::vector<int>> headPositions; // 每个线程独立空间中，packet的起始地址
     std::vector<cudaStream_t> streams;          // 异步拷贝的时候用，现在没用
     std::vector<size_t> currentPos;             // 记录每个包头的位置
@@ -47,7 +48,7 @@ private:
 
     std::vector<std::condition_variable> conditionVariables; // 条件变量
     std::vector<std::mutex> mutexes;            // 互斥锁
-    SharedQueue* sharedQueue;
+    SharedQueue *sharedQueue;
     bool inPacket;                              // 记录是否正在一个脉组中
     unsigned int prevSeqNum;
     unsigned int prevIndexValue; // 上一个packet相对于1GB的起始地址
@@ -61,13 +62,18 @@ private:
     int numSamples;             // 脉压采样点数
 
     void threadLoop(int threadID);
+
     void copyToThreadMemory();
+
     void notifyThread(int threadID);
+
     void waitForProcessingSignal(int threadID);
 
     static unsigned int FourChars2Uint(const char *startAddr);
 
-    void processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, int *d_headPositions, vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res);
+    void processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, int *d_headPositions,
+                     vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res,
+                     vector<cufftComplex *> &Max_res_host);
 
     void memcpyDataToThread(unsigned int startAddr, unsigned int endAddr);
 
@@ -84,4 +90,5 @@ private:
 };
 
 void checkCudaErrors(cudaError_t result);
+
 #endif // THREADPOOL_H

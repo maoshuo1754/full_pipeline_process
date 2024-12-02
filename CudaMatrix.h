@@ -14,6 +14,9 @@
 #include <thrust/transform.h>
 #include <thrust/functional.h>
 
+#define RANGE_NUM 8192   // 一个脉冲中的距离单元数
+#define CFAR_LENGTH 16  // CFAR 分段处理长度
+
 class CudaMatrix {
 private:
     int nrows, ncols;
@@ -44,6 +47,7 @@ public:
     void copyFromHost(const std::vector<cufftComplex>& hostData);
     void copyFromHost(cudaStream_t _stream, int rows, int cols, const cufftComplex *hostData);
     void copyToHost(std::vector<cufftComplex>& hostData) const;
+    void copyToHost(cufftComplex *hostData) const;
     std::vector<std::vector<cufftComplex>> to2DVector() const;
     void fillWithRandomValues();
     void print() const;
@@ -78,6 +82,7 @@ private:
     static void checkCudaErrors(cudaError_t result);
     static void checkCublasErrors(cublasStatus_t result);
     static void checkCufftErrors(cufftResult result);
+
 
 
 };
