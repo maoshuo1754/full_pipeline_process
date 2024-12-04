@@ -399,16 +399,13 @@ CudaMatrix& CudaMatrix::operator=(CudaMatrix&& other) noexcept {
     return *this;
 }
 
-void CudaMatrix::fft(cudaStream_t _stream) const{
-    cufftHandle plan;
-    checkCufftErrors(cufftPlan1d(&plan, ncols, CUFFT_C2C, nrows));
+void CudaMatrix::fft(cufftHandle &plan, cudaStream_t _stream) const{
+//    checkCufftErrors(cufftPlan1d(&plan, ncols, CUFFT_C2C, nrows));
     cufftSetStream(plan, _stream);
     checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_FORWARD));
-    checkCufftErrors(cufftDestroy(plan));
 }
 
-void CudaMatrix::fft_by_col(cudaStream_t _stream) {
-    cufftHandle plan;
+void CudaMatrix::fft_by_col(cufftHandle &plan, cudaStream_t _stream) {
 
     // 按列做FFT
 //    int batch = ncols;
@@ -420,15 +417,15 @@ void CudaMatrix::fft_by_col(cudaStream_t _stream) {
 //    int odist = 1;                // 每行之间的距离
 //    int n[] = {nrows};            // 每行数据的FFT大小
 
-    checkCufftErrors(cufftPlanMany(&plan, 1, &nrows, // Rank and size of the FFT
-                           &ncols, ncols, 1,   // Input data layout
-                           &ncols, ncols, 1,   // Output data layout
-                           CUFFT_C2C, ncols)   // FFT type and number of FFTs
-    );
+//    checkCufftErrors(cufftPlanMany(&plan, 1, &nrows, // Rank and size of the FFT
+//                           &ncols, ncols, 1,   // Input data layout
+//                           &ncols, ncols, 1,   // Output data layout
+//                           CUFFT_C2C, batch)   // FFT type and number of FFTs
+//    );
 
     cufftSetStream(plan, _stream);
     checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_FORWARD));
-    checkCufftErrors(cufftDestroy(plan));
+//    checkCufftErrors(cufftDestroy(plan));
 }
 
 
@@ -490,13 +487,9 @@ struct ScaleFunctor {
     }
 };
 
-void CudaMatrix::ifft(cudaStream_t _stream) const {
-    cufftHandle plan;
-    checkCufftErrors(cufftPlan1d(&plan, ncols, CUFFT_C2C, nrows));
+void CudaMatrix::ifft(cufftHandle &plan, cudaStream_t _stream) const {
     cufftSetStream(plan, _stream);
     checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_INVERSE));
-    checkCufftErrors(cufftDestroy(plan));
-    // Scale the result by 1/ncols to get the correct IFFT result
     float scale = 1.0f / ncols;
     thrust::device_ptr<cufftComplex> thrust_data(data);
     thrust::transform(thrust_data, thrust_data + nrows * ncols, thrust_data, ScaleFunctor(scale));
@@ -752,7 +745,6 @@ void CudaMatrix::abs(cudaStream_t _stream) const {
 
 // Allocate memory on the device
 void CudaMatrix::allocateMemory() {
-
     if (nrows > 0 && ncols > 0) {
         checkCudaErrors(cudaMalloc(&data, sizeof(cufftComplex) * nrows * ncols));
     }

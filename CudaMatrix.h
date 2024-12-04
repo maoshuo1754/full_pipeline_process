@@ -66,9 +66,9 @@ public:
     void elementWiseSquare(cudaStream_t _stream) const;
     void abs(cudaStream_t _stream) const;
 
-    void fft(cudaStream_t _stream) const;
-    void fft_by_col(cudaStream_t _stream);
-    void ifft(cudaStream_t _stream) const;
+    void fft(cufftHandle &plan, cudaStream_t _stream) const;
+    void fft_by_col(cufftHandle &plan, cudaStream_t _stream);
+    void ifft(cufftHandle &plan, cudaStream_t _stream) const;
     void fft_N(int nPoints);
 
     CudaMatrix extractSegment(int startInd, int rangeNumber) const;

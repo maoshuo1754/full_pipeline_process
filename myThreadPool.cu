@@ -15,8 +15,10 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue)
     for (size_t i = 0; i < numThreads; ++i) {
         threads.emplace_back(&ThreadPool::threadLoop, this, i);
     }
-    allocateThreadMemory();
+
     initPCcoefMatrix();
+    allocateThreadMemory();
+
     circleStartTime = high_resolution_clock::now();
 
     cout << "Initial Finished" << endl;
@@ -34,6 +36,17 @@ ThreadPool::~ThreadPool() {
 }
 
 void ThreadPool::allocateThreadMemory() {
+    int nrows = NUM_PULSE;
+    int ncols = RANGE_NUM;
+    checkCufftErrors(cufftPlan1d(&rowPlan, ncols, CUFFT_C2C, nrows));
+
+    checkCufftErrors(cufftPlanMany(&colPlan, 1, &nrows,     // Rank and size of the FFT
+                           &ncols, ncols, 1,              // Input data layout
+                           &ncols, ncols, 1,            // Output data layout
+                           CUFFT_C2C, 7498 + numSamples - 1)      // FFT type and number of FFTs
+    );
+
+
     for (size_t i = 0; i < numThreads; ++i) {
         char *d_memory = nullptr;
         cudaError_t err = cudaMalloc((void **) &d_memory, THREADS_MEM_SIZE);  // 在显存中分配内存
@@ -58,7 +71,8 @@ void ThreadPool::freeThreadMemory() {
         cudaStreamSynchronize(streams[i]); // 等待流中的所有操作完成
         cudaStreamDestroy(streams[i]);
     }
-
+    checkCufftErrors(cufftDestroy(rowPlan));
+    checkCufftErrors(cufftDestroy(colPlan));
     threadsMemory.clear();
 }
 
@@ -175,7 +189,9 @@ __global__ void processKernel(char *threadsMemory, cufftComplex *pComplex,
 void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, int *d_headPositions,
                              vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res,
                              vector<cufftComplex *> &Max_res_host) {
+//    return;
     cout << "thread " << threadID << " start" << endl;
+    auto start = high_resolution_clock::now();
 
     int numHeads = headPositions[threadID].size();       // 256
     int headLength = headPositions[threadID][1] - headPositions[threadID][0];
@@ -208,30 +224,33 @@ void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMa
         Max_res[i].copyToHost(Max_res_host[i]);
     }
 
+    // 记录结束时间
+    auto endTime = high_resolution_clock::now();
 
-    cout << "thread " << threadID << " process finished" << endl;
+    // 输出时间统计
+    cout << "thread " << threadID << " process finished after " << duration_cast<milliseconds>(endTime - start).count() << " ms" << endl;
 }
 
 // 在GPU处理一个脉组的所有波束的数据，全流程处理，包括脉压、积累、CFAR、选大。
 void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrices, vector<CudaMatrix> &CFAR_res,
                                        vector<CudaMatrix> &Max_res, int rangeNum) {
+
     for (int i = 0; i < CAL_WAVE_NUM; i++) {
         /*Pulse Compression*/
-        matrices[i].fft(streams[threadID]);
+        matrices[i].fft(rowPlan, streams[threadID]);
         matrices[i].elementWiseMul(PCcoefMatrix, streams[threadID]);
-        matrices[i].ifft(streams[threadID]);
-        auto &PCres_Segment = matrices[i];
+        matrices[i].ifft(rowPlan, streams[threadID]);
 
         /*coherent integration*/
-        for (int j = 0; j < 10; j++) {
-            PCres_Segment.fft_by_col(streams[threadID]);
+        for (int j = 0; j < 20; j++) {
+            matrices[i].fft_by_col(colPlan, streams[threadID]);
         }
 
         /*cfar*/
         double Pfa = 1e-6;
         int numGuardCells = 4;
         int numRefCells = 20;
-        PCres_Segment.cfar(CFAR_res[i], streams[threadID], Pfa, numGuardCells, numRefCells, numSamples - 1,
+        matrices[i].cfar(CFAR_res[i], streams[threadID], Pfa, numGuardCells, numRefCells, numSamples - 1,
                            numSamples - 1 + rangeNum);
         CFAR_res[i].max(Max_res[i], streams[threadID], 1);
     }
@@ -355,6 +374,42 @@ void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr
     } else {
 //        cout << (currentAddrOffset + copyLength) / 1024 / 1024 << " MB !!!!" << endl;
         std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
+    }
+}
+
+void checkCufftErrors(cufftResult result) {
+    if (result != CUFFT_SUCCESS) {
+        std::cerr << "CUFFT error: ";
+        switch (result) {
+            case CUFFT_INVALID_PLAN:
+                std::cerr << "CUFFT_INVALID_PLAN";
+                break;
+            case CUFFT_ALLOC_FAILED:
+                std::cerr << "CUFFT_ALLOC_FAILED";
+                break;
+            case CUFFT_INVALID_TYPE:
+                std::cerr << "CUFFT_INVALID_TYPE";
+                break;
+            case CUFFT_INVALID_VALUE:
+                std::cerr << "CUFFT_INVALID_VALUE";
+                break;
+            case CUFFT_INTERNAL_ERROR:
+                std::cerr << "CUFFT_INTERNAL_ERROR";
+                break;
+            case CUFFT_EXEC_FAILED:
+                std::cerr << "CUFFT_EXEC_FAILED";
+                break;
+            case CUFFT_SETUP_FAILED:
+                std::cerr << "CUFFT_SETUP_FAILED";
+                break;
+            case CUFFT_INVALID_SIZE:
+                std::cerr << "CUFFT_INVALID_SIZE";
+                break;
+            default:
+                std::cerr << "Unknown error";
+        }
+        std::cerr << std::endl;
+        exit(EXIT_FAILURE);
     }
 }
 
