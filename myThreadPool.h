@@ -16,7 +16,7 @@
 
 #define THREADS_MEM_SIZE  (300 * 1024 * 1024)  // 存放未解包数据
 #define WAVE_NUM 32    // 波束数
-#define CAL_WAVE_NUM 16 // 需要计算的波束数
+#define CAL_WAVE_NUM 32 // 需要计算的波束数
 
 #define NUM_PULSE 256     // 一个波束中的脉冲数
 #define RANGE_NUM 8192      // 一个脉冲中的距离单元数 做fft的，计算方法为 RANGE_NUM = 2 ** nextpow2(7498 + numSamples - 1)
@@ -54,9 +54,6 @@ private:
     unsigned int prevIndexValue;                    // 上一个packet相对于1GB的起始地址
     uint64_t uint64Pattern;
 
-    cufftHandle rowPlan;                            // 按行做fft的plan
-    cufftHandle colPlan;                            // 按列做fft的plan
-
     char timebuf[100];
     ofstream logFile;
 
@@ -76,14 +73,15 @@ private:
 
     void processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, int *d_headPositions,
                      vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res,
-                     vector<cufftComplex *> &Max_res_host);
+                     vector<cufftComplex *> &Max_res_host, cufftHandle &rowPlan, cufftHandle &colPlan);
 
     void memcpyDataToThread(unsigned int startAddr, unsigned int endAddr);
 
     void initPCcoefMatrix();
 
     void processPulseGroupData(int threadID, vector<CudaMatrix> &matrices, vector<CudaMatrix> &CFAR_res,
-                               vector<CudaMatrix> &Max_res, int rangeNum);
+                               vector<CudaMatrix> &Max_res, int rangeNum, cufftHandle &rowPlan,
+                               cufftHandle &colPlan);
 
     void allocateThreadMemory();
 

@@ -36,17 +36,6 @@ ThreadPool::~ThreadPool() {
 }
 
 void ThreadPool::allocateThreadMemory() {
-    int nrows = NUM_PULSE;
-    int ncols = RANGE_NUM;
-    checkCufftErrors(cufftPlan1d(&rowPlan, ncols, CUFFT_C2C, nrows));
-
-    checkCufftErrors(cufftPlanMany(&colPlan, 1, &nrows,     // Rank and size of the FFT
-                           &ncols, ncols, 1,              // Input data layout
-                           &ncols, ncols, 1,            // Output data layout
-                           CUFFT_C2C, 7498 + numSamples - 1)      // FFT type and number of FFTs
-    );
-
-
     for (size_t i = 0; i < numThreads; ++i) {
         char *d_memory = nullptr;
         cudaError_t err = cudaMalloc((void **) &d_memory, THREADS_MEM_SIZE);  // 在显存中分配内存
@@ -71,8 +60,6 @@ void ThreadPool::freeThreadMemory() {
         cudaStreamSynchronize(streams[i]); // 等待流中的所有操作完成
         cudaStreamDestroy(streams[i]);
     }
-    checkCufftErrors(cufftDestroy(rowPlan));
-    checkCufftErrors(cufftDestroy(colPlan));
     threadsMemory.clear();
 }
 
@@ -132,15 +119,26 @@ void ThreadPool::threadLoop(int threadID) {
         Max_res_host[i] = new cufftComplex[RANGE_NUM];
     }
 
+    cufftHandle rowPlan;                            // 按行做fft的plan
+    cufftHandle colPlan;                            // 按列做fft的plan
 
+    int nrows = NUM_PULSE;
+    int ncols = RANGE_NUM;
+    checkCufftErrors(cufftPlan1d(&rowPlan, ncols, CUFFT_C2C, nrows));
 
+    checkCufftErrors(cufftPlanMany(&colPlan, 1, &nrows,     // Rank and size of the FFT
+                                   &ncols, ncols, 1,              // Input data layout
+                                   &ncols, ncols, 1,            // Output data layout
+                                   CUFFT_C2C, 7498 + numSamples - 1)      // FFT type and number of FFTs
+    );
 
     while (!stop) {
         waitForProcessingSignal(threadID);
 
         if (stop) break; // 退出循环
 
-        processData(threadID, pComplex, matrices, d_headPositions, CFAR_res, Max_res, Max_res_host); // 处理 CUDA 内存中的数据
+        processData(threadID, pComplex, matrices, d_headPositions, CFAR_res, Max_res, Max_res_host, rowPlan,
+                    colPlan); // 处理 CUDA 内存中的数据
 
         // 处理完毕后重置标志
         {
@@ -153,6 +151,9 @@ void ThreadPool::threadLoop(int threadID) {
     cudaFree(d_headPositions);
 //    delete[] pComplex;
     cudaFree(pComplex);
+
+    checkCufftErrors(cufftDestroy(rowPlan));
+    checkCufftErrors(cufftDestroy(colPlan));
 
     for (auto ptr: Max_res_host) {
         delete[] ptr;
@@ -188,10 +189,10 @@ __global__ void processKernel(char *threadsMemory, cufftComplex *pComplex,
 // #define RANGE_NUM 8192   // 一个脉冲中的距离单元数
 void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, int *d_headPositions,
                              vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res,
-                             vector<cufftComplex *> &Max_res_host) {
+                             vector<cufftComplex *> &Max_res_host, cufftHandle &rowPlan, cufftHandle &colPlan) {
 //    return;
     cout << "thread " << threadID << " start" << endl;
-    auto start = high_resolution_clock::now();
+//    auto start = high_resolution_clock::now();
 
     int numHeads = headPositions[threadID].size();       // 256
     int headLength = headPositions[threadID][1] - headPositions[threadID][0];
@@ -217,7 +218,7 @@ void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMa
 //            matrices[i].print(i, i+1);
 //        }
 //    }
-    processPulseGroupData(threadID, matrices, CFAR_res, Max_res, rangeNum);
+    processPulseGroupData(threadID, matrices, CFAR_res, Max_res, rangeNum, rowPlan, colPlan);
 
     // 选大结果拷贝回内存
     for (int i = 0; i < CAL_WAVE_NUM; i++) {
@@ -225,15 +226,17 @@ void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMa
     }
 
     // 记录结束时间
-    auto endTime = high_resolution_clock::now();
+//    auto endTime = high_resolution_clock::now();
 
     // 输出时间统计
-    cout << "thread " << threadID << " process finished after " << duration_cast<milliseconds>(endTime - start).count() << " ms" << endl;
+//    cout << "thread " << threadID << " process finished after " << duration_cast<milliseconds>(endTime - start).count() << " ms" << endl;
+    cout << "thread " << threadID << " process finished"  << endl;
 }
 
 // 在GPU处理一个脉组的所有波束的数据，全流程处理，包括脉压、积累、CFAR、选大。
 void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrices, vector<CudaMatrix> &CFAR_res,
-                                       vector<CudaMatrix> &Max_res, int rangeNum) {
+                                       vector<CudaMatrix> &Max_res, int rangeNum, cufftHandle &rowPlan,
+                                       cufftHandle &colPlan) {
 
     for (int i = 0; i < CAL_WAVE_NUM; i++) {
         /*Pulse Compression*/
@@ -242,7 +245,7 @@ void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrice
         matrices[i].ifft(rowPlan, streams[threadID]);
 
         /*coherent integration*/
-        for (int j = 0; j < 20; j++) {
+        for (int j = 0; j < 10; j++) {
             matrices[i].fft_by_col(colPlan, streams[threadID]);
         }
 
