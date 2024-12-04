@@ -399,33 +399,12 @@ CudaMatrix& CudaMatrix::operator=(CudaMatrix&& other) noexcept {
     return *this;
 }
 
-void CudaMatrix::fft(cufftHandle &plan, cudaStream_t _stream) const{
-//    checkCufftErrors(cufftPlan1d(&plan, ncols, CUFFT_C2C, nrows));
-    cufftSetStream(plan, _stream);
+void CudaMatrix::fft(cufftHandle &plan) const{
     checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_FORWARD));
 }
 
-void CudaMatrix::fft_by_col(cufftHandle &plan, cudaStream_t _stream) {
-
-    // 按列做FFT
-//    int batch = ncols;
-//    int inembed[] = {ncols};  // 每行数据的大小
-//    int onembed[] = {ncols};  // 每行数据的大小
-//    int istride = ncols;          // 每个元素步幅
-//    int idist = 1;                // 每行之间的距离
-//    int ostride = ncols;          // 每个元素步幅
-//    int odist = 1;                // 每行之间的距离
-//    int n[] = {nrows};            // 每行数据的FFT大小
-
-//    checkCufftErrors(cufftPlanMany(&plan, 1, &nrows, // Rank and size of the FFT
-//                           &ncols, ncols, 1,   // Input data layout
-//                           &ncols, ncols, 1,   // Output data layout
-//                           CUFFT_C2C, batch)   // FFT type and number of FFTs
-//    );
-
-    cufftSetStream(plan, _stream);
+void CudaMatrix::fft_by_col(cufftHandle &plan) {
     checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_FORWARD));
-//    checkCufftErrors(cufftDestroy(plan));
 }
 
 
@@ -487,8 +466,7 @@ struct ScaleFunctor {
     }
 };
 
-void CudaMatrix::ifft(cufftHandle &plan, cudaStream_t _stream) const {
-    cufftSetStream(plan, _stream);
+void CudaMatrix::ifft(cufftHandle &plan) const {
     checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_INVERSE));
     float scale = 1.0f / ncols;
     thrust::device_ptr<cufftComplex> thrust_data(data);

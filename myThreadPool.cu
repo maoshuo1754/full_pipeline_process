@@ -11,13 +11,18 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue)
     // 创建并初始化线程
 
     logFile = ofstream("error_log.txt", ios_base::app);
+
+    initPCcoefMatrix();
+    allocateThreadMemory();
+
+
     uint64Pattern = *(uint64_t *) pattern;
     for (size_t i = 0; i < numThreads; ++i) {
         threads.emplace_back(&ThreadPool::threadLoop, this, i);
     }
 
-    initPCcoefMatrix();
-    allocateThreadMemory();
+
+
 
     circleStartTime = high_resolution_clock::now();
 
@@ -110,14 +115,19 @@ void ThreadPool::threadLoop(int threadID) {
     }
     // CFAR结果
     vector<CudaMatrix> CFAR_res(WAVE_NUM, CudaMatrix(NUM_PULSE, RANGE_NUM));
-    // 选大结果
-    vector<CudaMatrix> Max_res(WAVE_NUM, CudaMatrix(1, RANGE_NUM));
-    // 选大结果，host
-    vector<cufftComplex*> Max_res_host(WAVE_NUM);
 
+    // 选大结果 device
+    cufftComplex *pMaxRes_d;
+    cudaMalloc(&pMaxRes_d, sizeof(cufftComplex) * WAVE_NUM * RANGE_NUM);
+
+    vector<CudaMatrix> Max_res;
     for (int i = 0; i < WAVE_NUM; i++) {
-        Max_res_host[i] = new cufftComplex[RANGE_NUM];
+        Max_res.emplace_back(1, RANGE_NUM, pMaxRes_d + i * RANGE_NUM, true);
     }
+
+    // 选大结果，host
+    cufftComplex* pMaxRes_h = new cufftComplex[WAVE_NUM * RANGE_NUM];
+
 
     cufftHandle rowPlan;                            // 按行做fft的plan
     cufftHandle colPlan;                            // 按列做fft的plan
@@ -125,19 +135,21 @@ void ThreadPool::threadLoop(int threadID) {
     int nrows = NUM_PULSE;
     int ncols = RANGE_NUM;
     checkCufftErrors(cufftPlan1d(&rowPlan, ncols, CUFFT_C2C, nrows));
+    checkCufftErrors(cufftSetStream(rowPlan, streams[threadID]));
 
     checkCufftErrors(cufftPlanMany(&colPlan, 1, &nrows,     // Rank and size of the FFT
                                    &ncols, ncols, 1,              // Input data layout
                                    &ncols, ncols, 1,            // Output data layout
                                    CUFFT_C2C, 7498 + numSamples - 1)      // FFT type and number of FFTs
     );
+    cufftSetStream(colPlan, streams[threadID]);
 
     while (!stop) {
         waitForProcessingSignal(threadID);
 
         if (stop) break; // 退出循环
 
-        processData(threadID, pComplex, matrices, d_headPositions, CFAR_res, Max_res, Max_res_host, rowPlan,
+        processData(threadID, pComplex, matrices, d_headPositions, CFAR_res, Max_res, pMaxRes_d, pMaxRes_h, rowPlan,
                     colPlan); // 处理 CUDA 内存中的数据
 
         // 处理完毕后重置标志
@@ -151,13 +163,11 @@ void ThreadPool::threadLoop(int threadID) {
     cudaFree(d_headPositions);
 //    delete[] pComplex;
     cudaFree(pComplex);
+    cudaFree(pMaxRes_d);
+    delete[] pMaxRes_h;
 
     checkCufftErrors(cufftDestroy(rowPlan));
     checkCufftErrors(cufftDestroy(colPlan));
-
-    for (auto ptr: Max_res_host) {
-        delete[] ptr;
-    }
 }
 
 __global__ void processKernel(char *threadsMemory, cufftComplex *pComplex,
@@ -188,8 +198,8 @@ __global__ void processKernel(char *threadsMemory, cufftComplex *pComplex,
 // #define NUM_PULSE 256     // 一个脉组中的脉冲数
 // #define RANGE_NUM 8192   // 一个脉冲中的距离单元数
 void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, int *d_headPositions,
-                             vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res,
-                             vector<cufftComplex *> &Max_res_host, cufftHandle &rowPlan, cufftHandle &colPlan) {
+                             vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res, cufftComplex *pMaxRes_d,
+                             cufftComplex *pMaxRes_h, cufftHandle &rowPlan, cufftHandle &colPlan) {
 //    return;
     cout << "thread " << threadID << " start" << endl;
 //    auto start = high_resolution_clock::now();
@@ -221,9 +231,9 @@ void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMa
     processPulseGroupData(threadID, matrices, CFAR_res, Max_res, rangeNum, rowPlan, colPlan);
 
     // 选大结果拷贝回内存
-    for (int i = 0; i < CAL_WAVE_NUM; i++) {
-        Max_res[i].copyToHost(Max_res_host[i]);
-    }
+    cudaMemcpyAsync(pMaxRes_h, pMaxRes_d, sizeof(cufftComplex) * CAL_WAVE_NUM * RANGE_NUM, cudaMemcpyDeviceToHost,
+                    streams[threadID]);
+
 
     // 记录结束时间
 //    auto endTime = high_resolution_clock::now();
@@ -237,22 +247,21 @@ void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMa
 void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrices, vector<CudaMatrix> &CFAR_res,
                                        vector<CudaMatrix> &Max_res, int rangeNum, cufftHandle &rowPlan,
                                        cufftHandle &colPlan) {
-
+    double Pfa = 1e-6;
+    int numGuardCells = 4;
+    int numRefCells = 20;
     for (int i = 0; i < CAL_WAVE_NUM; i++) {
         /*Pulse Compression*/
-        matrices[i].fft(rowPlan, streams[threadID]);
+        matrices[i].fft(rowPlan);
         matrices[i].elementWiseMul(PCcoefMatrix, streams[threadID]);
-        matrices[i].ifft(rowPlan, streams[threadID]);
+        matrices[i].ifft(rowPlan);
 
         /*coherent integration*/
-        for (int j = 0; j < 10; j++) {
-            matrices[i].fft_by_col(colPlan, streams[threadID]);
+        for (int j = 0; j < 30; j++) {
+            matrices[i].fft_by_col(colPlan);
         }
 
         /*cfar*/
-        double Pfa = 1e-6;
-        int numGuardCells = 4;
-        int numRefCells = 20;
         matrices[i].cfar(CFAR_res[i], streams[threadID], Pfa, numGuardCells, numRefCells, numSamples - 1,
                            numSamples - 1 + rangeNum);
         CFAR_res[i].max(Max_res[i], streams[threadID], 1);
@@ -301,6 +310,7 @@ void ThreadPool::copyToThreadMemory() {
             seqNum = FourChars2Uint(sharedQueue->buffer + indexValue + SEQ_OFFSET);
             if (seqNum != prevSeqNum + 1 && prevSeqNum != 0) {
                 inPacket = false;
+                currentAddrOffset = 0;
                 std::cerr << "Error! Sequence number not continuous!" << std::endl;
                 std::time_t now = std::time(nullptr);
                 std::strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
@@ -376,6 +386,8 @@ void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr
         currentAddrOffset += copyLength;
     } else {
 //        cout << (currentAddrOffset + copyLength) / 1024 / 1024 << " MB !!!!" << endl;
+        inPacket = false;
+        currentAddrOffset = 0;
         std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
     }
 }
