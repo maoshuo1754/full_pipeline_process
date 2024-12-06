@@ -7,7 +7,7 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue)
           conditionVariables(numThreads), mutexes(numThreads),
           headPositions(numThreads, std::vector<int>()), currentPos(numThreads, 0),
           currentAddrOffset(0), numThreads(numThreads), inPacket(false),
-          cur_thread_id(0), prevSeqNum(0) { // 初始化 conditionVariables 和 mutexes
+          cur_thread_id(0), prevSeqNum(0), sender() { // 初始化 conditionVariables 和 mutexes
     // 创建并初始化线程
 
     logFile = ofstream("error_log.txt", ios_base::app);
@@ -22,6 +22,7 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue)
     }
 
 
+//    cout << 1 << endl;
 
 
     circleStartTime = high_resolution_clock::now();
@@ -140,7 +141,7 @@ void ThreadPool::threadLoop(int threadID) {
     checkCufftErrors(cufftPlanMany(&colPlan, 1, &nrows,     // Rank and size of the FFT
                                    &ncols, ncols, 1,              // Input data layout
                                    &ncols, ncols, 1,            // Output data layout
-                                   CUFFT_C2C, 7498 + numSamples - 1)      // FFT type and number of FFTs
+                                   CUFFT_C2C, REAL_RANGE_NUM + numSamples - 1)      // FFT type and number of FFTs
     );
     cufftSetStream(colPlan, streams[threadID]);
 
@@ -181,7 +182,7 @@ __global__ void processKernel(char *threadsMemory, cufftComplex *pComplex,
     if (headIdx < numHeads && rangeIdx < rangeNum && beamIdx < WAVE_NUM) {
         // 计算头位置的起始地址
         int headOffset = headPositions[headIdx];
-        char *blockIQstartAddr = threadsMemory + headOffset + 33 * 4;
+        char *blockIQstartAddr = threadsMemory + headOffset + DATA_OFFSET;
 
         // 计算当前数据块的偏移和新索引
         int blockOffset = rangeIdx * WAVE_NUM * 4 + beamIdx * 4;
@@ -200,13 +201,12 @@ __global__ void processKernel(char *threadsMemory, cufftComplex *pComplex,
 void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, int *d_headPositions,
                              vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res, cufftComplex *pMaxRes_d,
                              cufftComplex *pMaxRes_h, cufftHandle &rowPlan, cufftHandle &colPlan) {
-//    return;
     cout << "thread " << threadID << " start" << endl;
 //    auto start = high_resolution_clock::now();
 
     int numHeads = headPositions[threadID].size();       // 256
     int headLength = headPositions[threadID][1] - headPositions[threadID][0];
-    int rangeNum = floor((headLength - 33 * 4) / WAVE_NUM / 4.0);
+    int rangeNum = floor((headLength - DATA_OFFSET) / WAVE_NUM / 4.0);
 
     // 头的位置拷贝到显存
     cudaMemcpyAsync(d_headPositions, headPositions[threadID].data(), numHeads * sizeof(int), cudaMemcpyHostToDevice,
@@ -231,9 +231,17 @@ void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMa
     processPulseGroupData(threadID, matrices, CFAR_res, Max_res, rangeNum, rowPlan, colPlan);
 
     // 选大结果拷贝回内存
+    char rawMessage[DATA_OFFSET];
     cudaMemcpyAsync(pMaxRes_h, pMaxRes_d, sizeof(cufftComplex) * CAL_WAVE_NUM * RANGE_NUM, cudaMemcpyDeviceToHost,
                     streams[threadID]);
 
+    // 包头信息拷贝回内存(仅第一个包头)
+    cudaMemcpyAsync(rawMessage, threadsMemory[threadID], sizeof(rawMessage), cudaMemcpyDeviceToHost,
+                    streams[threadID]);
+
+    cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
+    if (!threadID)
+        sender.send(rawMessage, pMaxRes_h);
 
     // 记录结束时间
 //    auto endTime = high_resolution_clock::now();
@@ -257,7 +265,7 @@ void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrice
         matrices[i].ifft(rowPlan);
 
         /*coherent integration*/
-        for (int j = 0; j < 30; j++) {
+        for (int j = 0; j < INTEGRATION_TIMES; j++) {
             matrices[i].fft_by_col(colPlan);
         }
 

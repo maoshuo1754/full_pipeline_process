@@ -20,6 +20,10 @@ set(SOURCE_FILES
         myThreadPool.h
         myThreadPool.cu
         main.cu
+        NRx/udpSenderManager.cpp
+        NRx/NRxUdpSender.cpp
+        NRx/sendVideo.cpp
+        NRx/SendVideo.h
 )
 
 add_executable(reader ${SOURCE_FILES})
@@ -37,7 +41,7 @@ target_link_libraries(reader
 )
 
 # Include CUDA Toolkit headers
-target_include_directories(reader PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
+target_include_directories(reader PRIVATE ${CUDAToolkit_INCLUDE_DIRS} ./NRx)
 
 ## Set CUDA separable compilation
 #set_target_properties(reader PROPERTIES

@@ -8,6 +8,7 @@
 
 
 int main(){
+//    cout << sizeof (unsigned int ) << endl;
     int shmid = shmget(SHM_KEY, sizeof(SharedQueue), 0666 | IPC_CREAT);
     if (shmid == -1) throw std::runtime_error("Failed to create shared memory");
     

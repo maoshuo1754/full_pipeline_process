@@ -10,16 +10,18 @@
 #include "memory"
 #include "queue.h"      // 包含 SharedQueue 的定义
 #include "CudaMatrix.h" // 包含 CudaMatrix 的定义
+#include "SendVideo.h"  // 包含 SendVideo 的定义
 #include "utils.h"
 #include <chrono>
 
 
 #define THREADS_MEM_SIZE  (300 * 1024 * 1024)  // 存放未解包数据
 #define WAVE_NUM 32    // 波束数
-#define CAL_WAVE_NUM 16 // 需要计算的波束数
+#define CAL_WAVE_NUM 32 // 需要计算的波束数
+#define INTEGRATION_TIMES 50 // 积累次数
 
 #define NUM_PULSE 256     // 一个波束中的脉冲数
-#define RANGE_NUM 8192      // 一个脉冲中的距离单元数 做fft的，计算方法为 RANGE_NUM = 2 ** nextpow2(7498 + numSamples - 1)
+#define RANGE_NUM 8192      // 一个脉冲中的距离单元数 做fft的，计算方法为 RANGE_NUM = 2 ** nextpow2(REAL_RANGE_NUM + numSamples - 1)
 #define REAL_RANGE_NUM  7498 // 一个脉冲的真实距离单元数
 
 using namespace std;
@@ -60,6 +62,7 @@ private:
     CudaMatrix PCcoefMatrix;    // 脉压系数矩阵
     int NFFT;                   // 脉压时做fft的点数
     int numSamples;             // 脉压采样点数
+    SendVideo sender;
 
     void threadLoop(int threadID);
 

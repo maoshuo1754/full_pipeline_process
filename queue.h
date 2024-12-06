@@ -11,6 +11,7 @@
 #define BLOCK_SIZE (256*1024*1024)  // 256MB
 #define INDEX_SIZE (4096)           // 1KB
 #define SEQ_OFFSET 16               // 序列号相对于包头的偏移是16个Bytes
+#define DATA_OFFSET (33 * 4)              // 数据相对于包头的偏移是 33 * 4 个 Bytes
 
 struct SharedQueue {
     sem_t mutex;
