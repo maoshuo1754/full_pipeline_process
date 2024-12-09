@@ -241,7 +241,7 @@ void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMa
 
     cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
     if (!threadID)
-        sender.send(rawMessage, pMaxRes_h);
+        sender.send(rawMessage, pMaxRes_h, numSamples, rangeNum);
 
     // 记录结束时间
 //    auto endTime = high_resolution_clock::now();

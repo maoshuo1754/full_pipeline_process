@@ -7,6 +7,8 @@
 #include "NRxUdpSender.h"
 #include "MyStruct.h"
 #include "fstream"
+#include "../utils.h"
+#include "../queue.h"
 #include <string>
 #include <iostream>
 #include <vector_types.h>
@@ -19,7 +21,7 @@ class SendVideo {
 public:
     SendVideo();
     ~SendVideo();
-    void send(char *rawMessage, float2 *data);
+    void send(char *rawMessage, float2 *data, int numSamples, int rangeNum);
 
 private:
     unsigned int unMinPRTLen;

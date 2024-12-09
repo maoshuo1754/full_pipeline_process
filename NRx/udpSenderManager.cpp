@@ -191,6 +191,7 @@ bool UdpSender::initInWin32()
         return isIni;
     }
 #endif
+    return true;
 }
 
 ///
@@ -282,7 +283,7 @@ int UdpMapWrap::sendMsg(const void* msgBuf, const int msgLen, const string& dstI
 
         if (sendLen != msgLen) {
             std::cout << "Send failed, msg len is: " << msgLen
-                      << "send out len is: " << sendLen
+                      << " send out len is: " << sendLen
                       << " in udp: " << udpName << std::endl;
             ret = 1;
         }
