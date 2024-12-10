@@ -1,12 +1,13 @@
 #ifndef MYSTRUCT_H
 #define MYSTRUCT_H
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <arpa/inet.h>
 
 #define SLOT_SIZE (4096*1024)//缓冲区槽大小
 #define SLOT_NUM (32)//缓冲区槽个数
@@ -14,6 +15,7 @@
 #define VEDIODATASIZE (25000)
 #define HEAD_FLAG (0x7E7E)
 #define END_FLAG (0xAAAA)
+#define MAX_DISTANCE_ELEMENT_NUMBER 7500
 
 //数据缓冲区
 typedef struct _BaseRingBufferInfo {
@@ -332,6 +334,152 @@ struct PlatformInfo
     int                         lRollAngle;             //横摇角,量纲:0.01度,取值范围[-45~45]
     unsigned short              CRC;                    //CRC校验码
     unsigned short              End;                    //报文尾0xAAAA
+};
+
+#include <cstdint>
+typedef uint32_t UINT32;
+typedef uint16_t UINT16;
+typedef uint8_t UINT8;
+typedef int32_t INT32;
+typedef unsigned int UINT;
+typedef int16_t INT16;
+typedef int8_t INT8;
+
+typedef struct tagNRX_COMMON_HEADER
+{
+    UINT32 dwHEADER;									//����ͷ	0xF1A2B4C8
+    UINT16 wVERSION;									//Э��汾��	���ݹ�������ͷ�ı����ʷ��ţ�ĿǰΪ0
+    UINT16 wCOUNTER;									//������	���౨�Ķ��Լ���
+    UINT32 dwTxSecondTime;								//����ʱ��1	32λUTC����ʾ�롣�ɷ�����ȡ����ʱ����д��
+    UINT32 dwTxMicroSecondTime;							//����ʱ��2	��ʾ�����µ�΢����
+    UINT16 wMsgTotalLen;								//������������ͷ�����ݡ�����β�����ֽ��������Ϊ64K�ֽ�.FPGA���͵����ݴ�����0.
+    UINT16 wMsgFlag;									//����ʶ���	�ⲿ����ʹ��0-255���ڲ�����ʹ��256-65535
+    UINT16 wRadarID;									//�״�ID	Ӧ�ó����Զ���
+    UINT8  bytTxNodeNumber;								//�����ڵ��	ϵͳΪ�ܹ����ͻ�������ݵ���Ӳ��ʵ�����ڵ��
+    UINT8  bytRxNodeNumber;								//�շ��ڵ��
+    UINT8  bytDataFlag;									//���ݱ��	b7-4����ѹ����ǡ�0x0, ����δѹ��; 0x1, ����ʹ�� qt sdk ѹ��;����������.
+
+    UINT8 bytRecChannel;								//��¼����ͨ����	��¼�ط�ʹ�õ�ͨ���ţ��������ֶ�ͨ������
+    UINT16 wReserved0;									//Ԥ��	��0
+    UINT16 wReserved1;									//Ԥ��	��0
+    UINT16 wResesrved2;									//Ԥ��	��0
+}NRX_COMMON_HEADER;
+
+typedef struct tagNRX_RadarVideo_Head
+{
+    UINT32 dwSyncHeader;							//ͬ��ͷ��0xA5A61234
+    UINT32 dwVideoLen;								//�״���Ƶ�����ѹ�����ֽ���������������ͷ���״���Ƶͷ������β�ĳ���
+    UINT16 wHeadLen;								//�״���Ƶͷ����,���������ݣ���128.
+    UINT16 wEncodeFormat;							//0 8λ��Ƶ;1 16λ��Ƶ.;2 8λ��Ƶ + 8λ����;3 16λ��Ƶ + 16λ����;4 8λ��Ƶ + 8λ���� + 8λ�ٶ� + 8λԤ��. �ٶ��ò����ʾ.
+    //100~127��ר�����ڲ�����ʹ��. 100��32λ���������ȣ�dB�� + ͨ���ٶ�chnnalSpeed  101��32λ���������ȣ�dB�� + 32λ������������dB�� + ͨ���ٶ�chnnalSpeed
+    //102��32λ���������ȣ�dB�� + 32λ������������dB�� + 32λ�������ٶȣ�m / s��
+    UINT8 bytPulseMode;								//������Ϸ�ʽ,0��������  1�������岹ä	2��MTD��ͨ��  3��1�� + ���
+    UINT8 bytSubPulseNumber;						//���������,�����������������	���磺�������޲�ä���壬��ֵ��1��������1��ä����ֵ��2��	1��������16�������壬��ֵ��17��
+    UINT8 bytSubPulseCount;							//��ǰ�����������е���������ţ�[0, n)
+    UINT8 bytReserved0;								//Ԥ������ʾ������Ϸ�ʽ
+    UINT32 dwTxAbsSecondTime;						//����ʱ��1 32λUTC����ʾ��� 0 - 86399999ms���ɹ�������ͷ�е����ݱ�ǵ�b3λ������
+    UINT32 dwTxAbsMicroSecondTime;					//����ʱ��2 ��ʾ�����µ�΢������ ��Ч���ɹ�������ͷ�е����ݱ�ǵ�b3λ������
+    UINT32 dwTxRelMilliSecondTime_H;				//���ʱ�� ��32λ����λ: 1ms
+    UINT32 dwTxRelMilliSecondTime_L;				//���ʱ�� ��32λ����λ: 1ms
+    UINT32 dwSigBWHz;								//�źŴ���,LSB��1Hz��ȫF��ʾ��Ч
+    UINT32 dwSampleFreqHz;							//������,LSB��1Hz
+    UINT16 wAziCode;								//��λ 16λ���룬360��/65536
+    UINT16 wPulseWidth0p1us;						//���� LSB��0.1us��ȫF��ʾ��Ч
+    UINT16 wPRT0p1us;								//PRT LSB��0.1us��ȫF��ʾ��Ч
+    INT16 nZeroPointPos;							//��ʼ��Ԫ��� ��0�����뵥Ԫ������ĵ�Ԫ��
+    UINT32 dwSampleElementNumber;					//������Ԫ����
+    UINT32 dwReserved1;								//Ԥ��
+    UINT8 bytReserved2;								//Ԥ��
+    UINT8 bytPIM_Flag;								//PIM_Flag 0: ԭʼ. 1: ����. 2: ���.	0xFF��Ч.
+    UINT8 bytDataFlag;								//���ݱ�ʶ b7-5��Ƶ��������. 0dB; 1����ӳ��; 2Լ��������ӳ��.b4 - 0Ԥ��
+    UINT8 bytLinearMapLowPara;						//����ӳ����� ����ӳ��ʱ��Ч. ӳ��ǰ��������
+    UINT8 bytLinearMapHighPara;						//����ӳ����� ����ӳ��ʱ��Ч. ӳ��ǰ��������	val = 0 (if DB <= mapPreLowerDB) 		val = 2 ^ n - 1 (if DB >= mapPreUpperDB) 		val = (DB - mapPreLowerDB) / (mapPreUpperDB - mapPreLowerDB) * (2 ^ n - 1)
+    UINT8 bytReserved3;								//Ԥ��
+    UINT16 wDataSrc;								//����Դ �����ļ���ͨ����λ��ķ�ʽʹ��.���֧��16������Դ.	1:Simple Test		2 : Scenario Generator		4 : Replay From Recording		8 : Receive By UDP		2 ^ (4:15)Ԥ��
+    INT32 nLongitude;								//���� LSB��1/10000�֣�181�ȱ�ʾ��Ч
+    INT32 nLatitude;								//γ�� LSB��1/10000�֣�91�ȱ�ʾ��Ч
+    INT16 nAltitude;								//�߶� LSB��1�ף�Ĭ����0
+    UINT16 wAbsCourse;								//���Ժ��� LSB��360/65536��Ĭ����0
+    UINT16 wAbsCruiseSpeed;							//���Ժ��� LSB��0.1m/s��Ĭ����0
+    UINT16 wRelCourse;								//��Ժ���	LSB��360/65536��Ĭ����0
+    UINT16 wRelCruiseSpeed;							//��Ժ���	LSB��0.1m/s��Ĭ����0
+    INT16 nHeadAngle;								//��ҡ	��λ��360��/32768  Ĭ��ֵ0
+    INT16 nRoll;									//��ҡ	��λ��360��/32768  Ĭ��ֵ0
+    INT16 nPitch;									//��ҡ	��λ��360��/32768  Ĭ��ֵ0
+    UINT8 bytScanMode;								//ɨ�跽ʽ	b7: ��ʾ��������ɨ�跽ʽ�Ƿ���Ч. 1��Ч0��Ч.b6: 0, �̶�ƽ̨; 1, �ƶ�ƽ̨.	b5Ԥ��.	b4 - 0: 0˳ʱ�뻷ɨ, 1��ʱ�뻷ɨ, 2˳ʱ���е��ɨ, 3��ʱ���е��ɨ, 4˳ʱ�뵥���ɨ, 5��ʱ�뵥���ɨ, 6���ɨ��, 7��λ, 8ͣ����, 9����. b4 - 0 = 31��ʾ��Ч
+    UINT8 bytReserved4;								//RES4	Ԥ��
+    UINT16 wAntennaScanSpeed;						//����ɨ���ٶ�	��λ: 0.1 deg/s����Чʱ��0.
+    UINT16 wFanScanFrontAngle;						//������ɨǰ��	��λ: 360.f / 65536.f����Чʱ��0.
+    UINT16 wFanScanBackAngle;						//������ɨ����	��λ: 360.f / 65536.f����Чʱ��0.
+    INT32 nChannelSpeed;							//ͨ���ٶ�	�ٶ��ò����ʾ��LSB = 0.1m/s  0xFFFFʱ��Ч
+    UINT16 wChannelCount;							//ͨ�����	0xFFʱ��Ч
+    UINT16 wReserved5;								//RES5	Ԥ��
+    UINT8 wReserved6;								//RES6[16]
+    UINT32 dwReserved7;								//RES7	����βԤ��
+    UINT32 dwMsgTailFlag;							//����β	0xB5B65678
+}RX_RadarVideo_Head;
+
+typedef struct tagNRX_COMMON_TAIL
+{
+    UINT dwCheckSum;
+    UINT16 wTail1;
+    UINT16 wTail2;
+}NRX_COMMON_TAIL;
+
+struct VideoToNRXGUI
+{
+    NRX_COMMON_HEADER CommonHeader;
+    RX_RadarVideo_Head RadarVideoHeader;
+    UINT8 bytVideoData[MAX_DISTANCE_ELEMENT_NUMBER];
+    NRX_COMMON_TAIL CommonTail;
+
+    VideoToNRXGUI()
+    {
+        memset(&CommonHeader,0, sizeof(CommonHeader));
+        CommonHeader.dwHEADER = htonl(0xF1A2B4C8);
+        CommonHeader.wVERSION = htons(0);
+        CommonHeader.wMsgTotalLen = htons(sizeof(CommonHeader) + sizeof(RadarVideoHeader)+sizeof(bytVideoData)+sizeof(CommonTail));
+        CommonHeader.wMsgFlag = htons(0x0103);
+        CommonHeader.wRadarID = htons(0x0012);
+        CommonHeader.bytTxNodeNumber = 0x11;
+        CommonHeader.bytRxNodeNumber = 0x22;
+        CommonHeader.bytDataFlag = 0x08;
+        CommonHeader.bytRecChannel = 0;
+
+        memset(&RadarVideoHeader,0, sizeof(RadarVideoHeader));
+        RadarVideoHeader.dwSyncHeader = htonl(0xa5a61234);
+        RadarVideoHeader.dwVideoLen = htonl(sizeof(bytVideoData));
+        RadarVideoHeader.wHeadLen = htons(128);
+        RadarVideoHeader.wEncodeFormat = htons(0);
+        RadarVideoHeader.bytPulseMode = 0;
+        RadarVideoHeader.bytSubPulseNumber = 1;
+        RadarVideoHeader.bytSubPulseCount = 0;
+
+        RadarVideoHeader.dwSigBWHz = htonl(3e6);
+        RadarVideoHeader.dwSampleFreqHz = htonl(3906250);
+        RadarVideoHeader.wPulseWidth0p1us = htons(0xffff);
+        RadarVideoHeader.wPRT0p1us = htons(0xffff);
+        RadarVideoHeader.nZeroPointPos = htons(0);
+        RadarVideoHeader.dwSampleElementNumber =htonl( sizeof(bytVideoData));
+        RadarVideoHeader.bytPIM_Flag = 0;
+        RadarVideoHeader.bytDataFlag = 0x40;
+        RadarVideoHeader.bytLinearMapLowPara = 0;
+        RadarVideoHeader.bytLinearMapHighPara = 0xff;
+
+        RadarVideoHeader.wDataSrc = htons(8);
+
+        RadarVideoHeader.nLongitude = htonl(181 * 60 * 10000);
+        RadarVideoHeader.nLatitude = htonl(91 * 60 * 10000);
+        RadarVideoHeader.nAltitude = htons(0);
+
+        RadarVideoHeader.bytScanMode = 0x86;	//0x10000110
+
+        RadarVideoHeader.dwMsgTailFlag = htonl(0xB5B65678);
+
+        CommonTail.dwCheckSum = htonl(0);
+        CommonTail.wTail1 = htons(0xABCD);
+        CommonTail.wTail2 = htons(0xEF89);
+    }
 };
 
 #pragma pack()// 恢复之前的对齐
