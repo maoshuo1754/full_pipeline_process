@@ -4,24 +4,17 @@
 
 #include "SendVideo.h"
 
-SendVideo::SendVideo(): azi_table{
-        41965, 41965, 41965, 41965, 43008, 45056, 47104, 49152,
-        51200, 53248, 55296, 57344, 59392, 61440, 63488, 0,
-        2048, 4096, 6144, 8192, 10240, 12288, 14336, 16384,
-        18432, 20480, 22528, 23570, 23570, 23570, 23570, 23570 } {
+SendVideo::SendVideo() {
     m_sendBufOri = new char[1024 * 1024];
     unMinPRTLen = REAL_RANGE_NUM;
     unTmpAzi = 0;
-    c_speed = 2.99792458e8;
-    d = 0.0135;
+
     // 32个脉组的时间偏移量
     for (int ii = 0; ii < 8; ii++) {
         for (int jj = 0; jj <= 3; jj++) {
             timeArray[ii * 4 + jj] = ii * 0.5 + jj;
         }
     }
-
-
 
     sendSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sendSocket < 0) {
@@ -30,20 +23,22 @@ SendVideo::SendVideo(): azi_table{
 
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(8192);  // 0x2001是8192  0x2002岁8194
-    addr.sin_addr.s_addr = inet_addr("239.168.6.189");
+    addr.sin_port = htons(multicast_port);  // 0x2001是8192  0x2002岁8194
+    std::cout << "send_ip:      " << send_ip << std::endl;
+    std::cout << "multicast_ip: " << multicast_ip << std::endl;
+    addr.sin_addr.s_addr = inet_addr(multicast_ip.c_str());
 
     memset(&myaddr, 0, sizeof(myaddr));
     myaddr.sin_family = AF_INET;
-    myaddr.sin_port = htons(0);  // 0x2001是8192  0x2002岁8194
-    myaddr.sin_addr.s_addr = inet_addr("192.168.6.35");
+    myaddr.sin_port = htons(send_port);  // 0x2001是8192  0x2002岁8194
+    myaddr.sin_addr.s_addr = inet_addr(send_ip.c_str());
 
     if (bind(sendSocket, (sockaddr*)&myaddr, sizeof(myaddr)) < 0)
     {
         close(sendSocket);
         std::cerr << "bind error\n";
     } else {
-        std::cout << "bind success" << std::endl;
+        std::cout << "Socket bind success" << std::endl;
     }
 
 }
@@ -52,21 +47,6 @@ SendVideo::~SendVideo() {
     close(sendSocket);
     delete[] m_sendBufOri;
 }
-
-//void SendVideo::loadFromFile(const std::string& filename) {
-//    std::ifstream azi_file(filename);
-//    if (!azi_file) {
-//        std::cerr << "Can't open file: " << filename <<std::endl;
-//        return;
-//    }
-//
-//    for(auto & i : azi_table) {
-//        if (!(azi_file >> i)) {
-//            std::cerr << "Error when read file" << std::endl;
-//            break;
-//        }
-//    }
-//}
 
 double SendVideo::asind(double x) {
     std::complex<double> z(x, 0.0);
@@ -82,7 +62,6 @@ void SendVideo::send(char *rawMessage, float2 *data, int numSamples, int rangeNu
 
     auto rawMsg = reinterpret_cast<int*>(rawMessage);
     int freqPoint = (rawMsg[12] & 0x00000fff);
-    freqPoint = 3;
     double lambda_0 = c_speed / ((freqPoint * 10 + 9600)*1e6);
     double data_amp;
 
@@ -148,6 +127,7 @@ void SendVideo::send(char *rawMessage, float2 *data, int numSamples, int rangeNu
         auto sendres = sendto(sendSocket, &videoMsg, sizeof(videoMsg), 0, (sockaddr *)&addr, sizeof(addr));
         if (sendres < 0) {
             std::cerr << "sendto() failed!" << std::endl;
+            break;
         }
     }
 

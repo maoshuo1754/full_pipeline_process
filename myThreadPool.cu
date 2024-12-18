@@ -1,4 +1,5 @@
 #include "myThreadPool.h"
+#include "Config.h"
 #include <cuda_runtime.h>
 #include <iostream>
 
@@ -12,11 +13,10 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue)
 
     logFile = ofstream("error_log.txt", ios_base::app);
 
-    initPCcoefMatrix();
     allocateThreadMemory();
 
-
     uint64Pattern = *(uint64_t *) pattern;
+
     for (size_t i = 0; i < numThreads; ++i) {
         threads.emplace_back(&ThreadPool::threadLoop, this, i);
     }
@@ -42,6 +42,7 @@ ThreadPool::~ThreadPool() {
 }
 
 void ThreadPool::allocateThreadMemory() {
+    cout << "cudaMalloc " << THREADS_MEM_SIZE / 1024 / 1024 << " MB for each thread" << endl;
     for (size_t i = 0; i < numThreads; ++i) {
         char *d_memory = nullptr;
         cudaError_t err = cudaMalloc((void **) &d_memory, THREADS_MEM_SIZE);  // 在显存中分配内存
@@ -62,31 +63,30 @@ void ThreadPool::allocateThreadMemory() {
 
 void ThreadPool::freeThreadMemory() {
     for (size_t i = 0; i < numThreads; ++i) {
-        cudaFree(threadsMemory[i]);
+        checkCudaErrors(cudaFree(threadsMemory[i]));
         cudaStreamSynchronize(streams[i]); // 等待流中的所有操作完成
         cudaStreamDestroy(streams[i]);
     }
     threadsMemory.clear();
 }
 
-// TODO: 这里要做可更改系数的
-void ThreadPool::initPCcoefMatrix() {
-//    double C = 3e8;
-    double BandWidth = 15e6;
-    double PulseWidth = 2e-6;
-    double Fs = 31.25e6;
-//    double PRT = 100e-6;
-
-    numSamples = round(PulseWidth * Fs);
-    NFFT = RANGE_NUM;
-
-    auto LFM = generateLFM(BandWidth, PulseWidth, Fs);
-    auto PCcoef = generatePCcoef(LFM);
-    PCcoef = repmat(PCcoef, NUM_PULSE, 1);
-
-    PCcoefMatrix = CudaMatrix(NUM_PULSE, numSamples, PCcoef);
-    PCcoefMatrix.fft_N(NFFT);   // 提前做fft
-}
+//// TODO: 这里要做可更改系数的
+//void ThreadPool::initPCcoefMatrix() {
+////    double C = 3e8;
+//    double BandWidth = 6e6;
+//    double PulseWidth = 5e-6;
+//
+////    double PRT = 100e-6;
+//    numSamples = round(PulseWidth * Fs);
+//    NFFT = RANGE_NUM;
+//
+//    auto LFM = generateLFM(BandWidth, PulseWidth, Fs);
+//    auto PCcoef = generatePCcoef(LFM);
+//    PCcoef = repmat(PCcoef, NUM_PULSE, 1);
+//
+//    PCcoefMatrix = CudaMatrix(NUM_PULSE, numSamples, PCcoef);
+//    PCcoefMatrix.fft_N(NFFT);   // 提前做fft
+//}
 
 void ThreadPool::run() {
     while (!stop) {
@@ -104,10 +104,12 @@ void ThreadPool::threadLoop(int threadID) {
     // 创建 CudaMatrix 对象和 pComplex 指针， 存放解包完后的脉组数据
 //    cufftComplex* pComplex = new cufftComplex[WAVE_NUM * NUM_PULSE * RANGE_NUM];
     cufftComplex *pComplex;
-    cudaMalloc(&pComplex, sizeof(cufftComplex) * WAVE_NUM * NUM_PULSE * RANGE_NUM);
+    checkCudaErrors(cudaMalloc(&pComplex, sizeof(cufftComplex) * WAVE_NUM * NUM_PULSE * RANGE_NUM));
 
     int *d_headPositions;
-    cudaMalloc(&d_headPositions, 300 * sizeof(size_t));
+    checkCudaErrors(cudaMalloc(&d_headPositions, NUM_PULSE * 1.1 * sizeof(size_t)));
+
+    CudaMatrix PcCoefMatrix(1, RANGE_NUM); // 脉压系数
 
     // 原始IQ
     vector<CudaMatrix> matrices;
@@ -119,7 +121,7 @@ void ThreadPool::threadLoop(int threadID) {
 
     // 选大结果 device
     cufftComplex *pMaxRes_d;
-    cudaMalloc(&pMaxRes_d, sizeof(cufftComplex) * WAVE_NUM * RANGE_NUM);
+    checkCudaErrors(cudaMalloc(&pMaxRes_d, sizeof(cufftComplex) * WAVE_NUM * RANGE_NUM));
 
     vector<CudaMatrix> Max_res;
     for (int i = 0; i < WAVE_NUM; i++) {
@@ -129,29 +131,32 @@ void ThreadPool::threadLoop(int threadID) {
     // 选大结果，host
     cufftComplex* pMaxRes_h = new cufftComplex[WAVE_NUM * RANGE_NUM];
 
-
+    cufftHandle pcPlan;                             // 脉压fft的plan
     cufftHandle rowPlan;                            // 按行做fft的plan
     cufftHandle colPlan;                            // 按列做fft的plan
 
     int nrows = NUM_PULSE;
     int ncols = RANGE_NUM;
+    checkCufftErrors(cufftPlan1d(&pcPlan, ncols, CUFFT_C2C, 1));
+    checkCufftErrors(cufftSetStream(pcPlan, streams[threadID]));
+
     checkCufftErrors(cufftPlan1d(&rowPlan, ncols, CUFFT_C2C, nrows));
     checkCufftErrors(cufftSetStream(rowPlan, streams[threadID]));
 
     checkCufftErrors(cufftPlanMany(&colPlan, 1, &nrows,     // Rank and size of the FFT
                                    &ncols, ncols, 1,              // Input data layout
                                    &ncols, ncols, 1,            // Output data layout
-                                   CUFFT_C2C, REAL_RANGE_NUM + numSamples - 1)      // FFT type and number of FFTs
+                                   CUFFT_C2C, RANGE_NUM)      // FFT type and number of FFTs
     );
-    cufftSetStream(colPlan, streams[threadID]);
+    checkCufftErrors(cufftSetStream(colPlan, streams[threadID]));
 
     while (!stop) {
         waitForProcessingSignal(threadID);
 
         if (stop) break; // 退出循环
 
-        processData(threadID, pComplex, matrices, d_headPositions, CFAR_res, Max_res, pMaxRes_d, pMaxRes_h, rowPlan,
-                    colPlan); // 处理 CUDA 内存中的数据
+        processData(threadID, pComplex, matrices, PcCoefMatrix, d_headPositions, CFAR_res, Max_res, pMaxRes_d,
+                    pMaxRes_h,pcPlan, rowPlan, colPlan); // 处理 CUDA 内存中的数据
 
         // 处理完毕后重置标志
         {
@@ -161,12 +166,13 @@ void ThreadPool::threadLoop(int threadID) {
     }
 
     // 释放内存
-    cudaFree(d_headPositions);
+    checkCudaErrors(cudaFree(d_headPositions));
 //    delete[] pComplex;
-    cudaFree(pComplex);
-    cudaFree(pMaxRes_d);
+    checkCudaErrors(cudaFree(pComplex));
+    checkCudaErrors(cudaFree(pMaxRes_d));
     delete[] pMaxRes_h;
 
+    checkCufftErrors(cufftDestroy(pcPlan));
     checkCufftErrors(cufftDestroy(rowPlan));
     checkCufftErrors(cufftDestroy(colPlan));
 }
@@ -194,13 +200,36 @@ __global__ void processKernel(char *threadsMemory, cufftComplex *pComplex,
     }
 }
 
+void ThreadPool::generatePCcoefMatrix(CudaMatrix &PcCoefMatrix, char *rawMessage, cudaStream_t _stream) {
+    if(*(uint64_t *) (rawMessage) != uint64Pattern) {
+        cerr << "data error" << endl;
+        return;
+    }
+//    double BandWidth = 6e6;
+//    double PulseWidth = 5e-6;
+
+    auto PRT = FourChars2Uint(rawMessage + 14 * 4) / Fs_system;
+
+    auto pulseWidth = (FourChars2Uint(rawMessage + 13 * 4)  & 0xfffff) / Fs_system;
+
+    numSamples = round(pulseWidth * Fs);
+
+    auto fLFMStartWord = FourChars2Uint(rawMessage + 16 * 4);
+    double bandWidth = (Fs_system - fLFMStartWord / pow(2.0f,32) * Fs_system) * 2.0;
+
+    vector<cufftComplex> PcCoef = PCcoef(bandWidth, pulseWidth, Fs,  RANGE_NUM);
+
+    PcCoefMatrix.copyFromHost(_stream, 1, RANGE_NUM, PcCoef.data());
+}
+
 // 线程池中的数据处理函数
-// #define WAVE_NUM 32    // 波束数
-// #define NUM_PULSE 256     // 一个脉组中的脉冲数
-// #define RANGE_NUM 8192   // 一个脉冲中的距离单元数
-void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, int *d_headPositions,
-                             vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res, cufftComplex *pMaxRes_d,
-                             cufftComplex *pMaxRes_h, cufftHandle &rowPlan, cufftHandle &colPlan) {
+void
+ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, CudaMatrix &PcCoefMatrix,
+                        int *d_headPositions, vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res,
+                        cufftComplex *pMaxRes_d, cufftComplex *pMaxRes_h, cufftHandle &pcPlan, cufftHandle &rowPlan,
+                        cufftHandle &colPlan) {
+//    if (threadID) return;
+
     cout << "thread " << threadID << " start" << endl;
 //    auto start = high_resolution_clock::now();
 
@@ -209,8 +238,19 @@ void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMa
     int rangeNum = floor((headLength - DATA_OFFSET) / WAVE_NUM / 4.0);
 
     // 头的位置拷贝到显存
-    cudaMemcpyAsync(d_headPositions, headPositions[threadID].data(), numHeads * sizeof(int), cudaMemcpyHostToDevice,
-                    streams[threadID]);
+    cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
+    checkCudaErrors(cudaMemcpyAsync(d_headPositions, headPositions[threadID].data(), numHeads * sizeof(int), cudaMemcpyHostToDevice,
+                    streams[threadID]));
+
+    cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
+
+    char rawMessage[DATA_OFFSET];
+
+    // 包头信息拷贝回内存(仅第一个包头)
+    checkCudaErrors(cudaMemcpyAsync(rawMessage, threadsMemory[threadID], sizeof(rawMessage), cudaMemcpyDeviceToHost,
+                    streams[threadID]));
+
+    generatePCcoefMatrix(PcCoefMatrix, rawMessage, streams[threadID]);
 
     // 定义 blockDim 的大小
     const int threadsPerBlock = 256; // 每个block的线程数，根据硬件性能选择
@@ -219,25 +259,21 @@ void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMa
     dim3 gridDim1(WAVE_NUM, (rangeNum + threadsPerBlock - 1) / threadsPerBlock, numHeads);
 
     // 在gpu解包
-    processKernel<<<gridDim1, threadsPerBlock, 0, streams[threadID]>>>(threadsMemory[threadID], pComplex,
+    processKernel<<<gridDim1, threadsPerBlock>>>(threadsMemory[threadID], pComplex,
                                                                        d_headPositions, numHeads, rangeNum);
-
-
 //    if (!threadID) {
 //        for (int i = 0; i < WAVE_NUM; i++) {
 //            matrices[i].print(i, i+1);
 //        }
 //    }
-    processPulseGroupData(threadID, matrices, CFAR_res, Max_res, rangeNum, rowPlan, colPlan);
+    processPulseGroupData(threadID, matrices, PcCoefMatrix, CFAR_res, Max_res, rangeNum,
+                          pcPlan, rowPlan, colPlan);
 
     // 选大结果拷贝回内存
-    char rawMessage[DATA_OFFSET];
-    cudaMemcpyAsync(pMaxRes_h, pMaxRes_d, sizeof(cufftComplex) * CAL_WAVE_NUM * RANGE_NUM, cudaMemcpyDeviceToHost,
-                    streams[threadID]);
+    cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
+    checkCudaErrors(cudaMemcpyAsync(pMaxRes_h, pMaxRes_d, sizeof(cufftComplex) * CAL_WAVE_NUM * RANGE_NUM, cudaMemcpyDeviceToHost,
+                    streams[threadID]));
 
-    // 包头信息拷贝回内存(仅第一个包头)
-    cudaMemcpyAsync(rawMessage, threadsMemory[threadID], sizeof(rawMessage), cudaMemcpyDeviceToHost,
-                    streams[threadID]);
 
     cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
     if (!threadID)
@@ -249,20 +285,23 @@ void ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMa
     // 输出时间统计
 //    cout << "thread " << threadID << " process finished after " << duration_cast<milliseconds>(endTime - start).count() << " ms" << endl;
     cout << "thread " << threadID << " process finished"  << endl;
+    cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
 }
 
+
+
 // 在GPU处理一个脉组的所有波束的数据，全流程处理，包括脉压、积累、CFAR、选大。
-void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrices, vector<CudaMatrix> &CFAR_res,
-                                       vector<CudaMatrix> &Max_res, int rangeNum, cufftHandle &rowPlan,
-                                       cufftHandle &colPlan) {
-    double Pfa = 1e-6;
-    int numGuardCells = 4;
-    int numRefCells = 20;
+void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrices, CudaMatrix &PcCoefMatrix,
+                                       vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res, int rangeNum,
+                                       cufftHandle &pcPlan, cufftHandle &rowPlan, cufftHandle &colPlan) {
+
+    PcCoefMatrix.fft(pcPlan);
+//    matrices[0].printShape();
     for (int i = 0; i < CAL_WAVE_NUM; i++) {
         /*Pulse Compression*/
         matrices[i].fft(rowPlan);
-        matrices[i].elementWiseMul(PCcoefMatrix, streams[threadID]);
-        matrices[i].ifft(rowPlan);
+        matrices[i].rowWiseMul(PcCoefMatrix, streams[threadID]);
+        matrices[i].ifft(streams[threadID], rowPlan);
 
         /*coherent integration*/
         for (int j = 0; j < INTEGRATION_TIMES; j++) {
@@ -302,17 +341,15 @@ void ThreadPool::waitForProcessingSignal(int threadID) {
 void ThreadPool::copyToThreadMemory() {
     int block_index = sharedQueue->read_index;
 //    std::cout << "Block index: " << block_index << std::endl << std::endl;
-
+//    cout << "block_index： " << block_index << endl;
     unsigned int seqNum;
 
     unsigned int indexValue; // 当前packet相对于1GB的起始地址
     unsigned long copyStartAddr = block_index * BLOCK_SIZE; // 当前Block相对于1GB的复制起始地址
     bool startFlag;
-
-    for (int i = 0; i < 1024; i++) {
+    for (int i = 0; i < 2048; i++) {
         size_t indexOffset = block_index * INDEX_SIZE + i * 4;
         indexValue = FourChars2Uint(sharedQueue->index_buffer + indexOffset);
-
         // Check pattern match
         if (*(uint64_t *) (sharedQueue->buffer + indexValue) == uint64Pattern) {
             seqNum = FourChars2Uint(sharedQueue->buffer + indexValue + SEQ_OFFSET);
@@ -329,7 +366,7 @@ void ThreadPool::copyToThreadMemory() {
             startFlag = static_cast<uint8_t>(sharedQueue->buffer[indexValue + 23]) & 0x02;
 
             if (startFlag) {
-
+//                cout << "Packege start. seqNum:" << seqNum << endl;
 //                auto startTime = high_resolution_clock::now();
 //                cout << "Total processing time for pulse group data: "
 //                     << duration_cast<microseconds>(startTime - circleStartTime).count() << " us" << endl;
@@ -376,20 +413,23 @@ void ThreadPool::copyToThreadMemory() {
 // 从startAddr到endAddr的数据拷贝给线程的独立空间，Addr是相对于共享内存的起始地址
 void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr) {
     size_t copyLength = endAddr - startAddr;
-//    std::cout << "Copying " << copyLength / 1024 / 1024 << " MB from address " << startAddr << " to thread memory at " << currentAddrOffset << std::endl;
+//    std::cout << "Copying " << copyLength / 1024 / 1024 << " MB to thread " << cur_thread_id << std::endl;
+//    cout << cur_thread_id << ": " << (currentAddrOffset + copyLength) / 1024 / 1024 << " MB" << endl;
 
     if ((currentAddrOffset + copyLength) <= THREADS_MEM_SIZE) {  // Ensure within buffer bounds
-//        memcpy(threadsMemory[cur_thread_id] + currentAddrOffset[cur_thread_id],
-//               sharedQueue->buffer + startAddr,
-//               copyLength);
 
 //        // 内存拷贝到显存
-        cudaMemcpyAsync(threadsMemory[cur_thread_id] + currentAddrOffset,
+        checkCudaErrors(cudaMemcpyAsync(threadsMemory[cur_thread_id] + currentAddrOffset,
                         sharedQueue->buffer + startAddr,
                         copyLength,
                         cudaMemcpyHostToDevice,
                         streams[cur_thread_id]
-        );
+        ));
+//        cudaMemcpy(threadsMemory[cur_thread_id] + currentAddrOffset,
+//                        sharedQueue->buffer + startAddr,
+//                        copyLength,
+//                        cudaMemcpyHostToDevice
+//        );
 
         currentAddrOffset += copyLength;
     } else {
@@ -433,6 +473,13 @@ void checkCufftErrors(cufftResult result) {
         }
         std::cerr << std::endl;
         exit(EXIT_FAILURE);
+    }
+}
+
+void checkCudaErrors(cudaError_t result) {
+    if (result != cudaSuccess) {
+        cerr << "cudaError_t code: " << result << endl;
+        throw runtime_error(cudaGetErrorString(result));
     }
 }
 

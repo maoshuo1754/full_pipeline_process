@@ -14,8 +14,6 @@
 #include <thrust/transform.h>
 #include <thrust/functional.h>
 
-#define RANGE_NUM 8192   // 一个脉冲中的距离单元数
-#define CFAR_LENGTH 16  // CFAR 分段处理长度
 
 class CudaMatrix {
 private:
@@ -63,12 +61,13 @@ public:
     CudaMatrix& operator=(CudaMatrix&& other) noexcept; // Move assignment
     bool operator==(const CudaMatrix& other) const;
     void elementWiseMul(const CudaMatrix &other, cudaStream_t _stream) const;
+    void rowWiseMul(const CudaMatrix &other, cudaStream_t _stream);
     void elementWiseSquare(cudaStream_t _stream) const;
     void abs(cudaStream_t _stream) const;
 
     void fft(cufftHandle &plan) const;
     void fft_by_col(cufftHandle &plan);
-    void ifft(cufftHandle &plan) const;
+    void ifft(cudaStream_t _stream, cufftHandle &plan) const;
     void fft_N(int nPoints);
 
     CudaMatrix extractSegment(int startInd, int rangeNumber) const;

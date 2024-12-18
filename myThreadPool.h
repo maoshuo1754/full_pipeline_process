@@ -49,7 +49,6 @@ private:
     char timebuf[100];
     ofstream logFile;
 
-    CudaMatrix PCcoefMatrix;    // 脉压系数矩阵
     int NFFT;                   // 脉压时做fft的点数
     int numSamples;             // 脉压采样点数
     SendVideo sender;
@@ -64,24 +63,28 @@ private:
 
     static unsigned int FourChars2Uint(const char *startAddr);
 
-    void processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, int *d_headPositions,
-                     vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res, cufftComplex *pMaxRes_d,
-                     cufftComplex *pMaxRes_h, cufftHandle &rowPlan, cufftHandle &colPlan);
+    void processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, CudaMatrix &PcCoefMatrix,
+                     int *d_headPositions, vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res,
+                     cufftComplex *pMaxRes_d, cufftComplex *pMaxRes_h, cufftHandle &pcPlan, cufftHandle &rowPlan,
+                     cufftHandle &colPlan);
 
     void memcpyDataToThread(unsigned int startAddr, unsigned int endAddr);
 
-    void initPCcoefMatrix();
-
-    void processPulseGroupData(int threadID, vector<CudaMatrix> &matrices, vector<CudaMatrix> &CFAR_res,
-                               vector<CudaMatrix> &Max_res, int rangeNum, cufftHandle &rowPlan,
-                               cufftHandle &colPlan);
+    void processPulseGroupData(int threadID, vector<CudaMatrix> &matrices, CudaMatrix &PcCoefMatrix,
+                               vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res, int rangeNum,
+                               cufftHandle &pcPlan,
+                               cufftHandle &rowPlan, cufftHandle &colPlan);
 
     void allocateThreadMemory();
 
     void freeThreadMemory();
+
+    void generatePCcoefMatrix(CudaMatrix &PcCoefMatrix, char *rawMessage, cudaStream_t _stream);
+
 };
 
 void checkCufftErrors(cufftResult result);
+void checkCudaErrors(cudaError_t result);
 
 __device__ float TwoChars2float(const char *startAddr);
 

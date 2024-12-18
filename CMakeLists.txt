@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
+set(CUDA_NVCC_FLAGS_DEBUG "-G -g")
+
 # Enable CUDA language
 enable_language(CUDA)
 
@@ -19,17 +21,18 @@ set(SOURCE_FILES
         utils.h
         myThreadPool.h
         myThreadPool.cu
-        main.cu
-        NRx/udpSenderManager.cpp
-        NRx/NRxUdpSender.cpp
+        main.cpp
         NRx/sendVideo.cpp
         NRx/SendVideo.h
+        Config.h
+        Config.cpp
 )
 
 add_executable(reader ${SOURCE_FILES})
 
 # Find and link CUDA Toolkit libraries
 find_package(CUDAToolkit REQUIRED)
+find_package(nlohmann_json 3.7.3 REQUIRED)
 #find_package(OpenMP REQUIRED)
 
 target_link_libraries(reader
@@ -37,6 +40,7 @@ target_link_libraries(reader
         rt
         CUDA::cublas
         CUDA::cufft
+        nlohmann_json::nlohmann_json
 #        OpenMP::OpenMP_CXX
 )
 

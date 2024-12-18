@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <cmath>
 #include <cuComplex.h>
+#include "Config.h"
 
 using namespace std;
 
@@ -90,6 +91,7 @@ CudaMatrix::CudaMatrix(const CudaMatrix& other) : nrows(other.nrows), ncols(othe
 //    cout <<"copy constructor" << endl;
     allocateMemory();
     checkCudaErrors(cudaMemcpy(data, other.data, sizeof(cufftComplex) * nrows * ncols, cudaMemcpyDeviceToDevice));
+
 }
 
 // Move constructor
@@ -124,6 +126,7 @@ void CudaMatrix::copyFromHost(cudaStream_t _stream, int rows, int cols, const cu
         nrows = rows;
         ncols = cols;
         allocateMemory();
+        cout << "copyFromHost(): Copy size not match!" << endl;
     }
 //    checkCudaErrors(cudaMemcpy(data, hostData, sizeof(cufftComplex) * nrows * ncols, cudaMemcpyHostToDevice));
     // 异步拷贝
@@ -282,6 +285,30 @@ void CudaMatrix::elementWiseMul(const CudaMatrix &other, cudaStream_t _stream) c
     int gridSize = (size + blockSize - 1) / blockSize;
 
     elementWiseMulKernel<<<gridSize, blockSize, 0, _stream>>>(data, other.data, data, size);
+}
+
+// Kernel for row-wise multiplication
+__global__ void rowWiseMulKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows, int ncols) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < nrows * ncols) {
+        cufftComplex temp_a = d_a[idx];
+        cufftComplex temp_b = d_b[idx % ncols];
+        d_a[idx].x = temp_a.x * temp_b.x - temp_a.y * temp_b.y;
+        d_a[idx].y = temp_a.x * temp_b.y + temp_a.y * temp_b.x;
+    }
+}
+
+// 原地做行点乘，this矩阵是nxm的，other矩阵是1xm的，让this矩阵的每一行都点乘other矩阵
+void CudaMatrix::rowWiseMul(const CudaMatrix &other, cudaStream_t _stream) {
+    if (other.nrows != 1 || other.ncols != ncols) {
+        throw std::runtime_error("The other matrix must be of dimensions 1 x m.");
+    }
+
+    int size = nrows * ncols;
+    int blockSize = 256;
+    int gridSize = (size + blockSize - 1) / blockSize;
+
+    rowWiseMulKernel<<<gridSize, blockSize, 0, _stream>>>(data, other.data, nrows, ncols);
 }
 
 
@@ -466,12 +493,13 @@ struct ScaleFunctor {
     }
 };
 
-void CudaMatrix::ifft(cufftHandle &plan) const {
+void CudaMatrix::ifft(cudaStream_t _stream, cufftHandle &plan) const {
+    checkCufftErrors(cufftSetStream(plan, _stream));
     checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_INVERSE));
-    float scale = 1.0f / ncols;
-    thrust::device_ptr<cufftComplex> thrust_data(data);
-    thrust::transform(thrust_data, thrust_data + nrows * ncols, thrust_data, ScaleFunctor(scale));
-
+//    float scale = 1.0f / ncols;
+//    thrust::device_ptr<cufftComplex> thrust_data(data);
+//    auto exec_policy = thrust::cuda::par.on(_stream);
+//    thrust::transform(exec_policy, thrust_data, thrust_data + nrows * ncols, thrust_data, ScaleFunctor(scale));
 }
 
 
