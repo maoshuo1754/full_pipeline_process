@@ -10,8 +10,8 @@
 
 #define WAVE_NUM 32             // 波束数
 #define NUM_PULSE 2048          // 一个波束中的脉冲数
-#define RANGE_NUM 4096          // 一个脉冲中的距离单元数 做fft的，计算方法为 RANGE_NUM = 2 ** nextpow2(REAL_RANGE_NUM + numSamples - 1)
-#define REAL_RANGE_NUM  3748    // 一个脉冲的真实距离单元数
+#define NFFT 4096               // 一个脉冲中fft的点数，计算方法为 NFFT = 2 ** nextpow2(RANGE_NUM + numSamples - 1)
+#define RANGE_NUM  3748         // 一个脉冲的距离单元数
 #define CFAR_LENGTH 16          // 分段fft长度
 
 // 配置参数声明

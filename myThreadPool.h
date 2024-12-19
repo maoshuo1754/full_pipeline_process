@@ -49,8 +49,8 @@ private:
     char timebuf[100];
     ofstream logFile;
 
-    int NFFT;                   // 脉压时做fft的点数
     int numSamples;             // 脉压采样点数
+    CudaMatrix PcCoefMatrix;
     SendVideo sender;
 
     void threadLoop(int threadID);
@@ -63,23 +63,21 @@ private:
 
     static unsigned int FourChars2Uint(const char *startAddr);
 
-    void processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, CudaMatrix &PcCoefMatrix,
-                     int *d_headPositions, vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res,
-                     cufftComplex *pMaxRes_d, cufftComplex *pMaxRes_h, cufftHandle &pcPlan, cufftHandle &rowPlan,
-                     cufftHandle &colPlan);
+    void processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, int *d_headPositions,
+                     vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res, cufftComplex *pMaxRes_d,
+                     cufftComplex *pMaxRes_h, cufftHandle &pcPlan, cufftHandle &rowPlan, cufftHandle &colPlan);
 
     void memcpyDataToThread(unsigned int startAddr, unsigned int endAddr);
 
-    void processPulseGroupData(int threadID, vector<CudaMatrix> &matrices, CudaMatrix &PcCoefMatrix,
-                               vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res, int rangeNum,
-                               cufftHandle &pcPlan,
+    void processPulseGroupData(int threadID, vector<CudaMatrix> &matrices, vector<CudaMatrix> &CFAR_res,
+                               vector<CudaMatrix> &Max_res, int rangeNum, cufftHandle &pcPlan,
                                cufftHandle &rowPlan, cufftHandle &colPlan);
 
     void allocateThreadMemory();
 
     void freeThreadMemory();
 
-    void generatePCcoefMatrix(CudaMatrix &PcCoefMatrix, char *rawMessage, cudaStream_t _stream);
+    void generatePCcoefMatrix(char *rawMessage, cudaStream_t _stream);
 
 };
 

@@ -6,7 +6,7 @@
 
 SendVideo::SendVideo() {
     m_sendBufOri = new char[1024 * 1024];
-    unMinPRTLen = REAL_RANGE_NUM;
+    unMinPRTLen = RANGE_NUM;
     unTmpAzi = 0;
 
     // 32个脉组的时间偏移量
@@ -113,7 +113,7 @@ void SendVideo::send(char *rawMessage, float2 *data, int numSamples, int rangeNu
         videoMsg.RadarVideoHeader.wAziCode = htons(dwTemp);
 
         int xiuZheng = TAO_US * 150 / 38.4;// +TAO_US * 15 / 4.8;
-        auto* rowData = data + ii * RANGE_NUM;
+        auto* rowData = data + ii * NFFT;
         for (int k = 0; k < unMinPRTLen; ++k) {
             data_amp = (double)(rowData[k + numSamples - 2].x);
             data_amp = data_amp * 255 / 93.4;

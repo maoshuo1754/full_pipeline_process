@@ -63,14 +63,14 @@ std::vector<cufftComplex> repmat(const std::vector<cufftComplex>& vec, int rows,
     return result;
 }
 
-std::vector<cufftComplex> PCcoef(double BandWidth, double PulseWidth, double Fs, int NFFT) {
+std::vector<cufftComplex> PCcoef(double BandWidth, double PulseWidth, double Fs, int _NFFT) {
 //    std::cout << "BandWidth:" << BandWidth << " PulseWidth:" << PulseWidth << " Fs:" << Fs << std::endl;
     double Ts = 1 / Fs;
 
     int N = round(PulseWidth * Fs);
     double dT = (PulseWidth - Ts) / (N - 1); // t = linspace(-PulseWidth/2, PulseWidth/2-Ts, N);
 
-    std::vector<cufftComplex> result(NFFT);
+    std::vector<cufftComplex> result(_NFFT);
 
     // 生成线性调频信号
     for (int i = 0; i < N; ++i) {

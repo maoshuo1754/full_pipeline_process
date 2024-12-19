@@ -667,7 +667,7 @@ void CudaMatrix::cfar(CudaMatrix &output, cudaStream_t _stream, double Pfa, int 
 
     // Configure the CUDA kernel launch parameters
     int colsPerThread = CFAR_LENGTH; // 每个线程处理的列数
-    int threadsPerBlock = RANGE_NUM / colsPerThread; // 每个线程块中的线程数
+    int threadsPerBlock = NFFT / colsPerThread; // 每个线程块中的线程数
     int blocksPerRow = (ncols + colsPerThread - 1) / colsPerThread / threadsPerBlock; // 每行的线程块数
     dim3 blockDim(threadsPerBlock, 1); // 线程块大小：1 行 x 32 列
     dim3 gridDim(blocksPerRow, nrows); // 网格大小：每行 block 数 x 总行数

@@ -22,7 +22,7 @@ std::vector<cufftComplex> generatePCcoef(const std::vector<cufftComplex>& LFM);
 
 std::vector<cufftComplex> repmat(const std::vector<cufftComplex>& vec, int rows, int cols);
 
-std::vector<cufftComplex> PCcoef(double BandWidth, double PulseWidth, double Fs, int NFFT);
+std::vector<cufftComplex> PCcoef(double BandWidth, double PulseWidth, double Fs, int _NFFT);
 
 unsigned int nextpow2(unsigned int x);
 
