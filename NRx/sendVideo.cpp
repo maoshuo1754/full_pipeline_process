@@ -3,6 +3,7 @@
 //
 
 #include "SendVideo.h"
+#include "../Config.h"
 
 SendVideo::SendVideo() {
     m_sendBufOri = new char[1024 * 1024];
@@ -11,7 +12,7 @@ SendVideo::SendVideo() {
 
     // 32个脉组的时间偏移量
     for (int ii = 0; ii < 8; ii++) {
-        for (int jj = 0; jj <= 3; jj++) {
+        for (int jj = 0; jj < 4; jj++) {
             timeArray[ii * 4 + jj] = ii * 0.5 + jj;
         }
     }
@@ -112,11 +113,11 @@ void SendVideo::send(char *rawMessage, float2 *data, int numSamples, int rangeNu
         dwTemp = UINT16(rAzm / 360.0 * 65536.0f);
         videoMsg.RadarVideoHeader.wAziCode = htons(dwTemp);
 
-        int xiuZheng = TAO_US * 150 / 38.4;// +TAO_US * 15 / 4.8;
         auto* rowData = data + ii * NFFT;
         for (int k = 0; k < unMinPRTLen; ++k) {
-            data_amp = (double)(rowData[k + numSamples - 2].x);
-            data_amp = data_amp * 255 / 93.4;
+            // + system_delay
+            data_amp = (double)(rowData[k + numSamples - 1].x);
+//            data_amp = data_amp * 255 / 93.4;
             if(data_amp > 255)
                 data_amp = 255;
             videoMsg.bytVideoData[k] = (unsigned char)data_amp;

@@ -61,8 +61,6 @@ private:
 
     void waitForProcessingSignal(int threadID);
 
-    static unsigned int FourChars2Uint(const char *startAddr);
-
     void processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, int *d_headPositions,
                      vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res, cufftComplex *pMaxRes_d,
                      cufftComplex *pMaxRes_h, cufftHandle &pcPlan, cufftHandle &rowPlan, cufftHandle &colPlan);
@@ -77,12 +75,9 @@ private:
 
     void freeThreadMemory();
 
-    void generatePCcoefMatrix(char *rawMessage, cudaStream_t _stream);
+    void generatePCcoefMatrix(char *rawMessage, cufftHandle &pcPlan, cudaStream_t _stream);
 
 };
-
-void checkCufftErrors(cufftResult result);
-void checkCudaErrors(cudaError_t result);
 
 __device__ float TwoChars2float(const char *startAddr);
 

@@ -14,14 +14,6 @@
 #include <cuComplex.h>
 #include <chrono>
 
-std::vector<std::vector<cufftComplex>> readMatTxt(const std::string &filePath);
-
-std::vector<cufftComplex> generateLFM(double BandWidth, double PulseWidth, double Fs);
-
-std::vector<cufftComplex> generatePCcoef(const std::vector<cufftComplex>& LFM);
-
-std::vector<cufftComplex> repmat(const std::vector<cufftComplex>& vec, int rows, int cols);
-
 std::vector<cufftComplex> PCcoef(double BandWidth, double PulseWidth, double Fs, int _NFFT);
 
 unsigned int nextpow2(unsigned int x);
@@ -29,5 +21,11 @@ unsigned int nextpow2(unsigned int x);
 bool isCudaAvailable();
 
 long long calculateDuration(std::chrono::high_resolution_clock::time_point start, std::chrono::high_resolution_clock::time_point end);
+
+void checkCufftErrors(cufftResult result);
+
+void checkCudaErrors(cudaError_t result);
+
+unsigned int FourChars2Uint(const char *startAddr);
 
 #endif //CUDAPROJECT_UTILS_H

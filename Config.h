@@ -32,6 +32,7 @@ extern int send_port;
 
 extern double Fs;               // 采样率
 extern double Fs_system;        // 雷达系统内部时钟频率
+extern int system_delay;        // 系统处理延时, 低通滤波等系统延时
 
 extern double Pfa;
 extern int numGuardCells;

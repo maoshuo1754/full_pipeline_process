@@ -4,57 +4,9 @@
 #include <cmath>
 #include <cuComplex.h>
 #include "Config.h"
+#include "utils.h"
 
 using namespace std;
-
-// Helper functions to check errors
-void CudaMatrix::checkCudaErrors(cudaError_t result) {
-    if (result != cudaSuccess) {
-        throw runtime_error(cudaGetErrorString(result));
-    }
-}
-
-void CudaMatrix::checkCublasErrors(cublasStatus_t result) {
-    if (result != CUBLAS_STATUS_SUCCESS) {
-        throw runtime_error("cuBLAS error");
-    }
-}
-
-void CudaMatrix::checkCufftErrors(cufftResult result) {
-    if (result != CUFFT_SUCCESS) {
-        std::cerr << "CUFFT error: ";
-        switch (result) {
-            case CUFFT_INVALID_PLAN:
-                std::cerr << "CUFFT_INVALID_PLAN";
-                break;
-            case CUFFT_ALLOC_FAILED:
-                std::cerr << "CUFFT_ALLOC_FAILED";
-                break;
-            case CUFFT_INVALID_TYPE:
-                std::cerr << "CUFFT_INVALID_TYPE";
-                break;
-            case CUFFT_INVALID_VALUE:
-                std::cerr << "CUFFT_INVALID_VALUE";
-                break;
-            case CUFFT_INTERNAL_ERROR:
-                std::cerr << "CUFFT_INTERNAL_ERROR";
-                break;
-            case CUFFT_EXEC_FAILED:
-                std::cerr << "CUFFT_EXEC_FAILED";
-                break;
-            case CUFFT_SETUP_FAILED:
-                std::cerr << "CUFFT_SETUP_FAILED";
-                break;
-            case CUFFT_INVALID_SIZE:
-                std::cerr << "CUFFT_INVALID_SIZE";
-                break;
-            default:
-                std::cerr << "Unknown error";
-        }
-        std::cerr << std::endl;
-        exit(EXIT_FAILURE);
-    }
-}
 
 // Constructor
 CudaMatrix::CudaMatrix(int rows, int cols) : nrows(rows), ncols(cols), data(nullptr), initFromDevice(false) {
@@ -223,10 +175,15 @@ void CudaMatrix::print(int row) const {
     cout << "array of row" << row << "([" << endl;
     int i = row;
     cout << "  [";
-    for (int j = 0; j < ncols; ++j) {
-        cout << std::fixed << std::setprecision(5) << std::setw(6)
-             << hostData[i * ncols + j].x << " + "
-             << std::fixed << std::setprecision(5) << std::setw(6)
+    for (int j = 0; j < 30; ++j) {
+        cout << std::fixed << std::setprecision(2) << std::setw(3)
+             << hostData[i * ncols + j].x;
+
+        if (hostData[i * ncols + j].y >= 0) {
+            cout << "+";
+        }
+
+        cout << std::fixed << std::setprecision(2) << std::setw(3)
              << hostData[i * ncols + j].y << "j";
         if (j < ncols - 1) {
             cout << ",  ";
@@ -494,12 +451,11 @@ struct ScaleFunctor {
 };
 
 void CudaMatrix::ifft(cudaStream_t _stream, cufftHandle &plan) const {
-    checkCufftErrors(cufftSetStream(plan, _stream));
     checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_INVERSE));
-//    float scale = 1.0f / ncols;
-//    thrust::device_ptr<cufftComplex> thrust_data(data);
-//    auto exec_policy = thrust::cuda::par.on(_stream);
-//    thrust::transform(exec_policy, thrust_data, thrust_data + nrows * ncols, thrust_data, ScaleFunctor(scale));
+    float scale = 1.0f / ncols;
+    thrust::device_ptr<cufftComplex> thrust_data(data);
+    auto exec_policy = thrust::cuda::par.on(_stream);
+    thrust::transform(exec_policy, thrust_data, thrust_data + nrows * ncols, thrust_data, ScaleFunctor(scale));
 }
 
 

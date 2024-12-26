@@ -78,9 +78,6 @@ public:
 private:
     void allocateMemory();
     void deallocateMemory();
-    static void checkCudaErrors(cudaError_t result);
-    static void checkCublasErrors(cublasStatus_t result);
-    static void checkCufftErrors(cufftResult result);
 
 
 

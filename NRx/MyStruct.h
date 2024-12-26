@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <atomic>
 #include <arpa/inet.h>
+#include "../Config.h"
 
 #define SLOT_SIZE (4096*1024)//缓冲区槽大小
 #define SLOT_NUM (32)//缓冲区槽个数
@@ -15,7 +16,7 @@
 #define VEDIODATASIZE (25000)
 #define HEAD_FLAG (0x7E7E)
 #define END_FLAG (0xAAAA)
-#define MAX_DISTANCE_ELEMENT_NUMBER 7500
+#define MAX_DISTANCE_ELEMENT_NUMBER RANGE_NUM
 
 //数据缓冲区
 typedef struct _BaseRingBufferInfo {
@@ -347,76 +348,77 @@ typedef int8_t INT8;
 
 typedef struct tagNRX_COMMON_HEADER
 {
-    UINT32 dwHEADER;									//����ͷ	0xF1A2B4C8
-    UINT16 wVERSION;									//Э��汾��	���ݹ�������ͷ�ı����ʷ��ţ�ĿǰΪ0
-    UINT16 wCOUNTER;									//������	���౨�Ķ��Լ���
-    UINT32 dwTxSecondTime;								//����ʱ��1	32λUTC����ʾ�롣�ɷ�����ȡ����ʱ����д��
-    UINT32 dwTxMicroSecondTime;							//����ʱ��2	��ʾ�����µ�΢����
-    UINT16 wMsgTotalLen;								//������������ͷ�����ݡ�����β�����ֽ��������Ϊ64K�ֽ�.FPGA���͵����ݴ�����0.
-    UINT16 wMsgFlag;									//����ʶ���	�ⲿ����ʹ��0-255���ڲ�����ʹ��256-65535
-    UINT16 wRadarID;									//�״�ID	Ӧ�ó����Զ���
-    UINT8  bytTxNodeNumber;								//�����ڵ��	ϵͳΪ�ܹ����ͻ�������ݵ���Ӳ��ʵ�����ڵ��
-    UINT8  bytRxNodeNumber;								//�շ��ڵ��
-    UINT8  bytDataFlag;									//���ݱ��	b7-4����ѹ����ǡ�0x0, ����δѹ��; 0x1, ����ʹ�� qt sdk ѹ��;����������.
-
-    UINT8 bytRecChannel;								//��¼����ͨ����	��¼�ط�ʹ�õ�ͨ���ţ��������ֶ�ͨ������
-    UINT16 wReserved0;									//Ԥ��	��0
-    UINT16 wReserved1;									//Ԥ��	��0
-    UINT16 wResesrved2;									//Ԥ��	��0
+    UINT32 dwHEADER;									//报文头	0xF1A2B4C8
+    UINT16 wVERSION;									//协议版本号	根据公共数据头的变更历史编号，目前为0
+    UINT16 wCOUNTER;									//计数器	各类报文独自计数
+    UINT32 dwTxSecondTime;								//发送时间1	32位UTC，表示秒。由发方读取本地时间填写。
+    UINT32 dwTxMicroSecondTime;							//发送时间2	表示秒以下的微秒数
+    UINT16 wMsgTotalLen;								//包含公共数据头、数据、数据尾的总字节数，最大为64K字节.FPGA发送的数据此项填0.
+    UINT16 wMsgFlag;									//报文识别符	外部报文使用0-255，内部报文使用256-65535
+    UINT16 wRadarID;									//雷达ID	应用场景自定义
+    UINT8  bytTxNodeNumber;								//发方节点号	系统为能够发送或接收数据的软硬件实体分配节点号
+    UINT8  bytRxNodeNumber;								//收方节点号
+    UINT8  bytDataFlag;									//数据标记	b7-4数据压缩标记。0x0, 数据未压缩; 0x1, 数据使用 qt sdk 压缩;其它待定义.
+    //b3 数据中绝对时间格式. 0，时间1表示32位UTC，时间2表示秒以下的微秒数；1，表示自定义.绝对时间1表示0 - 86399999ms，绝对时间2无效填0.
+    //b2 - 0，预留，填0.
+    UINT8 bytRecChannel;								//记录数据通道号	记录回放使用的通道号，用于区分多通道数据
+    UINT16 wReserved0;									//预留	填0
+    UINT16 wReserved1;									//预留	填0
+    UINT16 wResesrved2;									//预留	填0
 }NRX_COMMON_HEADER;
 
 typedef struct tagNRX_RadarVideo_Head
 {
-    UINT32 dwSyncHeader;							//ͬ��ͷ��0xA5A61234
-    UINT32 dwVideoLen;								//�״���Ƶ�����ѹ�����ֽ���������������ͷ���״���Ƶͷ������β�ĳ���
-    UINT16 wHeadLen;								//�״���Ƶͷ����,���������ݣ���128.
-    UINT16 wEncodeFormat;							//0 8λ��Ƶ;1 16λ��Ƶ.;2 8λ��Ƶ + 8λ����;3 16λ��Ƶ + 16λ����;4 8λ��Ƶ + 8λ���� + 8λ�ٶ� + 8λԤ��. �ٶ��ò����ʾ.
-    //100~127��ר�����ڲ�����ʹ��. 100��32λ���������ȣ�dB�� + ͨ���ٶ�chnnalSpeed  101��32λ���������ȣ�dB�� + 32λ������������dB�� + ͨ���ٶ�chnnalSpeed
-    //102��32λ���������ȣ�dB�� + 32λ������������dB�� + 32λ�������ٶȣ�m / s��
-    UINT8 bytPulseMode;								//������Ϸ�ʽ,0��������  1�������岹ä	2��MTD��ͨ��  3��1�� + ���
-    UINT8 bytSubPulseNumber;						//���������,�����������������	���磺�������޲�ä���壬��ֵ��1��������1��ä����ֵ��2��	1��������16�������壬��ֵ��17��
-    UINT8 bytSubPulseCount;							//��ǰ�����������е���������ţ�[0, n)
-    UINT8 bytReserved0;								//Ԥ������ʾ������Ϸ�ʽ
-    UINT32 dwTxAbsSecondTime;						//����ʱ��1 32λUTC����ʾ��� 0 - 86399999ms���ɹ�������ͷ�е����ݱ�ǵ�b3λ������
-    UINT32 dwTxAbsMicroSecondTime;					//����ʱ��2 ��ʾ�����µ�΢������ ��Ч���ɹ�������ͷ�е����ݱ�ǵ�b3λ������
-    UINT32 dwTxRelMilliSecondTime_H;				//���ʱ�� ��32λ����λ: 1ms
-    UINT32 dwTxRelMilliSecondTime_L;				//���ʱ�� ��32λ����λ: 1ms
-    UINT32 dwSigBWHz;								//�źŴ���,LSB��1Hz��ȫF��ʾ��Ч
-    UINT32 dwSampleFreqHz;							//������,LSB��1Hz
-    UINT16 wAziCode;								//��λ 16λ���룬360��/65536
-    UINT16 wPulseWidth0p1us;						//���� LSB��0.1us��ȫF��ʾ��Ч
-    UINT16 wPRT0p1us;								//PRT LSB��0.1us��ȫF��ʾ��Ч
-    INT16 nZeroPointPos;							//��ʼ��Ԫ��� ��0�����뵥Ԫ������ĵ�Ԫ��
-    UINT32 dwSampleElementNumber;					//������Ԫ����
-    UINT32 dwReserved1;								//Ԥ��
-    UINT8 bytReserved2;								//Ԥ��
-    UINT8 bytPIM_Flag;								//PIM_Flag 0: ԭʼ. 1: ����. 2: ���.	0xFF��Ч.
-    UINT8 bytDataFlag;								//���ݱ�ʶ b7-5��Ƶ��������. 0dB; 1����ӳ��; 2Լ��������ӳ��.b4 - 0Ԥ��
-    UINT8 bytLinearMapLowPara;						//����ӳ����� ����ӳ��ʱ��Ч. ӳ��ǰ��������
-    UINT8 bytLinearMapHighPara;						//����ӳ����� ����ӳ��ʱ��Ч. ӳ��ǰ��������	val = 0 (if DB <= mapPreLowerDB) 		val = 2 ^ n - 1 (if DB >= mapPreUpperDB) 		val = (DB - mapPreLowerDB) / (mapPreUpperDB - mapPreLowerDB) * (2 ^ n - 1)
-    UINT8 bytReserved3;								//Ԥ��
-    UINT16 wDataSrc;								//����Դ �����ļ���ͨ����λ��ķ�ʽʹ��.���֧��16������Դ.	1:Simple Test		2 : Scenario Generator		4 : Replay From Recording		8 : Receive By UDP		2 ^ (4:15)Ԥ��
-    INT32 nLongitude;								//���� LSB��1/10000�֣�181�ȱ�ʾ��Ч
-    INT32 nLatitude;								//γ�� LSB��1/10000�֣�91�ȱ�ʾ��Ч
-    INT16 nAltitude;								//�߶� LSB��1�ף�Ĭ����0
-    UINT16 wAbsCourse;								//���Ժ��� LSB��360/65536��Ĭ����0
-    UINT16 wAbsCruiseSpeed;							//���Ժ��� LSB��0.1m/s��Ĭ����0
-    UINT16 wRelCourse;								//��Ժ���	LSB��360/65536��Ĭ����0
-    UINT16 wRelCruiseSpeed;							//��Ժ���	LSB��0.1m/s��Ĭ����0
-    INT16 nHeadAngle;								//��ҡ	��λ��360��/32768  Ĭ��ֵ0
-    INT16 nRoll;									//��ҡ	��λ��360��/32768  Ĭ��ֵ0
-    INT16 nPitch;									//��ҡ	��λ��360��/32768  Ĭ��ֵ0
-    UINT8 bytScanMode;								//ɨ�跽ʽ	b7: ��ʾ��������ɨ�跽ʽ�Ƿ���Ч. 1��Ч0��Ч.b6: 0, �̶�ƽ̨; 1, �ƶ�ƽ̨.	b5Ԥ��.	b4 - 0: 0˳ʱ�뻷ɨ, 1��ʱ�뻷ɨ, 2˳ʱ���е��ɨ, 3��ʱ���е��ɨ, 4˳ʱ�뵥���ɨ, 5��ʱ�뵥���ɨ, 6���ɨ��, 7��λ, 8ͣ����, 9����. b4 - 0 = 31��ʾ��Ч
-    UINT8 bytReserved4;								//RES4	Ԥ��
-    UINT16 wAntennaScanSpeed;						//����ɨ���ٶ�	��λ: 0.1 deg/s����Чʱ��0.
-    UINT16 wFanScanFrontAngle;						//������ɨǰ��	��λ: 360.f / 65536.f����Чʱ��0.
-    UINT16 wFanScanBackAngle;						//������ɨ����	��λ: 360.f / 65536.f����Чʱ��0.
-    INT32 nChannelSpeed;							//ͨ���ٶ�	�ٶ��ò����ʾ��LSB = 0.1m/s  0xFFFFʱ��Ч
-    UINT16 wChannelCount;							//ͨ�����	0xFFʱ��Ч
-    UINT16 wReserved5;								//RES5	Ԥ��
+    UINT32 dwSyncHeader;							//同步头，0xA5A61234
+    UINT32 dwVideoLen;								//雷达视频编码后不压缩的字节数，不包含数据头、雷达视频头和数据尾的长度
+    UINT16 wHeadLen;								//雷达视频头长度,不包含数据，填128.
+    UINT16 wEncodeFormat;							//0 8位视频;1 16位视频.;2 8位视频 + 8位背景;3 16位视频 + 16位背景;4 8位视频 + 8位背景 + 8位速度 + 8位预留. 速度用补码表示.
+    //100~127：专用于内部计算使用. 100：32位浮点数幅度（dB） + 通道速度chnnalSpeed  101：32位浮点数幅度（dB） + 32位浮点数背景（dB） + 通道速度chnnalSpeed
+    //102：32位浮点数幅度（dB） + 32位浮点数背景（dB） + 32位浮点数速度（m / s）
+    UINT8 bytPulseMode;								//脉冲组合方式,0：单脉冲  1：多脉冲补盲	2：MTD多通道  3：1长 + 多短
+    UINT8 bytSubPulseNumber;						//子脉冲个数,脉组中子脉冲个数。	例如：单脉冲无补盲脉冲，该值填1；单脉冲1补盲，该值填2；	1个长脉冲16个短脉冲，该值填17；
+    UINT8 bytSubPulseCount;							//当前脉冲在脉组中的子脉冲序号，[0, n)
+    UINT8 bytReserved0;								//预留，表示脉冲组合方式
+    UINT32 dwTxAbsSecondTime;						//绝对时间1 32位UTC，表示秒或 0 - 86399999ms（由公共数据头中的数据标记的b3位决定）
+    UINT32 dwTxAbsMicroSecondTime;					//绝对时间2 表示秒以下的微秒数或 无效（由公共数据头中的数据标记的b3位决定）
+    UINT32 dwTxRelMilliSecondTime_H;				//相对时间 高32位，单位: 1ms
+    UINT32 dwTxRelMilliSecondTime_L;				//相对时间 低32位，单位: 1ms
+    UINT32 dwSigBWHz;								//信号带宽,LSB：1Hz，全F表示无效
+    UINT32 dwSampleFreqHz;							//采样率,LSB：1Hz
+    UINT16 wAziCode;								//方位 16位编码，360度/65536
+    UINT16 wPulseWidth0p1us;						//脉宽 LSB：0.1us，全F表示无效
+    UINT16 wPRT0p1us;								//PRT LSB：0.1us，全F表示无效
+    INT16 nZeroPointPos;							//起始单元序号 第0个距离单元相对零距的单元数
+    UINT32 dwSampleElementNumber;					//采样单元个数
+    UINT32 dwReserved1;								//预留
+    UINT8 bytReserved2;								//预留
+    UINT8 bytPIM_Flag;								//PIM_Flag 0: 原始. 1: 积累. 2: 填充.	0xFF无效.
+    UINT8 bytDataFlag;								//数据标识 b7-5视频幅度量纲. 0dB; 1线性映射; 2约定非线性映射.b4 - 0预留
+    UINT8 bytLinearMapLowPara;						//线性映射参数 线性映射时有效. 映射前幅度下限
+    UINT8 bytLinearMapHighPara;						//线性映射参数 线性映射时有效. 映射前幅度上限	val = 0 (if DB <= mapPreLowerDB) 		val = 2 ^ n - 1 (if DB >= mapPreUpperDB) 		val = (DB - mapPreLowerDB) / (mapPreUpperDB - mapPreLowerDB) * (2 ^ n - 1)
+    UINT8 bytReserved3;								//预留
+    UINT16 wDataSrc;								//数据源 配置文件中通过按位或的方式使用.最多支持16中数据源.	1:Simple Test		2 : Scenario Generator		4 : Replay From Recording		8 : Receive By UDP		2 ^ (4:15)预留
+    INT32 nLongitude;								//经度 LSB：1/10000分，181度表示无效
+    INT32 nLatitude;								//纬度 LSB：1/10000分，91度表示无效
+    INT16 nAltitude;								//高度 LSB：1米，默认填0
+    UINT16 wAbsCourse;								//绝对航向 LSB：360/65536，默认填0
+    UINT16 wAbsCruiseSpeed;							//绝对航速 LSB：0.1m/s，默认填0
+    UINT16 wRelCourse;								//相对航向	LSB：360/65536，默认填0
+    UINT16 wRelCruiseSpeed;							//相对航速	LSB：0.1m/s，默认填0
+    INT16 nHeadAngle;								//首摇	单位：360度/32768  默认值0
+    INT16 nRoll;									//横摇	单位：360度/32768  默认值0
+    INT16 nPitch;									//纵摇	单位：360度/32768  默认值0
+    UINT8 bytScanMode;								//扫描方式	b7: 表示以下天线扫描方式是否有效. 1有效0无效.b6: 0, 固定平台; 1, 移动平台.	b5预留.	b4 - 0: 0顺时针环扫, 1逆时针环扫, 2顺时针机械扇扫, 3逆时针机械扇扫, 4顺时针单向电扫, 5逆时针单向电扫, 6随机扫描, 7定位, 8停车首, 9手轮. b4 - 0 = 31表示无效
+    UINT8 bytReserved4;								//RES4	预留
+    UINT16 wAntennaScanSpeed;						//天线扫描速度	单位: 0.1 deg/s，无效时填0.
+    UINT16 wFanScanFrontAngle;						//天线扇扫前沿	单位: 360.f / 65536.f，无效时填0.
+    UINT16 wFanScanBackAngle;						//天线扇扫后沿	单位: 360.f / 65536.f，无效时填0.
+    INT32 nChannelSpeed;							//通道速度	速度用补码表示，LSB = 0.1m/s  0xFFFF时无效
+    UINT16 wChannelCount;							//通道序号	0xFF时无效
+    UINT16 wReserved5;								//RES5	预留
     UINT8 wReserved6;								//RES6[16]
-    UINT32 dwReserved7;								//RES7	����βԤ��
-    UINT32 dwMsgTailFlag;							//����β	0xB5B65678
+    UINT32 dwReserved7;								//RES7	报文尾预留
+    UINT32 dwMsgTailFlag;							//报文尾	0xB5B65678
 }RX_RadarVideo_Head;
 
 typedef struct tagNRX_COMMON_TAIL
