@@ -14,6 +14,7 @@ int num_threads;
 int THREADS_MEM_SIZE;
 int CAL_WAVE_NUM;
 int INTEGRATION_TIMES;
+float normFactor;
 
 std::vector<int> azi_table;
 double c_speed;
@@ -46,6 +47,7 @@ void loadConfig(const std::string& filename) {
     THREADS_MEM_SIZE = config["THREADS_MEM_SIZE"];
     CAL_WAVE_NUM = config["CAL_WAVE_NUM"];
     INTEGRATION_TIMES = config["INTEGRATION_TIMES"];
+    normFactor = config["normFactor"];
 
     azi_table = config["azi_table"].get<std::vector<int>>();
     c_speed = config["c_speed"];

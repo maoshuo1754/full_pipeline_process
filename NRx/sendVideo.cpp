@@ -63,6 +63,7 @@ void SendVideo::send(char *rawMessage, float2 *data, int numSamples, int rangeNu
 
     auto rawMsg = reinterpret_cast<int*>(rawMessage);
     int freqPoint = (rawMsg[12] & 0x00000fff);
+    freqPoint = 3;
     double lambda_0 = c_speed / ((freqPoint * 10 + 9600)*1e6);
     double data_amp;
 
@@ -111,6 +112,8 @@ void SendVideo::send(char *rawMessage, float2 *data, int numSamples, int rangeNu
             rAzm += 360.f;
 
         dwTemp = UINT16(rAzm / 360.0 * 65536.0f);
+//        std::cout << ii << " " << rAzm << std::endl;
+//        std::cout << ii << "Azmcode: " << rAzm << std::endl;
         videoMsg.RadarVideoHeader.wAziCode = htons(dwTemp);
 
         auto* rowData = data + ii * NFFT;
@@ -121,6 +124,7 @@ void SendVideo::send(char *rawMessage, float2 *data, int numSamples, int rangeNu
             if(data_amp > 255)
                 data_amp = 255;
             videoMsg.bytVideoData[k] = (unsigned char)data_amp;
+//            videoMsg.bytVideoData[k] = 0;
         }
 
         dwTemp = UINT16(rAzm / 360.0 * 65536.0f);

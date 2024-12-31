@@ -74,6 +74,9 @@ public:
     void cfar(CudaMatrix &output, cudaStream_t stream, double Pfa, int numGuardCells, int numRefCells,
               int leftBoundary, int rightBoundary) const;
     void writeMatTxt(const std::string &filePath) const;
+    void scale(cudaStream_t _stream, float _scale);
+
+    void MTI(cudaStream_t _stream, int numCancellerPulses);
 
 private:
     void allocateMemory();

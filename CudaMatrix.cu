@@ -238,7 +238,7 @@ void CudaMatrix::elementWiseMul(const CudaMatrix &other, cudaStream_t _stream) c
     }
 
     int size = nrows * ncols;
-    int blockSize = 256;
+    int blockSize = CUDA_BLOCK_SIZE;
     int gridSize = (size + blockSize - 1) / blockSize;
 
     elementWiseMulKernel<<<gridSize, blockSize, 0, _stream>>>(data, other.data, data, size);
@@ -262,7 +262,7 @@ void CudaMatrix::rowWiseMul(const CudaMatrix &other, cudaStream_t _stream) {
     }
 
     int size = nrows * ncols;
-    int blockSize = 256;
+    int blockSize = CUDA_BLOCK_SIZE;
     int gridSize = (size + blockSize - 1) / blockSize;
 
     rowWiseMulKernel<<<gridSize, blockSize, 0, _stream>>>(data, other.data, nrows, ncols);
@@ -452,10 +452,78 @@ struct ScaleFunctor {
 
 void CudaMatrix::ifft(cudaStream_t _stream, cufftHandle &plan) const {
     checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_INVERSE));
-    float scale = 1.0f / ncols;
+//    float _scale = 1.0 / ncols;
+//    thrust::device_ptr<cufftComplex> thrust_data(data);
+//    auto exec_policy = thrust::cuda::par.on(_stream);
+//    thrust::transform(exec_policy, thrust_data, thrust_data + nrows * ncols, thrust_data, ScaleFunctor(_scale));
+}
+
+void CudaMatrix::scale(cudaStream_t _stream, float _scale){
+    _scale = _scale / ncols;
     thrust::device_ptr<cufftComplex> thrust_data(data);
     auto exec_policy = thrust::cuda::par.on(_stream);
-    thrust::transform(exec_policy, thrust_data, thrust_data + nrows * ncols, thrust_data, ScaleFunctor(scale));
+    thrust::transform(exec_policy, thrust_data, thrust_data + nrows * ncols, thrust_data, ScaleFunctor(_scale));
+}
+
+__global__ void MTIkernel3(cufftComplex *data, int nrows, int ncols) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int currentIndex, nextIndex, lastIndex;
+    cufftComplex current, next, last;
+    if (col < ncols) {
+        for (int row = 0; row < nrows - 2; row++) {
+            currentIndex = row * ncols + col;
+            nextIndex = (row + 1) * ncols + col;
+            lastIndex = (row + 2) * ncols + col;
+
+            current = data[currentIndex];
+            next = data[nextIndex];
+            last = data[lastIndex];
+            data[currentIndex].x = current.x + last.x - 2 * next.x;
+            data[currentIndex].y = current.y + last.y - 2 * next.y;
+        }
+        nextIndex = (nrows - 1) * ncols + col;
+        data[nextIndex].x = 0.0f;
+        data[nextIndex].y = 0.0f;
+
+        nextIndex = (nrows - 2) * ncols + col;
+        data[nextIndex].x = 0.0f;
+        data[nextIndex].y = 0.0f;
+    }
+}
+
+__global__ void MTIkernel2(cufftComplex *data, int nrows, int ncols) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int currentIndex, nextIndex;
+    cufftComplex current, next;
+    if (col < ncols) {
+        for (int row = 0; row < nrows - 1; row++) {
+            currentIndex = row * ncols + col;
+            nextIndex = (row + 1) * ncols + col;
+
+            current = data[currentIndex];
+            next = data[nextIndex];
+            data[currentIndex].x = next.x - current.x;
+            data[currentIndex].y = next.y - current.y;
+        }
+        nextIndex = (nrows - 1) * ncols + col;
+        data[nextIndex].x = 0.0f;
+        data[nextIndex].y = 0.0f;
+    }
+}
+
+void CudaMatrix::MTI(cudaStream_t _stream, int numCancellerPulses) {
+
+    dim3 blockDim(CUDA_BLOCK_SIZE);
+    dim3 gridDim((ncols + blockDim.x - 1) / blockDim.x);
+
+    if (numCancellerPulses == 2) {
+        MTIkernel2<<<gridDim, blockDim, 0, _stream>>>(data, nrows, ncols);
+    }
+
+    if (numCancellerPulses == 3) {
+        MTIkernel3<<<gridDim, blockDim, 0, _stream>>>(data, nrows, ncols);
+    }
+
 }
 
 
@@ -481,7 +549,7 @@ CudaMatrix CudaMatrix::extractSegment(int startInd, int rangeNumber) const {
     CudaMatrix result(nrows, rangeNumber);
 
     // Launch kernel to extract segments
-    int blockSize = 256;
+    int blockSize = CUDA_BLOCK_SIZE;
     int gridSize = (nrows + blockSize - 1) / blockSize;
     extractSegmentKernel<<<gridSize, blockSize>>>(data, result.data, nrows, ncols, startInd, rangeNumber);
 
@@ -499,15 +567,16 @@ void CudaMatrix::writeMatTxt(const std::string &filePath) const {
         std::cerr << "Error opening file " << filePath << " for writing!" << std::endl;
         return;
     }
-
-    outfile << nrows << " " << ncols << std::endl;
-
-        std::vector<cufftComplex> hostData(nrows * ncols);
+    std::vector<cufftComplex> hostData(nrows * ncols);
     copyToHost(hostData);
 
     for (int i = 0; i < nrows; ++i) {
         for (int j = 0; j < ncols; ++j) {
-            outfile << hostData[i * ncols + j].x << " " << hostData[i * ncols + j].y << endl;
+            outfile << hostData[i * ncols + j].x;
+            if (hostData[i * ncols + j].y >= 0) {
+                outfile << "+";
+            }
+            outfile << hostData[i * ncols + j].y << "i ";
         }
         outfile << std::endl;
     }
@@ -632,7 +701,6 @@ void CudaMatrix::cfar(CudaMatrix &output, cudaStream_t _stream, double Pfa, int 
     cfarKernel<<<gridDim, blockDim, 0, _stream>>>(data, output.data, nrows, ncols, alpha, numGuardCells, numRefCells, leftBoundary, rightBoundary);
 }
 
-
 // 现在是对实部选大，而不是abs
 __global__ void maxKernelDim1(cufftComplex *data, cufftComplex *maxValues, int nrows, int ncols) {
     int col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -666,7 +734,7 @@ __global__ void maxKernelDim2(cufftComplex *data, cufftComplex *maxValues, int n
 }
 
 void CudaMatrix::max(CudaMatrix &output, cudaStream_t _stream, int dim) {
-    dim3 blockDim(256);
+    dim3 blockDim(CUDA_BLOCK_SIZE);
     dim3 gridDim((ncols + blockDim.x - 1) / blockDim.x);
 
     maxKernelDim1<<<gridDim, blockDim, 0, _stream>>>(data, output.data, nrows, ncols);
@@ -682,7 +750,7 @@ __global__ void elementWiseSquareKernel(cufftComplex *idata, cufftComplex *odata
 }
 
 void CudaMatrix::elementWiseSquare(cudaStream_t _stream) const {
-    int blockSize = 256;
+    int blockSize = CUDA_BLOCK_SIZE;
     int size = ncols * nrows;
     int gridSize = (size + blockSize - 1) / blockSize;
 
@@ -699,7 +767,7 @@ __global__ void absCufftComplexKernel(cufftComplex *idata, cufftComplex *odata, 
 
 
 void CudaMatrix::abs(cudaStream_t _stream) const {
-    int blockSize = 256;
+    int blockSize = CUDA_BLOCK_SIZE;
     int size = ncols * nrows;
     int gridSize = (size + blockSize - 1) / blockSize;
     absCufftComplexKernel<<<gridSize, blockSize, 0, _stream>>>(data, data, size);

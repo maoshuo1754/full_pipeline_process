@@ -13,6 +13,7 @@
 #include "SendVideo.h"  // 包含 SendVideo 的定义
 #include "utils.h"
 #include <chrono>
+#include <string>
 
 using namespace std;
 using namespace std::chrono;
@@ -45,6 +46,8 @@ private:
     unsigned int prevSeqNum;
     unsigned int prevIndexValue;                    // 上一个packet相对于1GB的起始地址
     uint64_t uint64Pattern;
+    float Bandwidth;
+    float pulseWidth;
 
     char timebuf[100];
     ofstream logFile;

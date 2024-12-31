@@ -1,5 +1,6 @@
 #include "utils.h"
 
+using namespace std;
 std::vector<cufftComplex> PCcoef(double BandWidth, double PulseWidth, double Fs, int _NFFT) {
 //    std::cout << "BandWidth:" << BandWidth << " PulseWidth:" << PulseWidth << " Fs:" << Fs << std::endl;
     double Ts = 1 / Fs;
@@ -8,12 +9,17 @@ std::vector<cufftComplex> PCcoef(double BandWidth, double PulseWidth, double Fs,
     double dT = (PulseWidth - Ts) / (N - 1); // t = linspace(-PulseWidth/2, PulseWidth/2-Ts, N);
 
     std::vector<cufftComplex> result(_NFFT);
-
+    auto window = hammingWindow(N);
     // 生成线性调频信号
     for (int i = 0; i < N; ++i) {
         double t = -PulseWidth / 2 + i * dT;
         double phase = M_PI * BandWidth / PulseWidth * t * t;
         result[N-1-i] = cuConjf(make_cuComplex(cos(phase), sin(phase)));
+    }
+
+    for (int i = 0; i < N; ++i) {
+        result[i].x = result[i].x * window[i];
+        result[i].y = result[i].y * window[i];
     }
 
     return result;
@@ -99,4 +105,16 @@ unsigned int FourChars2Uint(const char *startAddr) {
            | static_cast<uint8_t>(startAddr[2]) << 8
            | static_cast<uint8_t>(startAddr[3]);
 
+}
+
+std::vector<double> hammingWindow(int N) {
+    std::vector<double> window(N);
+    for(int n = 0; n < N; n++) {
+        window[n] = 0.54 - 0.46 * std::cos(2.0 * M_PI * n / (N - 1));
+    }
+    return window;
+}
+
+bool isEqual(double a, double b, double epsilon) {
+    return fabs(a - b) < epsilon;
 }

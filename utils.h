@@ -28,4 +28,8 @@ void checkCudaErrors(cudaError_t result);
 
 unsigned int FourChars2Uint(const char *startAddr);
 
+std::vector<double> hammingWindow(int N);
+
+bool isEqual(double a, double b, double epsilon = 1e-9);
+
 #endif //CUDAPROJECT_UTILS_H

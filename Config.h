@@ -13,12 +13,14 @@
 #define NFFT 4096               // 一个脉冲中fft的点数，计算方法为 NFFT = 2 ** nextpow2(RANGE_NUM + numSamples - 1)
 #define RANGE_NUM  3748         // 一个脉冲的距离单元数
 #define CFAR_LENGTH 16          // 分段fft长度
+#define CUDA_BLOCK_SIZE 256     // cuda运算分块长度
 
 // 配置参数声明
 extern int num_threads;         // 工作线程数
 extern int THREADS_MEM_SIZE;    // 每个线程独立显存大小
 extern int CAL_WAVE_NUM;        // 计算的波束数
 extern int INTEGRATION_TIMES;   // 积累次数
+extern float normFactor;          // 归一化参数
 
 extern std::vector<int> azi_table; // 方位表
 
