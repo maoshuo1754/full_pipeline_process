@@ -40,7 +40,7 @@ ThreadPool::~ThreadPool() {
 void ThreadPool::allocateThreadMemory() {
     cout << "cudaMalloc " << THREADS_MEM_SIZE / 1024 / 1024 << " MB for each thread" << endl;
     for (size_t i = 0; i < numThreads; ++i) {
-        char *d_memory = nullptr;
+        unsigned char *d_memory = nullptr;
         checkCudaErrors(cudaMalloc((void **) &d_memory, THREADS_MEM_SIZE));  // 在显存中分配内存
         threadsMemory.emplace_back(d_memory);
 
@@ -147,7 +147,7 @@ void ThreadPool::threadLoop(int threadID) {
     checkCufftErrors(cufftDestroy(colPlan));
 }
 
-__global__ void processKernel(char *threadsMemory, cufftComplex *pComplex,
+__global__ void processKernel(unsigned char *threadsMemory, cufftComplex *pComplex,
                               const int *headPositions, int numHeads, int rangeNum) {
     // 获取线程和网格索引
     int headIdx = blockIdx.z;  // 每个block.z处理一个头位置
@@ -158,20 +158,19 @@ __global__ void processKernel(char *threadsMemory, cufftComplex *pComplex,
     if (headIdx < numHeads && rangeIdx < rangeNum && beamIdx < WAVE_NUM) {
         // 计算头位置的起始地址
         int headOffset = headPositions[headIdx];
-        char *blockIQstartAddr = threadsMemory + headOffset + DATA_OFFSET;
-
+        unsigned char *blockIQstartAddr = threadsMemory + headOffset + DATA_OFFSET;
         // 计算当前数据块的偏移和新索引
         int blockOffset = rangeIdx * WAVE_NUM * 4 + beamIdx * 4;
         int newIndex = beamIdx * NUM_PULSE * NFFT + headIdx * NFFT + rangeIdx;
 
         // 提取IQ数据并存储到结果数组
-        pComplex[newIndex].x = TwoChars2float(blockIQstartAddr + blockOffset);
-        pComplex[newIndex].y = TwoChars2float(blockIQstartAddr + blockOffset + 2);
+        pComplex[newIndex].x = *(int16_t*)(blockIQstartAddr + blockOffset);
+        pComplex[newIndex].y = *(int16_t*)(blockIQstartAddr + blockOffset + 2);
     }
 }
 
 
-void ThreadPool::generatePCcoefMatrix(char *rawMessage, cufftHandle &pcPlan, cudaStream_t _stream) {
+void ThreadPool::generatePCcoefMatrix(unsigned char *rawMessage, cufftHandle &pcPlan, cudaStream_t _stream) {
     static double prevPRT = -1;
     static double prevPulseWidth = -1;
     static double prevfLFMStartWord = -1;
@@ -183,10 +182,10 @@ void ThreadPool::generatePCcoefMatrix(char *rawMessage, cufftHandle &pcPlan, cud
 //    double BandWidth = 6e6;
 //    double PulseWidth = 5e-6;
 
-    auto PRT = FourChars2Uint(rawMessage + 14 * 4) / Fs_system; //120e-6
-    pulseWidth = (FourChars2Uint(rawMessage + 13 * 4)  & 0xfffff) / Fs_system; //5e-6
+    auto PRT = *(uint32_t *)(rawMessage + 14 * 4) / Fs_system; //120e-6
+    pulseWidth = ((*(uint32_t *)(rawMessage + 13 * 4)) & 0xfffff) / Fs_system; //5e-6
 
-    auto fLFMStartWord = FourChars2Uint(rawMessage + 16 * 4);
+    auto fLFMStartWord = *(uint32_t*)(rawMessage + 16 * 4);
 
     if (!isEqual(PRT, prevPRT) || !isEqual(pulseWidth, prevPulseWidth) || !isEqual(fLFMStartWord, prevfLFMStartWord)) {
         cout << "Param changed, regenerate pulse compress coefficient." << endl;
@@ -210,7 +209,7 @@ void
 ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix> &matrices, int *d_headPositions,
                         vector<CudaMatrix> &CFAR_res, vector<CudaMatrix> &Max_res, cufftComplex *pMaxRes_d,
                         cufftComplex *pMaxRes_h, cufftHandle &pcPlan, cufftHandle &rowPlan, cufftHandle &colPlan) {
-
+//    if (threadID != 1) return;
     cout << "thread " << threadID << " start" << endl;
     checkCudaErrors(cudaMemsetAsync(pComplex, 0, sizeof(cufftComplex) * WAVE_NUM * NUM_PULSE * NFFT, streams[threadID]));
     int numHeads = headPositions[threadID].size();       // 2048
@@ -227,7 +226,7 @@ ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix>
     checkCudaErrors(cudaMemcpyAsync(d_headPositions, headPositions[threadID].data(), numHeads * sizeof(int), cudaMemcpyHostToDevice,
                     streams[threadID]));
 
-    char rawMessage[DATA_OFFSET];
+    unsigned char rawMessage[DATA_OFFSET];
 
     // 包头信息拷贝回内存(仅第一个包头)
     checkCudaErrors(cudaMemcpyAsync(rawMessage, threadsMemory[threadID], sizeof(rawMessage), cudaMemcpyDeviceToHost,
@@ -242,9 +241,19 @@ ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix>
     processKernel<<<gridDim1, CUDA_BLOCK_SIZE, 0, streams[threadID]>>>(threadsMemory[threadID], pComplex,
                                                                        d_headPositions, numHeads, rangeNum);
 
+    cudaStreamSynchronize(streams[threadID]);
+
+    matrices[16].print(1024);
 
     processPulseGroupData(threadID, matrices, CFAR_res, Max_res, rangeNum,
                           pcPlan, rowPlan, colPlan);
+
+//    cudaStreamSynchronize(streams[threadID]);
+//    Max_res[1].writeMatTxt("max_01.txt");
+
+//    cudaStreamSynchronize(streams[threadID]);
+//    CudaMatrix tmp(32, NFFT, pMaxRes_d, true);
+//    tmp.writeMatTxt("wave_res.txt");
 
     // 选大结果拷贝回内存
     checkCudaErrors(cudaMemcpyAsync(pMaxRes_h, pMaxRes_d, sizeof(cufftComplex) * CAL_WAVE_NUM * NFFT, cudaMemcpyDeviceToHost,
@@ -279,7 +288,7 @@ void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrice
         // 归一化，同时连ifft的归一化一起做了
         matrices[i].scale(streams[threadID], scale);
 
-        matrices[i].MTI(streams[threadID], 2);
+//        matrices[i].MTI(streams[threadID], 2);
 
         /*coherent integration*/
         for (int j = 0; j < INTEGRATION_TIMES; j++) {
@@ -321,7 +330,7 @@ void ThreadPool::waitForProcessingSignal(int threadID) {
 void ThreadPool::copyToThreadMemory() {
     int block_index = sharedQueue->read_index;
 //    std::cout << "Block index: " << block_index << std::endl << std::endl;
-//    cout << "block_index： " << block_index << endl;
+
     unsigned int seqNum;
 
     unsigned int indexValue; // 当前packet相对于1GB的起始地址
@@ -330,14 +339,14 @@ void ThreadPool::copyToThreadMemory() {
     for (int i = 0; i < 2048; i++) {
         size_t indexOffset = block_index * INDEX_SIZE + i * 4;
         // TODO: 实测数据的时候这里需要修改
-        indexValue = *(int*)(sharedQueue->index_buffer + indexOffset);
+        indexValue = *(unsigned int*)(sharedQueue->index_buffer + indexOffset);
 //        indexValue = FourChars2Uint(sharedQueue->index_buffer + indexOffset);
         // Check pattern match
         if (    indexValue >= block_index * BLOCK_SIZE &&
                 indexValue < (block_index + 1) * BLOCK_SIZE &&
                 *(uint64_t *) (sharedQueue->buffer + indexValue) == uint64Pattern)
         {
-            seqNum = FourChars2Uint(sharedQueue->buffer + indexValue + SEQ_OFFSET);
+            seqNum = *(uint32_t*)(sharedQueue->buffer + indexValue + SEQ_OFFSET);
             if (seqNum != prevSeqNum + 1 && prevSeqNum != 0) {
                 inPacket = false;
                 currentAddrOffset = 0;
@@ -348,7 +357,7 @@ void ThreadPool::copyToThreadMemory() {
             }
             prevSeqNum = seqNum;
 
-            startFlag = static_cast<uint8_t>(sharedQueue->buffer[indexValue + 23]) & 0x02;
+            startFlag = *(uint8_t*)(sharedQueue->buffer + indexValue + 20) & 0x02;
 
             if (startFlag) {
 //                cout << "Packege start. seqNum:" << seqNum << endl;
@@ -420,11 +429,13 @@ void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr
 }
 
 // TwoChars2float 函数，将两个字符转换为 float 类型
-__device__ float TwoChars2float(const char *startAddr) {
-    float res =  static_cast<float>( static_cast<uint8_t>(startAddr[0]) << 8
-                                        | static_cast<uint8_t>(startAddr[1]) ) ;
+__device__ float TwoChars2float(const unsigned char *startAddr) {
+    float res =  static_cast<float>( static_cast<uint8_t>(startAddr[1]) << 8
+                                        | static_cast<uint8_t>(startAddr[0]) ) ;
+
     if(res > 32767.0f) {
         res -= 65536.0f;
     }
+//    printf("0x%02X%02X = %.2f \n", startAddr[0], startAddr[1], res);
     return res;
 }

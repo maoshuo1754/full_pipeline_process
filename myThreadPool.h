@@ -29,7 +29,7 @@ public:
 private:
     size_t numThreads;
     std::vector<std::thread> threads;               // 线程
-    std::vector<char *> threadsMemory;              // 每个线程独立的显存
+    std::vector<unsigned char *> threadsMemory;              // 每个线程独立的显存
     std::vector<std::vector<int>> headPositions;    // 每个线程独立空间中，packet的起始地址
     std::vector<cudaStream_t> streams;              // 异步拷贝的时候用，现在没用
     std::vector<size_t> currentPos;                 // 记录每个包头的位置
@@ -46,8 +46,8 @@ private:
     unsigned int prevSeqNum;
     unsigned int prevIndexValue;                    // 上一个packet相对于1GB的起始地址
     uint64_t uint64Pattern;
-    float Bandwidth;
-    float pulseWidth;
+    double Bandwidth;
+    double pulseWidth;
 
     char timebuf[100];
     ofstream logFile;
@@ -78,13 +78,13 @@ private:
 
     void freeThreadMemory();
 
-    void generatePCcoefMatrix(char *rawMessage, cufftHandle &pcPlan, cudaStream_t _stream);
+    void generatePCcoefMatrix(unsigned char *rawMessage, cufftHandle &pcPlan, cudaStream_t _stream);
 
 };
 
-__device__ float TwoChars2float(const char *startAddr);
+__device__ float TwoChars2float(const unsigned char *startAddr);
 
-__global__ void processKernel(char *threadsMemory, cufftComplex *pComplex,
+__global__ void processKernel(unsigned char *threadsMemory, cufftComplex *pComplex,
                               const int *headPositions, int numHeads, int rangeNum);
 
 #endif // THREADPOOL_H

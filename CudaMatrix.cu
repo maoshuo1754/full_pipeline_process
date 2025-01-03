@@ -175,7 +175,7 @@ void CudaMatrix::print(int row) const {
     cout << "array of row" << row << "([" << endl;
     int i = row;
     cout << "  [";
-    for (int j = 0; j < 30; ++j) {
+    for (int j = 0; j < ncols; ++j) {
         cout << std::fixed << std::setprecision(2) << std::setw(3)
              << hostData[i * ncols + j].x;
 
@@ -706,7 +706,8 @@ __global__ void maxKernelDim1(cufftComplex *data, cufftComplex *maxValues, int n
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     int ind;
     if (col < ncols) {
-        float maxVal = data[col].x;
+//        float maxVal = data[col].x;
+        float maxVal = -1;
         for (int row = 1; row < nrows; ++row) {
             ind = row * ncols + col;
 //            if (sqrt(val.x * val.x + val.y * val.y) > sqrt(maxVal.x * maxVal.x + maxVal.y * maxVal.y)) {

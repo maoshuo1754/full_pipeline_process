@@ -20,15 +20,15 @@ struct SharedQueue {
     sem_t items_available; // 表示可用数据
     int read_index;
     int write_index;
-    char index_buffer[QUEUE_SIZE * INDEX_SIZE];
-    char buffer[QUEUE_SIZE * BLOCK_SIZE];
+    unsigned char index_buffer[QUEUE_SIZE * INDEX_SIZE];
+    unsigned char buffer[QUEUE_SIZE * BLOCK_SIZE];
 
 };
 
 // 模式串：要匹配的字节数组
 const unsigned char pattern[] = {
-        0x07, 0x24, 0x95, 0xbc,
-        0x00, 0x09, 0x00, 0x09,
+        0xbc, 0x95, 0x24, 0x07,
+        0x09, 0x00, 0x09, 0x00,
 };
 
 #endif // QUEUE_H

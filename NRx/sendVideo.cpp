@@ -55,28 +55,28 @@ double SendVideo::asind(double x) {
     return result.real();
 }
 
-void SendVideo::send(char *rawMessage, float2 *data, int numSamples, int rangeNum) {
+void SendVideo::send(unsigned char *rawMessage, float2 *data, int numSamples, int rangeNum) {
 //    msgInfo->AziVal = static_cast<unsigned short>(asind(j * lambda_0 / (WAVE_NUM * d)) * 65536.0 / 360.0);
     unsigned long dwTemp, dwTemp1;
     int nAzmCode;
     float rAzm;
 
     auto rawMsg = reinterpret_cast<int*>(rawMessage);
-    int freqPoint = (rawMsg[12] & 0x00000fff);
+    int freqPoint = (htons(rawMsg[12]) & 0x00000fff);
     freqPoint = 3;
     double lambda_0 = c_speed / ((freqPoint * 10 + 9600)*1e6);
     double data_amp;
 
     for (int ii = 0; ii < WAVE_NUM; ii++) {
-        videoMsg.CommonHeader.wCOUNTER = htons(rawMsg[4] & 0xffff);  // 触发计数器
-        dwTemp = (rawMsg[6] & 0x1fffffff); // FPGA时间
+        videoMsg.CommonHeader.wCOUNTER = rawMsg[4];  // 触发计数器
+        dwTemp = (htons(rawMsg[6]) & 0x1fffffff); // FPGA时间
         dwTemp1 = dwTemp / 10000;
 
         //TRACE("FPGA TIME:%x\n", dwTemp);
         //TRACE("dwTxSecondTime:%x\n", dwTemp1);
         //TRACE("dwTxMicroSecondTime:%x\n", (dwTemp - dwTemp1 * 10000) * 100);
 
-        dwTemp = (rawMsg[7] & 0x3fffffff) / 10;//0.1ms->1ms
+        dwTemp = (htons(rawMsg[7]) & 0x3fffffff) / 10;//0.1ms->1ms
         //TRACE("FPGA TIME ms:%d\n", dwTemp);
         int h = dwTemp / 1000 / 60 / 60;
         int min = (dwTemp - (h * 60 * 60 * 1000)) / 1000 / 60;

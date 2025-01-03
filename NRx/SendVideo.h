@@ -26,7 +26,7 @@ class SendVideo {
 public:
     SendVideo();
     ~SendVideo();
-    void send(char *rawMessage, float2 *data, int numSamples, int rangeNum);
+    void send(unsigned char *rawMessage, float2 *data, int numSamples, int rangeNum);
 
 private:
     unsigned int unMinPRTLen;
