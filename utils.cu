@@ -99,14 +99,6 @@ void checkCudaErrors(cudaError_t result) {
     }
 }
 
-unsigned int FourChars2Uint(const char *startAddr) {
-    return static_cast<uint8_t>(startAddr[0]) << 24
-           | static_cast<uint8_t>(startAddr[1]) << 16
-           | static_cast<uint8_t>(startAddr[2]) << 8
-           | static_cast<uint8_t>(startAddr[3]);
-
-}
-
 std::vector<double> hammingWindow(int N) {
     std::vector<double> window(N);
     for(int n = 0; n < N; n++) {

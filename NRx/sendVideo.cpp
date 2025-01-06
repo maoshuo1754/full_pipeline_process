@@ -119,7 +119,7 @@ void SendVideo::send(unsigned char *rawMessage, float2 *data, int numSamples, in
         auto* rowData = data + ii * NFFT;
         for (int k = 0; k < unMinPRTLen; ++k) {
             // + system_delay
-            data_amp = (double)(rowData[k + numSamples - 1].x);
+            data_amp = (double)(rowData[k + numSamples - 1 + 52].x);
 //            data_amp = data_amp * 255 / 93.4;
             if(data_amp > 255)
                 data_amp = 255;

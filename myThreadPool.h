@@ -82,8 +82,6 @@ private:
 
 };
 
-__device__ float TwoChars2float(const unsigned char *startAddr);
-
 __global__ void processKernel(unsigned char *threadsMemory, cufftComplex *pComplex,
                               const int *headPositions, int numHeads, int rangeNum);
 

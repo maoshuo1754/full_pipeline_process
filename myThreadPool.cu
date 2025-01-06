@@ -164,8 +164,8 @@ __global__ void processKernel(unsigned char *threadsMemory, cufftComplex *pCompl
         int newIndex = beamIdx * NUM_PULSE * NFFT + headIdx * NFFT + rangeIdx;
 
         // 提取IQ数据并存储到结果数组
-        pComplex[newIndex].x = *(int16_t*)(blockIQstartAddr + blockOffset);
-        pComplex[newIndex].y = *(int16_t*)(blockIQstartAddr + blockOffset + 2);
+        pComplex[newIndex].x = *(int16_t*)(blockIQstartAddr + blockOffset + 2);
+        pComplex[newIndex].y = *(int16_t*)(blockIQstartAddr + blockOffset);
     }
 }
 
@@ -243,13 +243,12 @@ ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix>
 
     cudaStreamSynchronize(streams[threadID]);
 
-    matrices[16].print(1024);
+    cudaStreamSynchronize(streams[threadID]);
 
     processPulseGroupData(threadID, matrices, CFAR_res, Max_res, rangeNum,
                           pcPlan, rowPlan, colPlan);
 
-//    cudaStreamSynchronize(streams[threadID]);
-//    Max_res[1].writeMatTxt("max_01.txt");
+
 
 //    cudaStreamSynchronize(streams[threadID]);
 //    CudaMatrix tmp(32, NFFT, pMaxRes_d, true);
@@ -277,7 +276,7 @@ void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrice
     float scale = 1.0f  / sqrt(Bandwidth * pulseWidth);
 
     for (int i = 0; i < CAL_WAVE_NUM; i++) {
-        string filename = "data" + to_string(i) + "_max.txt";
+//        string filename = "data" + to_string(i) + "_max.txt";
         /*Pulse Compression*/
         matrices[i].fft(rowPlan);
 
@@ -336,11 +335,10 @@ void ThreadPool::copyToThreadMemory() {
     unsigned int indexValue; // 当前packet相对于1GB的起始地址
     unsigned long copyStartAddr = block_index * BLOCK_SIZE; // 当前Block相对于1GB的复制起始地址
     bool startFlag;
-    for (int i = 0; i < 2048; i++) {
+    for (int i = 0; i < 1024; i++) {
         size_t indexOffset = block_index * INDEX_SIZE + i * 4;
         // TODO: 实测数据的时候这里需要修改
         indexValue = *(unsigned int*)(sharedQueue->index_buffer + indexOffset);
-//        indexValue = FourChars2Uint(sharedQueue->index_buffer + indexOffset);
         // Check pattern match
         if (    indexValue >= block_index * BLOCK_SIZE &&
                 indexValue < (block_index + 1) * BLOCK_SIZE &&
@@ -360,6 +358,7 @@ void ThreadPool::copyToThreadMemory() {
             startFlag = *(uint8_t*)(sharedQueue->buffer + indexValue + 20) & 0x02;
 
             if (startFlag) {
+
 //                cout << "Packege start. seqNum:" << seqNum << endl;
 //                auto startTime = high_resolution_clock::now();
 //                cout << "Total processing time for pulse group data: "
@@ -426,16 +425,4 @@ void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr
         currentAddrOffset = 0;
         std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
     }
-}
-
-// TwoChars2float 函数，将两个字符转换为 float 类型
-__device__ float TwoChars2float(const unsigned char *startAddr) {
-    float res =  static_cast<float>( static_cast<uint8_t>(startAddr[1]) << 8
-                                        | static_cast<uint8_t>(startAddr[0]) ) ;
-
-    if(res > 32767.0f) {
-        res -= 65536.0f;
-    }
-//    printf("0x%02X%02X = %.2f \n", startAddr[0], startAddr[1], res);
-    return res;
 }
