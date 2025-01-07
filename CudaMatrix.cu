@@ -445,21 +445,16 @@ struct ScaleFunctor {
 
     ScaleFunctor(float s) : scale(s) {}
 
-    __device__ cufftComplex operator()(cufftComplex c) const {
+    __device__ cufftComplex operator()(cufftComplex& c) const {
         return make_cuComplex(c.x * scale, c.y * scale);
     }
 };
 
 void CudaMatrix::ifft(cudaStream_t _stream, cufftHandle &plan) const {
     checkCufftErrors(cufftExecC2C(plan, data, data, CUFFT_INVERSE));
-//    float _scale = 1.0 / ncols;
-//    thrust::device_ptr<cufftComplex> thrust_data(data);
-//    auto exec_policy = thrust::cuda::par.on(_stream);
-//    thrust::transform(exec_policy, thrust_data, thrust_data + nrows * ncols, thrust_data, ScaleFunctor(_scale));
 }
 
-void CudaMatrix::scale(cudaStream_t _stream, float _scale){
-    _scale = _scale / ncols;
+void CudaMatrix::scale(cudaStream_t _stream, float _scale){;
     thrust::device_ptr<cufftComplex> thrust_data(data);
     auto exec_policy = thrust::cuda::par.on(_stream);
     thrust::transform(exec_policy, thrust_data, thrust_data + nrows * ncols, thrust_data, ScaleFunctor(_scale));
@@ -683,10 +678,6 @@ __global__ void cfarKernel(const cufftComplex* data, cufftComplex* cfar_signal, 
 void CudaMatrix::cfar(CudaMatrix &output, cudaStream_t _stream, double Pfa, int numGuardCells, int numRefCells,
                       int leftBoundary, int rightBoundary) const {
     double alpha = (numRefCells * 2 * (pow(Pfa, -1.0 / (numRefCells * 2)) - 1));
-
-    // Compute the absolute values
-    this->abs(_stream);
-
     // Compute the squared absolute values
     this->elementWiseSquare(_stream);
 
@@ -720,20 +711,6 @@ __global__ void maxKernelDim1(cufftComplex *data, cufftComplex *maxValues, int n
     }
 }
 
-__global__ void maxKernelDim2(cufftComplex *data, cufftComplex *maxValues, int nrows, int ncols) {
-    int row = blockIdx.x * blockDim.x + threadIdx.x;
-    if (row < nrows) {
-        cufftComplex maxVal = data[row * ncols];
-        for (int col = 1; col < ncols; ++col) {
-            cufftComplex val = data[row * ncols + col];
-            if (sqrt(val.x * val.x + val.y * val.y) > sqrt(maxVal.x * maxVal.x + maxVal.y * maxVal.y)) {
-                maxVal = val;
-            }
-        }
-        maxValues[row] = maxVal;
-    }
-}
-
 void CudaMatrix::max(CudaMatrix &output, cudaStream_t _stream, int dim) {
     dim3 blockDim(CUDA_BLOCK_SIZE);
     dim3 gridDim((ncols + blockDim.x - 1) / blockDim.x);
@@ -750,28 +727,28 @@ __global__ void elementWiseSquareKernel(cufftComplex *idata, cufftComplex *odata
     }
 }
 
-void CudaMatrix::elementWiseSquare(cudaStream_t _stream) const {
-    int blockSize = CUDA_BLOCK_SIZE;
-    int size = ncols * nrows;
-    int gridSize = (size + blockSize - 1) / blockSize;
-
-    elementWiseSquareKernel<<<gridSize, blockSize, 0, _stream>>>(data, data, size);
-}
-
-__global__ void absCufftComplexKernel(cufftComplex *idata, cufftComplex *odata, int size) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < size) {
-        odata[idx].x = cuCabsf(idata[idx]);
-        odata[idx].y = 0;
+struct elementWiseSquareFunctor {
+    __device__ cufftComplex operator()(cufftComplex& value) const {
+        return make_cuComplex(value.x * value.x - value.y * value.y, 2 * value.x * value.y);
     }
+};
+
+void CudaMatrix::elementWiseSquare(cudaStream_t _stream) const {
+    thrust::device_ptr<cufftComplex> thrust_data(data);
+    auto exec_policy = thrust::cuda::par.on(_stream);
+    thrust::transform(exec_policy, thrust_data, thrust_data + nrows * ncols, thrust_data, elementWiseSquareFunctor());
 }
 
+struct AbsFunctor {
+    __device__ cufftComplex operator()(cufftComplex& c) const {
+        return make_cuComplex(sqrtf(c.x * c.x + c.y * c.y), 0);
+    }
+};
 
 void CudaMatrix::abs(cudaStream_t _stream) const {
-    int blockSize = CUDA_BLOCK_SIZE;
-    int size = ncols * nrows;
-    int gridSize = (size + blockSize - 1) / blockSize;
-    absCufftComplexKernel<<<gridSize, blockSize, 0, _stream>>>(data, data, size);
+    thrust::device_ptr<cufftComplex> thrust_data(data);
+    auto exec_policy = thrust::cuda::par.on(_stream);
+    thrust::transform(exec_policy, thrust_data, thrust_data + nrows * ncols, thrust_data, AbsFunctor());
 }
 
 // Allocate memory on the device

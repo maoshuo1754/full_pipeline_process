@@ -241,14 +241,8 @@ ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix>
     processKernel<<<gridDim1, CUDA_BLOCK_SIZE, 0, streams[threadID]>>>(threadsMemory[threadID], pComplex,
                                                                        d_headPositions, numHeads, rangeNum);
 
-    cudaStreamSynchronize(streams[threadID]);
-
-    cudaStreamSynchronize(streams[threadID]);
-
     processPulseGroupData(threadID, matrices, CFAR_res, Max_res, rangeNum,
                           pcPlan, rowPlan, colPlan);
-
-
 
 //    cudaStreamSynchronize(streams[threadID]);
 //    CudaMatrix tmp(32, NFFT, pMaxRes_d, true);
@@ -257,7 +251,6 @@ ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix>
     // 选大结果拷贝回内存
     checkCudaErrors(cudaMemcpyAsync(pMaxRes_h, pMaxRes_d, sizeof(cufftComplex) * CAL_WAVE_NUM * NFFT, cudaMemcpyDeviceToHost,
                                     streams[threadID]));
-
 
     cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
 
@@ -273,8 +266,7 @@ void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrice
                                        vector<CudaMatrix> &Max_res, int rangeNum, cufftHandle &pcPlan,
                                        cufftHandle &rowPlan, cufftHandle &colPlan) {
 //    PcCoefMatrix.fft(pcPlan);
-    float scale = 1.0f  / sqrt(Bandwidth * pulseWidth);
-
+    float scale = 1.0f  / sqrt(Bandwidth * pulseWidth) / NUM_PULSE / RANGE_NUM;
     for (int i = 0; i < CAL_WAVE_NUM; i++) {
 //        string filename = "data" + to_string(i) + "_max.txt";
         /*Pulse Compression*/
@@ -287,7 +279,7 @@ void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrice
         // 归一化，同时连ifft的归一化一起做了
         matrices[i].scale(streams[threadID], scale);
 
-//        matrices[i].MTI(streams[threadID], 2);
+//        matrices[i].MTI(streams[threadID], 3);
 
         /*coherent integration*/
         for (int j = 0; j < INTEGRATION_TIMES; j++) {
@@ -295,10 +287,10 @@ void ThreadPool::processPulseGroupData(int threadID, vector<CudaMatrix> &matrice
         }
 
         /*cfar*/
-//        matrices[i].cfar(CFAR_res[i], streams[threadID], Pfa, numGuardCells, numRefCells, numSamples - 1,  numSamples + rangeNum);
         matrices[i].abs(streams[threadID]);
+        matrices[i].cfar(CFAR_res[i], streams[threadID], Pfa, numGuardCells, numRefCells, numSamples - 1,  numSamples + rangeNum);
 
-        matrices[i].max(Max_res[i], streams[threadID], 1);
+        CFAR_res[i].max(Max_res[i], streams[threadID], 1);
         Max_res[i].scale(streams[threadID], 1.0f / normFactor * 255);
     }
 }
@@ -337,7 +329,6 @@ void ThreadPool::copyToThreadMemory() {
     bool startFlag;
     for (int i = 0; i < 1024; i++) {
         size_t indexOffset = block_index * INDEX_SIZE + i * 4;
-        // TODO: 实测数据的时候这里需要修改
         indexValue = *(unsigned int*)(sharedQueue->index_buffer + indexOffset);
         // Check pattern match
         if (    indexValue >= block_index * BLOCK_SIZE &&
@@ -421,8 +412,10 @@ void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr
         currentAddrOffset += copyLength;
     } else {
 //        cout << (currentAddrOffset + copyLength) / 1024 / 1024 << " MB !!!!" << endl;
+        std::cerr << "Copying " << copyLength / 1024 / 1024 << " MB to thread " << cur_thread_id << std::endl;
+        std::cerr << cur_thread_id << ": " << (currentAddrOffset + copyLength) / 1024 / 1024 << " MB" << endl;
+        std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
         inPacket = false;
         currentAddrOffset = 0;
-        std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
     }
 }

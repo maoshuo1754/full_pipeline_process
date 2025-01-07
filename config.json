@@ -4,7 +4,7 @@
   "num_threads": 4,
   "CAL_WAVE_NUM": 32,
   "INTEGRATION_TIMES": 1,
-  "normFactor": 128,
+  "normFactor": 2048,
 
   "send_ip": "192.168.7.1",
   "send_port": 0,
@@ -24,8 +24,8 @@
   "Fs": 31.25e6,
   "system_delay": 25,
 
-  "Pfa": 1e-6,
-  "numGuardCells": 4,
+  "Pfa": 1e-7,
+  "numGuardCells": 5,
   "numRefCells": 20
 }
 
