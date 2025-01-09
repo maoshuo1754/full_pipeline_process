@@ -80,8 +80,6 @@ void ThreadPool::threadLoop(int threadID) {
     int *d_headPositions;
     checkCudaErrors(cudaMalloc(&d_headPositions, NUM_PULSE * 1.1 * sizeof(size_t)));
 
-    CudaMatrix PcCoefMatrix(1, NFFT); // 脉压系数
-
     // 原始IQ
     vector<CudaMatrix> matrices;
     for (int i = 0; i < WAVE_NUM; i++) {
@@ -185,7 +183,7 @@ void ThreadPool::generatePCcoefMatrix(unsigned char *rawMessage, cufftHandle &pc
     auto PRT = *(uint32_t *)(rawMessage + 14 * 4) / Fs_system; //120e-6
     pulseWidth = ((*(uint32_t *)(rawMessage + 13 * 4)) & 0xfffff) / Fs_system; //5e-6
 
-    auto fLFMStartWord = *(uint32_t*)(rawMessage + 16 * 4);
+    auto fLFMStartWord = *(uint32_t *)(rawMessage + 16 * 4);
 
     if (!isEqual(PRT, prevPRT) || !isEqual(pulseWidth, prevPulseWidth) || !isEqual(fLFMStartWord, prevfLFMStartWord)) {
         cout << "Param changed, regenerate pulse compress coefficient." << endl;
@@ -216,8 +214,8 @@ ThreadPool::processData(int threadID, cufftComplex *pComplex, vector<CudaMatrix>
     int headLength = headPositions[threadID][1] - headPositions[threadID][0];
     int rangeNum = floor((headLength - DATA_OFFSET) / WAVE_NUM / 4.0);
 
-    //    cout << "numHeads: " << numHeads << endl;
-    //    cout << "headLength: " << headLength << endl;
+//        cout << "numHeads: " << numHeads << endl;
+//        cout << "headLength: " << headLength << endl;
     if (rangeNum != RANGE_NUM) {
         throw std::runtime_error("The calculated range num is different from that is set");
     }
@@ -397,8 +395,8 @@ void ThreadPool::copyToThreadMemory() {
 // 从startAddr到endAddr的数据拷贝给线程的独立空间，Addr是相对于共享内存的起始地址
 void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr) {
     size_t copyLength = endAddr - startAddr;
-//    std::cout << "Copying " << copyLength / 1024 / 1024 << " MB to thread " << cur_thread_id << std::endl;
-//    cout << cur_thread_id << ": " << (currentAddrOffset + copyLength) / 1024 / 1024 << " MB" << endl;
+//    std::cout << "Copying " << copyLength / 1024 / 1024 << " MB to thread " << cur_thread_id << " :totally "
+//              << (currentAddrOffset + copyLength) / 1024 / 1024 << " MB" << endl;
 
     if ((currentAddrOffset + copyLength) <= THREADS_MEM_SIZE) {  // Ensure within buffer bounds
 
@@ -412,8 +410,8 @@ void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr
         currentAddrOffset += copyLength;
     } else {
 //        cout << (currentAddrOffset + copyLength) / 1024 / 1024 << " MB !!!!" << endl;
-        std::cerr << "Copying " << copyLength / 1024 / 1024 << " MB to thread " << cur_thread_id << std::endl;
-        std::cerr << cur_thread_id << ": " << (currentAddrOffset + copyLength) / 1024 / 1024 << " MB" << endl;
+        std::cerr << "Copying " << copyLength / 1024 / 1024 << " MB to thread " << cur_thread_id << " :totally "
+                  << (currentAddrOffset + copyLength) / 1024 / 1024 << " MB" << endl;
         std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
         inPacket = false;
         currentAddrOffset = 0;

@@ -28,6 +28,6 @@ void checkCudaErrors(cudaError_t result);
 
 std::vector<double> hammingWindow(int N);
 
-bool isEqual(double a, double b, double epsilon = 1e-9);
+bool isEqual(double a, double b, double epsilon = 1e-6);
 
 #endif //CUDAPROJECT_UTILS_H

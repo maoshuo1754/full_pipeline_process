@@ -8,7 +8,7 @@ std::vector<cufftComplex> PCcoef(double BandWidth, double PulseWidth, double Fs,
     int N = round(PulseWidth * Fs);
     double dT = (PulseWidth - Ts) / (N - 1); // t = linspace(-PulseWidth/2, PulseWidth/2-Ts, N);
 
-    std::vector<cufftComplex> result(_NFFT);
+    std::vector<cufftComplex> result(_NFFT, make_cuComplex(0, 0));
     auto window = hammingWindow(N);
     // 生成线性调频信号
     for (int i = 0; i < N; ++i) {

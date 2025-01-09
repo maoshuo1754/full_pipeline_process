@@ -25,8 +25,8 @@ SendVideo::SendVideo() {
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_port = htons(multicast_port);  // 0x2001是8192  0x2002岁8194
-    std::cout << "send_ip:      " << send_ip << std::endl;
-    std::cout << "multicast_ip: " << multicast_ip << std::endl;
+    std::cout << "send_ip:      " << send_ip << ":" << send_port <<std::endl;
+    std::cout << "multicast_ip: " << multicast_ip << ":" << multicast_port << std::endl;
     addr.sin_addr.s_addr = inet_addr(multicast_ip.c_str());
 
     memset(&myaddr, 0, sizeof(myaddr));
@@ -62,9 +62,9 @@ void SendVideo::send(unsigned char *rawMessage, float2 *data, int numSamples, in
     float rAzm;
 
     auto rawMsg = reinterpret_cast<int*>(rawMessage);
-    int freqPoint = (htons(rawMsg[12]) & 0x00000fff);
+    int freqPoint = ((rawMsg[12]) & 0x00000fff);
     freqPoint = 3;
-    double lambda_0 = c_speed / ((freqPoint * 10 + 9600)*1e6);
+    double lambda_0 = c_speed / ((freqPoint * 10 + 9600) * 1e6);
     double data_amp;
 
     for (int ii = 0; ii < WAVE_NUM; ii++) {
