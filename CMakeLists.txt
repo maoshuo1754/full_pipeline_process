@@ -24,16 +24,25 @@ set(SOURCE_FILES
         main.cpp
         NRx/sendVideo.cpp
         NRx/SendVideo.h
+        NRx/plot.h
+        NRx/plot.cpp
         Config.h
         Config.cpp
 )
 
-add_executable(reader ${SOURCE_FILES})
+file(GLOB MYSRCS "${PROJECT_SOURCE_DIR}/NRx/include/*.cpp")
+
+if (CMAKE_BUILD_TYPE MATCHES "Debug")
+    file(GLOB DLLFILES "${PROJECT_SOURCE_DIR}/NRx/dlls/debug/*.dll")
+else ()
+    file(GLOB DLLFILES "${PROJECT_SOURCE_DIR}/NRx/dlls/release/*.dll")
+endif ()
+
+add_executable(reader ${SOURCE_FILES} ${MYSRCS})
 
 # Find and link CUDA Toolkit libraries
 find_package(CUDAToolkit REQUIRED)
 find_package(nlohmann_json 3.7.3 REQUIRED)
-#find_package(OpenMP REQUIRED)
 
 target_link_libraries(reader
         pthread
@@ -41,14 +50,14 @@ target_link_libraries(reader
         CUDA::cublas
         CUDA::cufft
         nlohmann_json::nlohmann_json
+        ${DLLFILES}
 #        OpenMP::OpenMP_CXX
 )
 
 # Include CUDA Toolkit headers
-target_include_directories(reader PRIVATE ${CUDAToolkit_INCLUDE_DIRS} ./NRx)
-
-## Set CUDA separable compilation
-#set_target_properties(reader PROPERTIES
-#        CUDA_SEPARABLE_COMPILATION ON
-#) 
+target_include_directories(reader PRIVATE
+        ${CUDAToolkit_INCLUDE_DIRS}
+        ./NRx
+        ./NRx/include
+)
 

@@ -3,12 +3,22 @@
 #include <cuda_runtime.h>
 #include <iostream>
 
-ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue)
-        : stop(false), sharedQueue(sharedQueue), processingFlags(numThreads, false),
-          conditionVariables(numThreads), mutexes(numThreads),
-          headPositions(numThreads, std::vector<int>()), currentPos(numThreads, 0),
-          currentAddrOffset(0), numThreads(numThreads), inPacket(false),
-          cur_thread_id(0), prevSeqNum(0), PcCoefMatrix(1, NFFT), sender() { // 初始化 conditionVariables 和 mutexes
+ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue):
+    stop(false),
+    sharedQueue(sharedQueue),
+    processingFlags(numThreads, false),
+    conditionVariables(numThreads), mutexes(numThreads),
+    headPositions(numThreads, std::vector<int>()),
+    currentPos(numThreads, 0),
+    currentAddrOffset(0),
+    numThreads(numThreads),
+    inPacket(false),
+    cur_thread_id(0),
+    prevSeqNum(0),
+    PcCoefMatrix(1, NFFT),
+    sender()
+    {
+    // 初始化 conditionVariables 和 mutexes
     // 创建并初始化线程
 
     logFile = ofstream("error_log.txt", ios_base::app);

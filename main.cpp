@@ -5,6 +5,11 @@
 #include "myThreadPool.h"
 #include "Config.h"
 
+void runCommandDelayed(const string& commond) {
+    this_thread::sleep_for(chrono::milliseconds(600));
+    system(commond.c_str());
+}
+
 int main(){
     loadConfig("/home/csic724/CLionProjects/PcieReader/config.json");
 //    cout << sizeof (unsigned int ) << endl;
@@ -22,5 +27,9 @@ int main(){
 
     cout << "Working Threads Num:" << num_threads << endl;
     ThreadPool thread_pool(num_threads, sharedQueue);
+
+    thread t(runCommandDelayed, "/home/csic724/CLionProjects/writer/cmake-build-debug/writer");
+    t.detach();
+
     thread_pool.run();
 }

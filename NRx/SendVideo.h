@@ -14,10 +14,11 @@
 #include <cmath>
 #include <complex>
 #include <sys/socket.h>
-#include "netinet/in.h"
-#include "arpa/inet.h"
-#include "cstring"
-#include "unistd.h"
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <cstring>
+#include <unistd.h>
+#include "plot.h"
 
 #define TAO (5.0e-6)
 #define TAO_US (TAO*1e6f)
@@ -37,7 +38,7 @@ private:
     int timeArray[32];
     sockaddr_in addr;
     sockaddr_in myaddr;
-
+    Plot plot;
     static double asind(double x);
 };
 
