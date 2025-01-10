@@ -24,7 +24,7 @@
   "Fs": 31.25e6,
   "system_delay": 25,
 
-  "Pfa": 1e-7,
+  "Pfa": 1e-8,
   "numGuardCells": 5,
   "numRefCells": 20
 }
