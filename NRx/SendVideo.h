@@ -40,6 +40,7 @@ private:
     sockaddr_in myaddr;
     Plot plot;
     static double asind(double x);
+    ofstream outfile;
 };
 
 

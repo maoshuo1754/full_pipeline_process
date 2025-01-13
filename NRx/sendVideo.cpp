@@ -5,7 +5,7 @@
 #include "SendVideo.h"
 #include "../Config.h"
 
-SendVideo::SendVideo(): plot() {
+SendVideo::SendVideo(): plot() { // , outfile("detectVideo.txt")
     m_sendBufOri = new char[1024 * 1024];
     unMinPRTLen = RANGE_NUM;
     unTmpAzi = 0;
@@ -86,7 +86,8 @@ void SendVideo::send(unsigned char *rawMessage, float2 *data, int numSamples, in
     videoMsg.RadarVideoHeader.dwTxRelMilliSecondTime_H = htonl(0);
     videoMsg.RadarVideoHeader.dwTxRelMilliSecondTime_L = htonl(dwTemp);
 
-    for (int ii = 0; ii < WAVE_NUM; ii++) {
+//    for (int ii = 0; ii < WAVE_NUM; ii++) {
+    for (int ii = WAVE_NUM-1; ii >=0; ii--) {
 
         int sec = dwTemp / 1000 % 60 + timeArray[ii];
 
@@ -101,21 +102,24 @@ void SendVideo::send(unsigned char *rawMessage, float2 *data, int numSamples, in
             rAzm += 360.f;
 
         dwTemp = UINT16(rAzm / 360.0f * 65536.0f);
-//        cout << "[Azi1:]" << dwTemp << endl;
         videoMsg.RadarVideoHeader.wAziCode = htons(dwTemp);
 
         auto* rowData = data + ii * NFFT;
         for (int k = 0; k < unMinPRTLen; ++k) {
             // + system_delay
             //TODO: 这个偏移会不会动
-            data_amp = (rowData[k + numSamples - 1 + 52].x);
+            data_amp = rowData[k + numSamples - 1 + 52].x;
+            data_amp = data_amp * 1.5;
             if(data_amp > 255)
                 data_amp = 255;
             videoMsg.bytVideoData[k] = (unsigned char)data_amp;
         }
 
+//        cout << ii << "： " <<  rAzm << endl;
         dwTemp = UINT16(rAzm / 360.0 * 65536.0f);
+
         videoMsg.RadarVideoHeader.wAziCode = htons(dwTemp);
+
         auto sendres = sendto(sendSocket, &videoMsg, sizeof(videoMsg), 0, (sockaddr *)&addr, sizeof(addr));
         if (sendres < 0) {
             std::cerr << "Detected video sendto() failed!" << std::endl;
@@ -123,6 +127,6 @@ void SendVideo::send(unsigned char *rawMessage, float2 *data, int numSamples, in
         }
         plot.MainFun(reinterpret_cast<char*>(&videoMsg), sizeof(videoMsg));
     }
-
+//    outfile << endl;
 
 }

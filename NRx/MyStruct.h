@@ -433,6 +433,7 @@ struct VideoToNRXGUI
     NRX_COMMON_HEADER CommonHeader;
     RX_RadarVideo_Head RadarVideoHeader;
     UINT8 bytVideoData[MAX_DISTANCE_ELEMENT_NUMBER];
+//    UINT8 bytSpeedData[MAX_DISTANCE_ELEMENT_NUMBER];
     NRX_COMMON_TAIL CommonTail;
 
     VideoToNRXGUI()
@@ -440,7 +441,7 @@ struct VideoToNRXGUI
         memset(&CommonHeader,0, sizeof(CommonHeader));
         CommonHeader.dwHEADER = htonl(0xF1A2B4C8);
         CommonHeader.wVERSION = htons(0);
-        CommonHeader.wMsgTotalLen = htons(sizeof(CommonHeader) + sizeof(RadarVideoHeader)+sizeof(bytVideoData)+sizeof(CommonTail));
+        CommonHeader.wMsgTotalLen = htons(sizeof(CommonHeader) + sizeof(RadarVideoHeader)+sizeof(bytVideoData)+sizeof(CommonTail)); // +sizeof(bytSpeedData)
         CommonHeader.wMsgFlag = htons(0x0103);
         CommonHeader.wRadarID = htons(0x0012);
         CommonHeader.bytTxNodeNumber = 0x11;

@@ -308,18 +308,18 @@ void Plot::PlotConv(NRx8BitPulse *res_a, int16* speed, size_t speedLength) {
     // plot2DParam.dDisGridWid = getIntParam(tagName, paramName.plotdetDisGridWidName);     // 保留参数，距离格子宽度（米），为了节约计算量，可以粗略画格子
     plot2DParam.uiMinEchoAmp = 0;       // 最小回波幅度
     plot2DParam.uiMaxEchoAmp = 255;     // 最大回波幅度
-    plot2DParam.uiDisDet_M = 4;    // 距离检测，M
-    plot2DParam.uiDisDet_N = 5;    // 距离检测，N
-    plot2DParam.dMinAziWid = 0.1;         // 点迹最小方位展宽
+    plot2DParam.uiDisDet_M = 3;    // 距离检测，M
+    plot2DParam.uiDisDet_N = 4;    // 距离检测，N
+    plot2DParam.dMinAziWid = 1;         // 点迹最小方位展宽
     plot2DParam.dMaxAziWid = 360;       // 点迹最大方位展宽
     plot2DParam.dMinDisWid = 1;        // 点迹最小距离展宽
     plot2DParam.dMaxDisWid = 10000;    // 点迹最大距离展宽
-    plot2DParam.uiMinCellNum = 2;        // 点迹最小距离单元数
+    plot2DParam.uiMinCellNum = 3;        // 点迹最小距离单元数
     plot2DParam.uiMaxCellNum = 65535;     // 点迹最大距离单元数
 
     plot2DParam.usNosJugThr = 37;
 
-    plot2DParam.bSlbeDet_Enable = 1;
+    plot2DParam.bSlbeDet_Enable = 0;
     plot2DParam.dGridAziWid = 11.25;      // 格子方位宽度
     plot2DParam.dGridDisWid = 5000;       // 格子距离宽度
     plot2DParam.iMlobeAmpThr = 136;       // 大于该门限的认为可能存在副瓣点迹
