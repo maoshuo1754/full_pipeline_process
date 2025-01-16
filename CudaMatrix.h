@@ -53,7 +53,7 @@ public:
     void print(int row, float des) const;
     void printLargerThan0() const;
 
-    void max(CudaMatrix &output, cudaStream_t _stream, int dim=1);
+    void max(CudaMatrix &output, int *speed, cudaStream_t _stream);
 
     CudaMatrix T(bool inplace = true);
     CudaMatrix operator*(const CudaMatrix& other) const;

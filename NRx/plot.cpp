@@ -153,23 +153,18 @@ Plot::~Plot() {
     outfile.close();
 }
 
-void Plot::MainFun(char *dataBuf, unsigned int dataSize) {
-    // dataBuf以下组成
+void Plot::MainFun(char *dataBuf, unsigned int dataSize, int *speeds) {
+    //    dataBuf以下组成
     //    NRX_COMMON_HEADER CommonHeader;
     //    RX_RadarVideo_Head RadarVideoHeader;
     //    UINT8 bytVideoData[MAX_DISTANCE_ELEMENT_NUMBER];
     //    NRX_COMMON_TAIL CommonTail;
 
-    auto* speed = reinterpret_cast<int16 *>(dataBuf + dataSize);
-    size_t speedLength = dataSize - sizeof(_tagMsgHead) - sizeof(_EntireMessageInfo) - sizeof(_tagMsgEnd);
-
     // 将dataBuf转为NRx8bitPulse
     XX92NRx8bit(dataBuf);
 
-    // 点迹凝聚
-
-    // TODO 点迹凝聚使用速度信息
-    PlotConv(nrx8bitPulse, speed, speedLength);
+    // 点迹凝聚使用速度信息
+    PlotConv(nrx8bitPulse, speeds, NFFT);
 
 }
 
@@ -181,7 +176,7 @@ void Plot::setSocket(int socket, sockaddr_in addr) {
 
 
 void Plot::XX92NRx8bit(char *xx9buf) {
-    auto pVideoToNRXGUI = reinterpret_cast<VideoToNRXGUI*>(xx9buf);
+    auto* pVideoToNRXGUI = reinterpret_cast<VideoToNRXGUI*>(xx9buf);
 
     auto* header = (NRxIfHeader *)m_nrx8bitBuf;
     // fill in head
@@ -189,14 +184,10 @@ void Plot::XX92NRx8bit(char *xx9buf) {
     header->protocol = NRxProtolVerion;
     static unsigned short uscounter = 0; // 发送流水号
     header->counter = uscounter++;
-    time_t curtm;
-    ::time(&curtm); // get current time
-    std::tm *localTime = std::localtime(&curtm);
-    header->time = curtm;
 
-    timeval now{};
-    gettimeofday(&now, nullptr);
-    header->microSecs = now.tv_usec;
+//    gettimeofday(&tv, nullptr);
+    header->time = pVideoToNRXGUI->CommonHeader.dwTxSecondTime;
+    header->microSecs = pVideoToNRXGUI->CommonHeader.dwTxMicroSecondTime;
 
 //    header->msgBytes; // fill before snd
     header->tag = NRxIfTag_VidOri;
@@ -209,7 +200,7 @@ void Plot::XX92NRx8bit(char *xx9buf) {
     header->res2 = 0;
     header->res3 = 0;
 
-    NRxVidInfo *vidInfo = (NRxVidInfo *) (header + 1);
+    auto* vidInfo = (NRxVidInfo *) (header + 1);
     vidInfo->vidSyncHead = 0xA5A61234;
     vidInfo->vidFormat = 0; // process only support 8bit - 20221203
     vidInfo->pulseCombineMode = 0;
@@ -220,10 +211,10 @@ void Plot::XX92NRx8bit(char *xx9buf) {
     // vidInfo->absTime0 = (uint32) xx9VidMsgInfo.Time1;
     // vidInfo->absTime1 = 0;
 
-    vidInfo->absTime0 = (uint32)(pVideoToNRXGUI->CommonHeader.dwTxSecondTime);
-    vidInfo->absTime1 = (uint32)(pVideoToNRXGUI->CommonHeader.dwTxMicroSecondTime);
+    vidInfo->absTime0 = pVideoToNRXGUI->CommonHeader.dwTxSecondTime;
+    vidInfo->absTime1 = pVideoToNRXGUI->CommonHeader.dwTxMicroSecondTime;
     //自守时
-    double dUTCMicroSec = pVideoToNRXGUI->CommonHeader.dwTxSecondTime;
+    double dUTCMicroSec = vidInfo->absTime0 * 1e6 + vidInfo->absTime1;
 
     static double dUTCMicroSecPre = dUTCMicroSec;
     static double dRelTime = 0;
@@ -264,9 +255,9 @@ void Plot::XX92NRx8bit(char *xx9buf) {
 //    }
     vidInfo->high = 0;
 
-    vidInfo->scanType = 1 << 7;
+    vidInfo->scanType = (1 << 7) & 10;
     // vidInfo->servoScanSpeed = 300;
-    vidInfo->servoScanSpeed = 3600 / oneScanTime;
+    vidInfo->servoScanSpeed = 13635;
     vidInfo->servoStartAzi = 0;
     vidInfo->servoEndAzi = 0;
     vidInfo->channelSpeed = 0xFFFF;
@@ -291,7 +282,8 @@ void Plot::XX92NRx8bit(char *xx9buf) {
 }
 
 
-void Plot::PlotConv(NRx8BitPulse *res_a, int16* speed, size_t speedLength) {
+void Plot::PlotConv(NRx8BitPulse *res_a, int *speed, size_t speedLength) {
+//    cout << speed[326] << endl;
     // 是否测试时间
 //    bool bIsTestTime = NRxObj::isTestTime();
 //    static uint32 uiProPulseAll = 0;
@@ -917,16 +909,13 @@ void Plot::PlotNetSend(NRx8BitPulse *curPulse) {
                             plotinfo->aziStart = PreSecPlotBuff[idx][idx1].aziStart;
                             plotinfo->aziEnd = PreSecPlotBuff[idx][idx1].aziEnd;
                             // TODO 判断点迹是否在MTD上下界内，若不在，doppVel和maxDoppDiff填0xFFFF
-                            if ((plotinfo->dis >= this->mtdLowBound) && (plotinfo->dis <= this->mtdHighBound)) {
-                                plotinfo->doppVel = PreSecPlotBuff[idx][idx1].doppVel;
-                                plotinfo->maxDoppDiff = PreSecPlotBuff[idx][idx1].maxDoppDiff;
-                                // plotinfo->amp = PreSecPlotBuff[idx][idx1].maxDoppDiff;
-                            }
-                            else {
-                                plotinfo->doppVel = 0xFFFF;
-                                plotinfo->maxDoppDiff = 0xFFFF;
-                                // plotinfo->amp = PreSecPlotBuff[idx][idx1].maxDoppDiff;
-                            }
+
+                            plotinfo->doppVel = PreSecPlotBuff[idx][idx1].doppVel;
+                            plotinfo->maxDoppDiff = PreSecPlotBuff[idx][idx1].maxDoppDiff;
+                            // plotinfo->amp = PreSecPlotBuff[idx][idx1].maxDoppDiff;
+//                            cout << plotinfo->dis << " " << plotinfo->azi << " doppVel:" << PreSecPlotBuff[idx][idx1].doppVel << endl;
+                            plotinfo->amp = abs(PreSecPlotBuff[idx][idx1].doppVel);
+//                            printf("plotinfo->amp: %d\n", plotinfo->amp);
                             /* null ********************************************************
                             plotinfo.saturate = PreSecPlotBuff[idx][idx1].saturate;
                             plotinfo.SNR = PreSecPlotBuff[idx][idx1].SNR;
@@ -1041,7 +1030,7 @@ void Plot::PlotNetSend(NRx8BitPulse *curPulse) {
 *   返回：
 *       无
 *******************************************************************/
-void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPulse *curDetThr, int16* speed) {
+void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPulse *curDetThr, int *speed) {
     /* ************************** 获取当前脉冲参数 ***************************** */
     double dCurPulseTime = (double) (((uint64) (curPulse->vidinfo.relTime0) << 32) + curPulse->vidinfo.relTime1);
     // std::cout << "dCurPulseTime" << dCurPulseTime << std::endl;
@@ -1081,22 +1070,23 @@ void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPul
     /* *************************** 定义过程变量 ******************************* */
     sTempPlotBuff CurPlotBuff_Row;      // 当前距离格子
     bool bDisDetStart = false;          // 距离检测起始标识
-    uint32 uiStartIdx = 0;       // 距离凝聚起始id
-    uint32 uiEndIdx = 0;         // 距离凝聚结束id
-    uint32 uiWinDetSum = 0;       // 距离检测窗过门限点数
-    uint32 uiSumCellNum = 0;      // 过门限单元计数
+    uint32 uiStartIdx = 0;              // 距离凝聚起始id
+    uint32 uiEndIdx = 0;                // 距离凝聚结束id
+    uint32 uiWinDetSum = 0;             // 距离检测窗过门限点数
+    uint32 uiSumCellNum = 0;            // 过门限单元计数
     double dSumAmp = 0.0;               // 幅度和
     double dSumTimeAmp = 0.0;           // 时间幅度和
-    double dSumAbsTimeAmp = 0.0;           // 时间幅度和
+    double dSumAbsTimeAmp = 0.0;        // 时间幅度和
     double dSumAziAmp = 0.0;            // 方位幅度和
     double dSumDisAmp = 0.0;            // 距离幅度和
     double dSumBaGAmp = 0.0;            // 背景幅度和
     double dSumThrAmp = 0.0;            // 门限幅度和
-    // TODO 新增速度过程变量
+    //速度过程变量
     double dSumSpeed = 0.0;
     double dMaxSpeed = -65536.0;
-    double dMinSpeed = 65536.0;
-    uint32 uiDisRowIdx = 0;       // 格子行号
+    double dPowerSum = 65536.0;
+
+    uint32 uiDisRowIdx = 0;          // 格子行号
     uint32 uiStartDisRowIdx = 0;     // 格子起始行号
     uint32 uiEndDisRowIdx = 0;       // 格子结束行号
 
@@ -1152,11 +1142,11 @@ void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPul
                     dSumAbsTimeAmp += dCurPulseAbsTime * dCurPulseData[idx3];
                     dSumAziAmp += dCurPulseAzi * dCurPulseData[idx3];
                     dSumDisAmp += ((double) (idx3 + 1)) * dSamCellSize * dCurPulseData[idx3];  // idx3? or idx3+1?
-//                     TODO 凝聚速度信息
-//                    double tmp_speed = (double)*(speed + idx3);
-//                    dSumSpeed += tmp_speed / 100; // 求和
-//                    dMaxSpeed = max(dMaxSpeed, tmp_speed / 100); // 取大
-//                    dMinSpeed = min(dMinSpeed, tmp_speed / 100); // 取小
+                    // 凝聚速度信息
+                    double tmp_speed = speed[idx3] / 100.0; // 质心法
+                    dSumSpeed += tmp_speed * dCurPulseData[idx3]; // 求和
+                    dPowerSum += dCurPulseData[idx3]; // 功率求和
+                    dMaxSpeed = max(dMaxSpeed, tmp_speed); // 取大
 
                     if (curBaGAmp != nullptr) {
                         dSumBaGAmp += curBaGAmp->data[idx3];
@@ -1213,10 +1203,11 @@ void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPul
                 CurPlotBuff_Row.unEndDisIdx = uiEndIdx;
                 CurPlotBuff_Row.dStartDis = ((double) (uiStartIdx)) * dSamCellSize;
                 CurPlotBuff_Row.dEndDis = ((double) (uiEndIdx + 1)) * dSamCellSize;
+
                 // TODO 赋值速度信息给当前点迹缓存
                 CurPlotBuff_Row.dSumSpeed = dSumSpeed;
                 CurPlotBuff_Row.dMaxSpeed = dMaxSpeed;
-                CurPlotBuff_Row.dMinSpeed = dMinSpeed;
+                CurPlotBuff_Row.dPowerSum = dPowerSum;
 
                 CurPlotBuff[uiDisRowIdx] = CurPlotBuff_Row;
 
@@ -1231,8 +1222,8 @@ void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPul
                 uiSumCellNum = 0;
                 // TODO 速度过程变量重置
                 dSumSpeed = 0.0;
-                dMaxSpeed = -1.0;
-                dMinSpeed = 65536.0;
+                dPowerSum = 0.0;
+                dMaxSpeed = -65536.0;
                 bDisDetStart = false;
                 /* ********************************************************** */
             } else // 如果未开始，则继续滑动
@@ -1360,7 +1351,7 @@ void Plot::PlotsDetect(NRx8BitPulse *curPulse) {
     // TODO 新增点迹速度信息、最大最小速度信息
     double dPlotSpeed;
     double dPlotMaxSpeed;
-    double dPlotMinSpeed;
+    double dPlotPowerSum;
 
     double dCurPulseAzi;
     double dCurPulseAzi_1 = (double) (curPulse->vidinfo.azi) * 360.0 / 65536.0;
@@ -1430,9 +1421,9 @@ void Plot::PlotsDetect(NRx8BitPulse *curPulse) {
                 dPlotEAzi = PrePlotBuff_idx.dEndAzi;
                 dPlotSDis = PrePlotBuff_idx.dStartDis;
                 dPlotEDis = PrePlotBuff_idx.dEndDis;
-                dPlotSpeed = PrePlotBuff_idx.dSumSpeed / PrePlotBuff_idx.unSamCellSum;
+                dPlotSpeed = PrePlotBuff_idx.dSumSpeed;
                 dPlotMaxSpeed = PrePlotBuff_idx.dMaxSpeed;
-                dPlotMinSpeed = PrePlotBuff_idx.dMinSpeed;
+                dPlotPowerSum = PrePlotBuff_idx.dPowerSum;
 
                 switch (plot2DParam.uiFusionMode) {
                     case 0:  // 质量中心
@@ -1506,14 +1497,10 @@ void Plot::PlotsDetect(NRx8BitPulse *curPulse) {
                             /* 缺省始 */
                             PlotInfoBuff[usSectorPlotNum].saturate = 0;
                             // TODO 根据局部变量填写NRxPlot对应的字段，注意单位
-                            PlotInfoBuff[usSectorPlotNum].doppVel = dPlotSpeed * 10.0;
-                            // PlotInfoBuff[usSectorPlotNum].maxDoppDiff = (dPlotMaxSpeed - dPlotMinSpeed) * 10.0;
-                            if (abs(dPlotMaxSpeed) > abs(dPlotMinSpeed)) {
-                                PlotInfoBuff[usSectorPlotNum].maxDoppDiff = (dPlotMaxSpeed) * 10.0;
-                            }
-                            else {
-                                PlotInfoBuff[usSectorPlotNum].maxDoppDiff = (dPlotMinSpeed) * 10.0;
-                            }
+                            // cout << PlotInfoBuff[usSectorPlotNum].dis << " " << PlotInfoBuff[usSectorPlotNum].azi / 65536 * 360 << " cal speed:" << dPlotSpeed / dPlotPowerSum * 10 << endl;
+                            PlotInfoBuff[usSectorPlotNum].doppVel =  dPlotSpeed / dPlotPowerSum * 10;
+                            PlotInfoBuff[usSectorPlotNum].maxDoppDiff = dPlotMaxSpeed;
+
                             PlotInfoBuff[usSectorPlotNum].plotType = 0;
                             PlotInfoBuff[usSectorPlotNum].plotConfLv = 0;
                             /* 缺省止 */
@@ -1594,10 +1581,12 @@ sTempPlotBuff Plot::GridCombine(sTempPlotBuff plotGrid_1, sTempPlotBuff plotGrid
     plotGrid_1.unSamCellSum += plotGrid_2.unSamCellSum;
     plotGrid_1.dTimeAmpSum += plotGrid_2.dTimeAmpSum;
     plotGrid_1.dAbsTimeAmpSum += plotGrid_2.dAbsTimeAmpSum;
+
     // TODO 合并plotGrid_1和plotGrid_2的速度信息
     plotGrid_1.dSumSpeed += plotGrid_2.dSumSpeed;
+    plotGrid_1.dPowerSum += plotGrid_2.dPowerSum;
     plotGrid_1.dMaxSpeed = max(plotGrid_1.dMaxSpeed, plotGrid_2.dMaxSpeed);
-    plotGrid_1.dMinSpeed = min(plotGrid_1.dMinSpeed, plotGrid_2.dMinSpeed);
+
     if (plotGrid_1.dStartAzi > plotGrid_2.dStartAzi) {
         plotGrid_1.dStartAzi = plotGrid_2.dStartAzi;
         plotGrid_1.unStartAziIdx = plotGrid_2.unStartAziIdx;

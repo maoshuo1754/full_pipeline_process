@@ -6,6 +6,8 @@
 #include <include/NRxObj.h>
 #include <string>
 #include <vector>
+#include <sys/time.h>
+
 //static const int32 TEMP_MAX_SECTOR_NUM (32);               // 方位扇区数
 static const int32 MaxPlotInSector                (NRxMaxPlotsNum);
 
@@ -33,7 +35,7 @@ typedef struct sTempPlotBuff
     // TODO 新增速度过程变量
     double dSumSpeed; // 速度和
     double dMaxSpeed; // 最大速度
-    double dMinSpeed; // 最小速度
+    double dPowerSum; // 最小速度
     uint32 unSamCellSum;  // 过门限单元数
     uint32 unPulseSum;    // 脉冲计数
     uint32 unStartAziIdx; // 起始方位码
@@ -66,7 +68,7 @@ typedef struct sTempPlotBuff
         // TODO 新增速度过程变量
         dSumSpeed = 0.0;
         dMaxSpeed = -1.0;
-        dMinSpeed = -1.0;
+        dPowerSum = -1.0;
         unSamCellSum = 0;
         unPulseSum = 0;
         unStartAziIdx = 0;
@@ -130,10 +132,10 @@ public:
     Plot();
     ~Plot();
 
-    void MainFun(char* dataBuf, unsigned int dataSize);
+    void MainFun(char *dataBuf, unsigned int dataSize, int *speedChannels);
 
     void XX92NRx8bit(char *xx9buf);
-    void PlotConv(NRx8BitPulse* res_a, int16* speed, size_t speedLength);
+    void PlotConv(NRx8BitPulse* res_a, int *speed, size_t speedLength);
 
     void setMTDRange(int low, int high);
     void setSocket(int socket, sockaddr_in addr);
@@ -144,7 +146,7 @@ private:
     bool checkPolyArea(uint16 azi, uint32 dis);
 
     void PlotNetSend(NRx8BitPulse*);
-    void DisDetCov(NRx8BitPulse*, NRx8BitPulse*, NRx8BitPulse*, int16* speed);
+    void DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPulse *curDetThr, int *speed);
     void AziDetCov(NRx8BitPulse*);
     void PlotsDetect(NRx8BitPulse*);
 
@@ -196,7 +198,7 @@ private:
 
     bool useClutterMap; //杂波图开关
     std::vector<char*> clutterMap; //杂波图缓存
-
+    struct timeval tv;
     int sendSocket;
     sockaddr_in sendAddr;
 

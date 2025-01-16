@@ -27,7 +27,9 @@ class SendVideo {
 public:
     SendVideo();
     ~SendVideo();
-    void send(unsigned char *rawMessage, float2 *data, int numSamples, int rangeNum);
+    void
+    send(unsigned char *rawMessage, float2 *detectedVideo, vector<int> &chnSpeeds, int *speedChannels, int numSamples,
+         int rangeNum);
 
 private:
     unsigned int unMinPRTLen;

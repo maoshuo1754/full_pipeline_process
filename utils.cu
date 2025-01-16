@@ -110,3 +110,10 @@ std::vector<double> hammingWindow(int N) {
 bool isEqual(double a, double b, double epsilon) {
     return fabs(a - b) < epsilon;
 }
+
+void getCurrentTime(uint32_t& second, uint32_t& microsecond) {
+    struct timeval tv;
+    gettimeofday(&tv, nullptr);
+    second = static_cast<uint32_t>(tv.tv_sec % 86400);
+    microsecond = static_cast<uint32_t>(tv.tv_usec);
+}

@@ -564,6 +564,7 @@ void CudaMatrix::writeMatTxt(const std::string &filePath) const {
     }
     std::vector<cufftComplex> hostData(nrows * ncols);
     copyToHost(hostData);
+//    cout << "nrows:" << nrows << " ncols:" << ncols << endl;
 
     for (int i = 0; i < nrows; ++i) {
         for (int j = 0; j < ncols; ++j) {
@@ -693,29 +694,31 @@ void CudaMatrix::cfar(CudaMatrix &output, cudaStream_t _stream, double Pfa, int 
 }
 
 // 现在是对实部选大，而不是abs
-__global__ void maxKernelDim1(cufftComplex *data, cufftComplex *maxValues, int nrows, int ncols) {
+__global__ void maxKernelDim1(cufftComplex *data, cufftComplex *maxValues, int *speedChannels, int nrows, int ncols) {
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     int ind;
+
     if (col < ncols) {
-//        float maxVal = data[col].x;
-        float maxVal = -1;
+        float maxVal = data[col].x;
+        int maxChannel = 0;
         for (int row = 1; row < nrows; ++row) {
             ind = row * ncols + col;
 //            if (sqrt(val.x * val.x + val.y * val.y) > sqrt(maxVal.x * maxVal.x + maxVal.y * maxVal.y)) {
             if (data[ind].x > maxVal) {
                 maxVal = data[ind].x;
+                maxChannel = row;
             }
         }
         maxValues[col].x = maxVal;
         maxValues[col].y = 0;
+        speedChannels[col] = maxChannel;
     }
 }
 
-void CudaMatrix::max(CudaMatrix &output, cudaStream_t _stream, int dim) {
-    dim3 blockDim(CUDA_BLOCK_SIZE);
-    dim3 gridDim((ncols + blockDim.x - 1) / blockDim.x);
-
-    maxKernelDim1<<<gridDim, blockDim, 0, _stream>>>(data, output.data, nrows, ncols);
+void CudaMatrix::max(CudaMatrix &output, int *speedChannels, cudaStream_t _stream) {
+    dim3 blockDim_(CUDA_BLOCK_SIZE);
+    dim3 gridDim_((ncols + blockDim_.x - 1) / blockDim_.x);
+    maxKernelDim1<<<gridDim_, blockDim_, 0, _stream>>>(data, output.data, speedChannels, nrows, ncols);
 }
 
 __global__ void elementWiseSquareKernel(cufftComplex *idata, cufftComplex *odata, int size) {

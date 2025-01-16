@@ -4,8 +4,9 @@
 
 #include "SendVideo.h"
 #include "../Config.h"
+#include "../utils.h"
 
-SendVideo::SendVideo(): plot() { // , outfile("detectVideo.txt")
+SendVideo::SendVideo(): plot(){ // , outfile("detectVideo.txt")
     m_sendBufOri = new char[1024 * 1024];
     unMinPRTLen = RANGE_NUM;
     unTmpAzi = 0;
@@ -58,38 +59,45 @@ double SendVideo::asind(double x) {
     return result.real();
 }
 
-void SendVideo::send(unsigned char *rawMessage, float2 *data, int numSamples, int rangeNum) {
+
+// 输入参数：
+// - rawMessage: 报文头的原始信息
+// - detectedVideo: 检测后视频
+// - chnSpeeds: 通道对应的速度值，0.01m/s
+// - speedChannels: 检查视频每个点从哪个通道选出来的最大值，和detectedVideo大小一样
+
+void SendVideo::send(unsigned char *rawMessage, float2 *detectedVideo, vector<int> &chnSpeeds, int *speedChannels,
+                int numSamples, int rangeNum) {
 //    msgInfo->AziVal = static_cast<unsigned short>(asind(j * lambda_0 / (WAVE_NUM * d)) * 65536.0 / 360.0);
-    unsigned long dwTemp, dwTemp1;
+    uint32 dwTemp;
     int nAzmCode;
     float rAzm;
 
-    auto rawMsg = reinterpret_cast<int*>(rawMessage);
-    int freqPoint = ((rawMsg[12]) & 0x00000fff);
+    auto rawMsg = reinterpret_cast<uint32*>(rawMessage);
+    uint32 freqPoint = ((rawMsg[12]) & 0x00000fff);
     freqPoint = 3;
     double lambda_0 = c_speed / ((freqPoint * 10 + 9600) * 1e6);
     float data_amp;
 
     videoMsg.CommonHeader.wCOUNTER = rawMsg[4];  // 触发计数器
-    dwTemp = (htons(rawMsg[6]) & 0x1fffffff); // FPGA时间
-    dwTemp = (htons(rawMsg[7]) & 0x3fffffff) / 10;//0.1ms->1ms
-//    printf("FPGA TIME ms:%d\n", dwTemp);
-    int h = dwTemp / 1000 / 60 / 60;
-    int min = (dwTemp - (h * 60 * 60 * 1000)) / 1000 / 60;
+    dwTemp = rawMsg[6] / 10; // FPGA时间 //0.1ms->1ms
 
-    videoMsg.CommonHeader.dwTxSecondTime = htonl(dwTemp);        //FPGA Time
-    videoMsg.CommonHeader.dwTxMicroSecondTime = htonl(dwTemp);        //FPGA Time
+//    videoMsg.CommonHeader.dwTxSecondTime = htonl(dwTemp);        //FPGA Time
+//    videoMsg.CommonHeader.dwTxMicroSecondTime = htonl(dwTemp);        //FPGA Time
+    videoMsg.CommonHeader.dwTxSecondTime = dwTemp / 1000;
+    videoMsg.CommonHeader.dwTxMicroSecondTime = dwTemp % 1000 * 1000;
 
-    videoMsg.RadarVideoHeader.dwTxAbsSecondTime = htonl(dwTemp);
-    videoMsg.RadarVideoHeader.dwTxAbsMicroSecondTime = htonl(0);
+    videoMsg.RadarVideoHeader.dwTxAbsSecondTime = dwTemp / 1000;
+    videoMsg.RadarVideoHeader.dwTxAbsMicroSecondTime = dwTemp % 1000 * 1000;
 
-    videoMsg.RadarVideoHeader.dwTxRelMilliSecondTime_H = htonl(0);
-    videoMsg.RadarVideoHeader.dwTxRelMilliSecondTime_L = htonl(dwTemp);
+    videoMsg.RadarVideoHeader.dwTxRelMilliSecondTime_H = dwTemp / 1000;
+    videoMsg.RadarVideoHeader.dwTxRelMilliSecondTime_L = dwTemp % 1000 * 1000;
 
 //    for (int ii = 0; ii < WAVE_NUM; ii++) {
     for (int ii = WAVE_NUM-1; ii >=0; ii--) {
 
         int sec = dwTemp / 1000 % 60 + timeArray[ii];
+//        cout << "time:" << h << ":" << min << ":" << sec << endl;
 
         nAzmCode = (azi_table[31 - ii] & 0xffff);
 
@@ -101,10 +109,12 @@ void SendVideo::send(unsigned char *rawMessage, float2 *data, int numSamples, in
         if (rAzm < 0)
             rAzm += 360.f;
 
+//        cout << "[rAzm:]" << ii << " " << rAzm << endl;
         dwTemp = UINT16(rAzm / 360.0f * 65536.0f);
         videoMsg.RadarVideoHeader.wAziCode = htons(dwTemp);
 
-        auto* rowData = data + ii * NFFT;
+        auto* rowData = detectedVideo + ii * NFFT;
+        auto* rowSpeed = speedChannels + ii * NFFT;
         for (int k = 0; k < unMinPRTLen; ++k) {
             // + system_delay
             //TODO: 这个偏移会不会动
@@ -112,12 +122,13 @@ void SendVideo::send(unsigned char *rawMessage, float2 *data, int numSamples, in
             data_amp = data_amp * 1.5;
             if(data_amp > 255)
                 data_amp = 255;
+
             videoMsg.bytVideoData[k] = (unsigned char)data_amp;
+            rowSpeed[k] = chnSpeeds[rowSpeed[k + numSamples - 1 + 52]];
         }
 
-//        cout << ii << "： " <<  rAzm << endl;
+//        cout << "ii:" << ii << " [rAzm]:" << rAzm << endl;
         dwTemp = UINT16(rAzm / 360.0 * 65536.0f);
-
         videoMsg.RadarVideoHeader.wAziCode = htons(dwTemp);
 
         auto sendres = sendto(sendSocket, &videoMsg, sizeof(videoMsg), 0, (sockaddr *)&addr, sizeof(addr));
@@ -125,8 +136,8 @@ void SendVideo::send(unsigned char *rawMessage, float2 *data, int numSamples, in
             std::cerr << "Detected video sendto() failed!" << std::endl;
             break;
         }
-        plot.MainFun(reinterpret_cast<char*>(&videoMsg), sizeof(videoMsg));
+        plot.MainFun(reinterpret_cast<char *>(&videoMsg), sizeof(videoMsg), rowSpeed);
     }
-//    outfile << endl;
+
 
 }

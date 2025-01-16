@@ -27,12 +27,15 @@ struct ThreadPoolResources {
 
     int* pHeadPositions_d;           // 头位置
 
-    vector<CudaMatrix> matrices;    // 原始 IQ 数据
+    vector<CudaMatrix> IQmatrices;    // 原始 IQ 数据
     vector<CudaMatrix> CFAR_res;    // CFAR 结果
     vector<CudaMatrix> Max_res;     // 选大结果
 
-    cufftComplex* pMaxRes_d;        // 选大结果 (device)
+    cufftComplex* pMaxRes_d;        // 选大结果 (device) ，用这个初始化CudaMatrix矩阵指针
     cufftComplex* pMaxRes_h;        // 选大结果 (host)
+    int* pSpeed_d;         // 选大速度结果 (device 通道数)
+    int* pSpeed_h;         // 选大速度结果 (host 通道数)
+
     cufftHandle pcPlan;             // 脉压 FFT plan
     cufftHandle rowPlan;            // 按行 FFT plan
     cufftHandle colPlan;            // 按列 FFT plan
@@ -46,10 +49,12 @@ struct ThreadPoolResources {
         checkCudaErrors(cudaMalloc(&pHeadPositions_d, NUM_PULSE * 1.1 * sizeof(size_t)));
         checkCudaErrors(cudaMalloc(&pMaxRes_d, sizeof(cufftComplex) * WAVE_NUM * NFFT));
         pMaxRes_h = new cufftComplex[WAVE_NUM * NFFT];
+        checkCudaErrors(cudaMalloc(&pSpeed_d, sizeof(int) * WAVE_NUM * NFFT));
+        pSpeed_h = new int[WAVE_NUM * NFFT];
 
-        // 初始化 matrices 和 CFAR_res
+        // 初始化 IQmatrices 和 CFAR_res
         for (int i = 0; i < WAVE_NUM; i++) {
-            matrices.emplace_back(NUM_PULSE, NFFT, pComplex_d + i * NUM_PULSE * NFFT, true);
+            IQmatrices.emplace_back(NUM_PULSE, NFFT, pComplex_d + i * NUM_PULSE * NFFT, true);
             CFAR_res.emplace_back(NUM_PULSE, NFFT);
             Max_res.emplace_back(1, NFFT, pMaxRes_d + i * NFFT, true);
         }
@@ -76,6 +81,8 @@ struct ThreadPoolResources {
         checkCudaErrors(cudaFree(pHeadPositions_d));
         checkCudaErrors(cudaFree(pMaxRes_d));
         delete[] pMaxRes_h;
+        checkCudaErrors(cudaFree(pSpeed_d));
+        delete[] pSpeed_h;
 
         checkCufftErrors(cufftDestroy(pcPlan));
         checkCufftErrors(cufftDestroy(rowPlan));
@@ -114,6 +121,7 @@ private:
     uint64_t uint64Pattern;
     double Bandwidth;
     double pulseWidth;
+    vector<int> chnSpeeds;
 
     char timebuf[100];
     ofstream logFile;

@@ -13,6 +13,7 @@
 #include <string>
 #include <cuComplex.h>
 #include <chrono>
+#include <sys/time.h>
 
 std::vector<cufftComplex> PCcoef(double BandWidth, double PulseWidth, double Fs, int _NFFT);
 
@@ -29,5 +30,7 @@ void checkCudaErrors(cudaError_t result);
 std::vector<double> hammingWindow(int N);
 
 bool isEqual(double a, double b, double epsilon = 1e-6);
+
+void getCurrentTime(uint32_t& second, uint32_t& microsecond);
 
 #endif //CUDAPROJECT_UTILS_H

@@ -2,6 +2,7 @@
 #include "Config.h"
 #include <cuda_runtime.h>
 #include <iostream>
+#include <algorithm>
 
 ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue) :
         stop(false),
@@ -142,11 +143,35 @@ void ThreadPool::generatePCcoefMatrix(unsigned char *rawMessage, cufftHandle &pc
     if (!isEqual(PRT, prevPRT) || !isEqual(pulseWidth, prevPulseWidth) || !isEqual(fLFMStartWord, prevfLFMStartWord)) {
         cout << "Param changed, regenerate pulse compress coefficient." << endl;
         numSamples = round(pulseWidth * Fs);  // 31.25e6
-
         Bandwidth = (Fs_system - fLFMStartWord / pow(2.0f, 32) * Fs_system) * 2.0;
+        int freqPoint = (*(uint32_t *)(rawMessage + 12 * 4) & 0x00000fff);
+        freqPoint = 3;
+        double lambda = c_speed / ((freqPoint * 10 + 9600) * 1e6);
 
         cout << "Bandwidth:" << Bandwidth << endl;
         cout << "PulseWidth:" << pulseWidth << endl;
+        cout << "lambda:" << lambda << endl;
+
+
+        chnSpeeds.clear();
+        double delta_v = lambda / PRT / NUM_PULSE / 2.0f; //两个滤波器之间的速度间隔
+        double blind_v = lambda / PRT / 2.0f;
+
+        for(int i = 0; i < NUM_PULSE; ++i){
+            int v;
+            if (i < NUM_PULSE / 2){
+                v = static_cast<int>(std::round(delta_v * i * 100)) ;
+            }
+            else{
+                v = static_cast<int>(std::round((delta_v * i - blind_v) * 100)) ;
+            }
+            chnSpeeds.push_back(v);
+        }
+        cout << "speed channel"  << " " << chnSpeeds[1931]/100.0 << endl;
+//        for(int i = 1020; i < 1030; i++) {
+//            cout << "speed channel" << i << " " << chnSpeeds[i] << endl;
+//        }
+
         vector<cufftComplex> PcCoef = PCcoef(Bandwidth, pulseWidth, Fs, NFFT);
         PcCoefMatrix.copyFromHost(_stream, 1, NFFT, PcCoef.data());
         PcCoefMatrix.fft(pcPlan);
@@ -193,20 +218,20 @@ void ThreadPool::processData(ThreadPoolResources &resources) {
                                                                        resources.pHeadPositions_d, numHeads, rangeNum);
 
     processPulseGroupData(resources, rangeNum);
-
-//    cudaStreamSynchronize(streams[threadID]);
-//    CudaMatrix tmp(32, NFFT, pMaxRes_d, true);
-//    tmp.writeMatTxt("wave_res.txt");
-
     // 选大结果拷贝回内存
-    checkCudaErrors(
-            cudaMemcpyAsync(resources.pMaxRes_h, resources.pMaxRes_d, sizeof(cufftComplex) * CAL_WAVE_NUM * NFFT,
+    checkCudaErrors(cudaMemcpyAsync(resources.pMaxRes_h, resources.pMaxRes_d, sizeof(cufftComplex) * CAL_WAVE_NUM * NFFT,
                             cudaMemcpyDeviceToHost,
                             streams[threadID]));
 
+    // 速度通道拷贝回内存
+    checkCudaErrors(cudaMemcpyAsync(resources.pSpeed_h, resources.pSpeed_d, sizeof(int) * CAL_WAVE_NUM * NFFT,
+                                    cudaMemcpyDeviceToHost,
+                                    streams[threadID]));
+
+
     cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
 
-    sender.send(resources.rawMessage, resources.pMaxRes_h, numSamples, rangeNum);
+    sender.send(resources.rawMessage, resources.pMaxRes_h, chnSpeeds, resources.pSpeed_h, numSamples, rangeNum);
 
     cout << "thread " << threadID << " process finished" << endl;
 }
@@ -216,7 +241,7 @@ void ThreadPool::processData(ThreadPoolResources &resources) {
 void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int rangeNum) {
 //    PcCoefMatrix.fft(pcPlan);
     int threadID = resources.threadID;
-    auto &matrices = resources.matrices;
+    auto &matrices = resources.IQmatrices;
     auto &CFAR_res = resources.CFAR_res;
     auto &Max_res = resources.Max_res;
 
@@ -233,7 +258,7 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
         // 归一化，同时连ifft的归一化一起做了
         matrices[i].scale(streams[threadID], scale);
 
-//        matrices[i].MTI(streams[threadID], 3);
+//        IQmatrices[i].MTI(streams[threadID], 3);
 
         /*coherent integration*/
         for (int j = 0; j < INTEGRATION_TIMES; j++) {
@@ -245,7 +270,10 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
         matrices[i].cfar(CFAR_res[i], streams[threadID], Pfa, numGuardCells, numRefCells, numSamples - 1,
                          numSamples + rangeNum);
 
-        CFAR_res[i].max(Max_res[i], streams[threadID], 1);
+        auto* pSpeedChannels = resources.pSpeed_d + i * NFFT;
+//        CFAR_res[i].printShape();
+
+        CFAR_res[i].max(Max_res[i], pSpeedChannels, streams[threadID]);
         Max_res[i].scale(streams[threadID], 1.0f / normFactor * 255);
     }
 }

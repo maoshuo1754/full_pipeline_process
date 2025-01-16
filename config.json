@@ -6,9 +6,9 @@
   "INTEGRATION_TIMES": 1,
   "normFactor": 1024,
 
-  "send_ip": "192.168.7.1",
+  "send_ip": "127.0.0.1",
   "send_port": 0,
-  "multicast_ip": "239.168.6.254",
+  "multicast_ip": "127.0.0.1",
   "multicast_port": 8192,
   "azi_table": [
     41965, 41965, 41965, 41965, 43008, 45056, 47104, 49152,
