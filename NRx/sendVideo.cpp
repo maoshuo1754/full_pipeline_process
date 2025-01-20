@@ -76,14 +76,12 @@ void SendVideo::send(unsigned char *rawMessage, float2 *detectedVideo, vector<in
     auto rawMsg = reinterpret_cast<uint32*>(rawMessage);
     uint32 freqPoint = ((rawMsg[12]) & 0x00000fff);
     freqPoint = 3;
-    double lambda_0 = c_speed / ((freqPoint * 10 + 9600) * 1e6);
+    double lambda_0 = c_speed / ((freqPoint * 10 + 8110) * 1e6);
     float data_amp;
 
     videoMsg.CommonHeader.wCOUNTER = rawMsg[4];  // 触发计数器
-    dwTemp = rawMsg[6] / 10; // FPGA时间 //0.1ms->1ms
+    dwTemp = rawMsg[6] / 10 + 8*60*60*1000; // FPGA时间 //0.1ms->1ms + 8h
 
-//    videoMsg.CommonHeader.dwTxSecondTime = htonl(dwTemp);        //FPGA Time
-//    videoMsg.CommonHeader.dwTxMicroSecondTime = htonl(dwTemp);        //FPGA Time
     videoMsg.CommonHeader.dwTxSecondTime = dwTemp / 1000;
     videoMsg.CommonHeader.dwTxMicroSecondTime = dwTemp % 1000 * 1000;
 
@@ -94,7 +92,7 @@ void SendVideo::send(unsigned char *rawMessage, float2 *detectedVideo, vector<in
     videoMsg.RadarVideoHeader.dwTxRelMilliSecondTime_L = dwTemp % 1000 * 1000;
 
 //    for (int ii = 0; ii < WAVE_NUM; ii++) {
-    for (int ii = WAVE_NUM-1; ii >=0; ii--) {
+    for (int ii = WAVE_NUM - 1; ii >=0; ii--) {
 
         int sec = dwTemp / 1000 % 60 + timeArray[ii];
 //        cout << "time:" << h << ":" << min << ":" << sec << endl;
@@ -119,7 +117,7 @@ void SendVideo::send(unsigned char *rawMessage, float2 *detectedVideo, vector<in
             // + system_delay
             //TODO: 这个偏移会不会动
             data_amp = rowData[k + numSamples - 1 + 52].x;
-            data_amp = data_amp * 1.5;
+            data_amp = data_amp * 1.0;
             if(data_amp > 255)
                 data_amp = 255;
 

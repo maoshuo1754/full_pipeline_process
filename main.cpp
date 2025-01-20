@@ -28,8 +28,8 @@ int main(){
     cout << "Working Threads Num:" << num_threads << endl;
     ThreadPool thread_pool(num_threads, sharedQueue);
 
-    thread t(runCommandDelayed, "/home/csic724/CLionProjects/writer/cmake-build-debug/writer");
-    t.detach();
+    // thread t(runCommandDelayed, "/home/csic724/CLionProjects/writer/cmake-build-debug/writer");
+    // t.detach();
 
     thread_pool.run();
 }

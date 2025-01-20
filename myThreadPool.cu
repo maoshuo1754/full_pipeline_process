@@ -169,8 +169,10 @@ void ThreadPool::generatePCcoefMatrix(unsigned char *rawMessage, cufftHandle &pc
         }
         cout << "speed channel"  << " " << chnSpeeds[1931]/100.0 << endl;
 //        for(int i = 1020; i < 1030; i++) {
-//            cout << "speed channel" << i << " " << chnSpeeds[i] << endl;
+//        for(int i = 1930; i < 1940; i++) {
+//                cout << "speed channel" << i << " " << chnSpeeds[i] << endl;
 //        }
+
 
         vector<cufftComplex> PcCoef = PCcoef(Bandwidth, pulseWidth, Fs, NFFT);
         PcCoefMatrix.copyFromHost(_stream, 1, NFFT, PcCoef.data());
@@ -239,7 +241,9 @@ void ThreadPool::processData(ThreadPoolResources &resources) {
 
 // 在GPU处理一个脉组的所有波束的数据，全流程处理，包括脉压、积累、CFAR、选大。
 void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int rangeNum) {
-//    PcCoefMatrix.fft(pcPlan);
+    static int count = 0;
+    count++;
+    cout << "count:" << count << endl;
     int threadID = resources.threadID;
     auto &matrices = resources.IQmatrices;
     auto &CFAR_res = resources.CFAR_res;
@@ -264,14 +268,19 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
         for (int j = 0; j < INTEGRATION_TIMES; j++) {
             matrices[i].fft_by_col(resources.colPlan);
         }
-
+        
         /*cfar*/
         matrices[i].abs(streams[threadID]);
         matrices[i].cfar(CFAR_res[i], streams[threadID], Pfa, numGuardCells, numRefCells, numSamples - 1,
                          numSamples + rangeNum);
 
         auto* pSpeedChannels = resources.pSpeed_d + i * NFFT;
-//        CFAR_res[i].printShape();
+
+//        cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
+//        if (count == 20 && i == 19) {
+//            CFAR_res[i].writeMatTxt("20_19.txt");
+//            cout << "20_19.txt write finished" << endl;
+//        }
 
         CFAR_res[i].max(Max_res[i], pSpeedChannels, streams[threadID]);
         Max_res[i].scale(streams[threadID], 1.0f / normFactor * 255);
@@ -303,7 +312,7 @@ void ThreadPool::waitForProcessingSignal(int threadID) {
 // 循环将内存的数据拷贝到显存(未解包)，每个线程对应一个脉组的数据
 void ThreadPool::copyToThreadMemory() {
     int block_index = sharedQueue->read_index;
-//    std::cout << "Block index: " << block_index << std::endl << std::endl;
+    // std::cout << "Block index: " << block_index << std::endl << std::endl;
 
     unsigned int seqNum;
 
