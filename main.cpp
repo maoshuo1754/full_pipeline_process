@@ -11,7 +11,10 @@ void runCommandDelayed(const string& commond) {
 }
 
 int main(){
-    loadConfig("/home/csic724/CLionProjects/PcieReader/config.json");
+    string configFilePath = "/home/csic724/CLionProjects/PcieReader/config.json";
+    loadConfig(configFilePath);
+    std::thread configMonitor(monitorConfig, configFilePath, loadConfig);
+
 //    cout << sizeof (unsigned int ) << endl;
     int shmid = shmget(SHM_KEY, sizeof(SharedQueue), 0666 | IPC_CREAT);
     if (shmid == -1) throw std::runtime_error("Failed to create shared memory");
@@ -28,8 +31,11 @@ int main(){
     cout << "Working Threads Num:" << num_threads << endl;
     ThreadPool thread_pool(num_threads, sharedQueue);
 
-    // thread t(runCommandDelayed, "/home/csic724/CLionProjects/writer/cmake-build-debug/writer");
-    // t.detach();
+    thread t(runCommandDelayed, "/home/csic724/CLionProjects/writer/cmake-build-debug/writer");
+    t.detach();
 
     thread_pool.run();
+
+    monitorConfigRunning = false;
+    configMonitor.join();
 }

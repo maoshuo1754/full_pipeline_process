@@ -4,7 +4,7 @@
   "num_threads": 4,
   "CAL_WAVE_NUM": 32,
   "INTEGRATION_TIMES": 1,
-  "normFactor": 1024,
+  "normFactor": 256,
 
   "send_ip": "127.0.0.1",
   "send_port": 0,

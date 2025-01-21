@@ -33,4 +33,6 @@ bool isEqual(double a, double b, double epsilon = 1e-6);
 
 void getCurrentTime(uint32_t& second, uint32_t& microsecond);
 
+unsigned int FourChars2Uint(char *startAddr);
+
 #endif //CUDAPROJECT_UTILS_H

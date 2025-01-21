@@ -2,9 +2,13 @@
 // Created by csic724 on 2024/12/17.
 //
 #include "Config.h"
+
+#include <filesystem>
 #include <nlohmann/json.hpp> // 使用 JSON 库
 #include <fstream>
 #include <iostream>
+#include <mutex>
+#include <thread>
 
 using json = nlohmann::json;
 
@@ -67,4 +71,26 @@ void loadConfig(const std::string& filename) {
     numGuardCells = config["numGuardCells"];
 
     std::cout << "Configuration loaded successfully.\n";
+}
+
+
+
+void monitorConfig(const std::string& filename, void (*loadConfig)(const std::string&)) {
+    namespace fs = std::filesystem;
+    auto lastWriteTime = fs::last_write_time(filename);
+
+    while(monitorConfigRunning) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        auto currentWriteTime = fs::last_write_time(filename);
+        if(lastWriteTime < currentWriteTime) {
+            std::cout << "Config file changes! reloading..." << std::endl;
+            lastWriteTime = currentWriteTime;
+
+            try {
+                loadConfig(filename);
+            } catch(const std::exception& e) {
+                std::cerr << e.what() << std::endl;
+            }
+        }
+    }
 }

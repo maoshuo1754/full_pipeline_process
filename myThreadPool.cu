@@ -167,7 +167,7 @@ void ThreadPool::generatePCcoefMatrix(unsigned char *rawMessage, cufftHandle &pc
             }
             chnSpeeds.push_back(v);
         }
-        cout << "speed channel"  << " " << chnSpeeds[1931]/100.0 << endl;
+        // cout << "speed channel"  << " " << chnSpeeds[1931]/100.0 << endl;
 //        for(int i = 1020; i < 1030; i++) {
 //        for(int i = 1930; i < 1940; i++) {
 //                cout << "speed channel" << i << " " << chnSpeeds[i] << endl;
@@ -322,6 +322,8 @@ void ThreadPool::copyToThreadMemory() {
     for (int i = 0; i < 1024; i++) {
         size_t indexOffset = block_index * INDEX_SIZE + i * 4;
         indexValue = *(unsigned int *) (sharedQueue->index_buffer + indexOffset);
+        // indexValue = FourChars2Uint(reinterpret_cast<char*>(sharedQueue->index_buffer + indexOffset));
+        // cout << "index:" << indexValue << endl;
         // Check pattern match
         if (indexValue >= block_index * BLOCK_SIZE &&
             indexValue < (block_index + 1) * BLOCK_SIZE &&

@@ -117,3 +117,11 @@ void getCurrentTime(uint32_t& second, uint32_t& microsecond) {
     second = static_cast<uint32_t>(tv.tv_sec % 86400);
     microsecond = static_cast<uint32_t>(tv.tv_usec);
 }
+
+unsigned int FourChars2Uint(char *startAddr) {
+    return static_cast<uint8_t>(startAddr[0]) << 24
+           | static_cast<uint8_t>(startAddr[1]) << 16
+           | static_cast<uint8_t>(startAddr[2]) << 8
+           | static_cast<uint8_t>(startAddr[3]);
+
+}

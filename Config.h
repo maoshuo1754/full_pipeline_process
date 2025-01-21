@@ -8,6 +8,8 @@
 #include <vector>
 #include <string>
 
+#include <atomic>
+
 #define WAVE_NUM 32             // 波束数
 #define NUM_PULSE 2048          // 一个波束中的脉冲数
 #define NFFT 4096               // 一个脉冲中fft的点数，计算方法为 NFFT = 2 ** nextpow2(RANGE_NUM + numSamples - 1)
@@ -44,5 +46,8 @@ extern int numRefCells;
 // 数据缓冲区声明
 
 void loadConfig(const std::string& filename); // 声明配置加载函数
+
+inline std::atomic<bool> monitorConfigRunning(true);
+void monitorConfig(const std::string& filename, void (*loadConfig)(const std::string&)); // 参数实时更新
 
 #endif //READER_CONFIG_H
