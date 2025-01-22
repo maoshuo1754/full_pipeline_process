@@ -167,8 +167,7 @@ void ThreadPool::generatePCcoefMatrix(unsigned char *rawMessage, cufftHandle &pc
             }
             chnSpeeds.push_back(v);
         }
-        // cout << "speed channel"  << " " << chnSpeeds[1931]/100.0 << endl;
-//        for(int i = 1020; i < 1030; i++) {
+
 //        for(int i = 1930; i < 1940; i++) {
 //                cout << "speed channel" << i << " " << chnSpeeds[i] << endl;
 //        }
@@ -319,7 +318,7 @@ void ThreadPool::copyToThreadMemory() {
     unsigned int indexValue; // 当前packet相对于1GB的起始地址
     unsigned long copyStartAddr = block_index * BLOCK_SIZE; // 当前Block相对于1GB的复制起始地址
     bool startFlag;
-    for (int i = 0; i < 1024; i++) {
+    for (int i = 0; i < INDEX_SIZE / sizeof(unsigned int); i++) {
         size_t indexOffset = block_index * INDEX_SIZE + i * 4;
         indexValue = *(unsigned int *) (sharedQueue->index_buffer + indexOffset);
         // indexValue = FourChars2Uint(reinterpret_cast<char*>(sharedQueue->index_buffer + indexOffset));

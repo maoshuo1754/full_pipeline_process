@@ -2,11 +2,9 @@
 #include <sstream>
 #include "include/NRxPIM.h"
 #include "include/NRxParamsMgr.h"
-#include "include/NRxLogger.h"
 #include "libs/include/timer/Timer.h"
 #include "MyStruct.h"
 #include "arpa/inet.h"
-#include <include/NRxCrossPlatformFunc.h>
 #include <include/otherInterface.h>
 
 static const int32 TEMP_MAX_SECTOR_NUM(32);

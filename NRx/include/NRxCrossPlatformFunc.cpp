@@ -28,7 +28,7 @@ string NRxMultiPlatform::getExePath()
 
 #ifdef WIN32
     if ((buffer = _getcwd(NULL, 0)) == NULL) {
-        // @ TODO: log info
+        //
         printf("NRxCrossPlatformFunc Warning: cann't get current working directory\n");
     } else {
         exePath = buffer;
@@ -36,7 +36,7 @@ string NRxMultiPlatform::getExePath()
     }
 #else // linux
     if ((buffer = getcwd(NULL, 0)) == NULL) {
-        // @ TODO: log info
+        //
         printf("NRxCrossPlatformFunc Warning: cann't get current working directory\n");
     } else {
         exePath = buffer;
@@ -62,7 +62,7 @@ std::string NRxMultiPlatform::relPath2AbsPath(const std::string& relPath)
     _fullpath(dir, relPath.c_str(), 1024);
 #else
     char dir[1024 * 1024];
-    realpath(relPath.c_str(), dir);
+    auto res = realpath(relPath.c_str(), dir);
 #endif
     std::stringstream ss;
     ss << dir;

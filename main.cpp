@@ -7,7 +7,7 @@
 
 void runCommandDelayed(const string& commond) {
     this_thread::sleep_for(chrono::milliseconds(600));
-    system(commond.c_str());
+    auto res = system(commond.c_str());
 }
 
 int main(){

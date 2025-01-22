@@ -23,18 +23,18 @@ using namespace std::chrono;
 struct ThreadPoolResources {
     int threadID;                   // 线程ID
     cudaStream_t stream;            // cuda流，用于异步处理
-    cufftComplex* pComplex_d;         // 解包后的脉组数据
+    cufftComplex* pComplex_d;       // 解包后的脉组数据
 
-    int* pHeadPositions_d;           // 头位置
+    int* pHeadPositions_d;          // 头位置
 
-    vector<CudaMatrix> IQmatrices;    // 原始 IQ 数据
+    vector<CudaMatrix> IQmatrices;  // 原始 IQ 数据
     vector<CudaMatrix> CFAR_res;    // CFAR 结果
     vector<CudaMatrix> Max_res;     // 选大结果
 
     cufftComplex* pMaxRes_d;        // 选大结果 (device) ，用这个初始化CudaMatrix矩阵指针
     cufftComplex* pMaxRes_h;        // 选大结果 (host)
-    int* pSpeed_d;         // 选大速度结果 (device 通道数)
-    int* pSpeed_h;         // 选大速度结果 (host 通道数)
+    int* pSpeed_d;                  // 选大速度结果 (device 通道数)
+    int* pSpeed_h;                  // 选大速度结果 (host 通道数)
 
     cufftHandle pcPlan;             // 脉压 FFT plan
     cufftHandle rowPlan;            // 按行 FFT plan
