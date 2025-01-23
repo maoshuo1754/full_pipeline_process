@@ -38,8 +38,8 @@ private:
     int sendSocket;
     VideoToNRXGUI videoMsg;
     int timeArray[32];
-    sockaddr_in addr;
-    sockaddr_in myaddr;
+    sockaddr_in remoteAddr;
+    sockaddr_in localAddr;
     Plot plot;
     static double asind(double x);
     ofstream outfile;

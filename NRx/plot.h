@@ -198,8 +198,8 @@ private:
     bool useClutterMap; //杂波图开关
     std::vector<char*> clutterMap; //杂波图缓存
     struct timeval tv;
-    int sendSocket;
-    sockaddr_in sendAddr;
+    int localSocket;
+    sockaddr_in remotePlotAddr;
 
 
 private:

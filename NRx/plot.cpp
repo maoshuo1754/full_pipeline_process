@@ -6,6 +6,7 @@
 #include "MyStruct.h"
 #include "arpa/inet.h"
 #include <include/otherInterface.h>
+#include <../Config.h>
 
 static const int32 TEMP_MAX_SECTOR_NUM(32);
 static const int32 MaxPlotNumInPlotDataSet(1024);
@@ -152,12 +153,6 @@ Plot::~Plot() {
 }
 
 void Plot::MainFun(char *dataBuf, unsigned int dataSize, int *speeds) {
-    //    dataBuf以下组成
-    //    NRX_COMMON_HEADER CommonHeader;
-    //    RX_RadarVideo_Head RadarVideoHeader;
-    //    UINT8 bytVideoData[MAX_DISTANCE_ELEMENT_NUMBER];
-    //    NRX_COMMON_TAIL CommonTail;
-
     // 将dataBuf转为NRx8bitPulse
     XX92NRx8bit(dataBuf);
 
@@ -167,9 +162,12 @@ void Plot::MainFun(char *dataBuf, unsigned int dataSize, int *speeds) {
 }
 
 void Plot::setSocket(int socket, sockaddr_in addr) {
-    sendSocket = socket;
-    sendAddr = addr;
-    sendAddr.sin_port = htons(8196);
+    memset(&remotePlotAddr, 0, sizeof(remotePlotAddr));
+    remotePlotAddr.sin_family = AF_INET;
+    remotePlotAddr.sin_port = htons(remote_plot_port);  // 0x2001是8192  0x2002岁8194
+    remotePlotAddr.sin_addr.s_addr = inet_addr(remote_plot_ip.c_str());
+
+    localSocket = socket;
 }
 
 
@@ -912,8 +910,12 @@ void Plot::PlotNetSend(NRx8BitPulse *curPulse) {
                             plotinfo->maxDoppDiff = PreSecPlotBuff[idx][idx1].maxDoppDiff;
                             // plotinfo->amp = PreSecPlotBuff[idx][idx1].maxDoppDiff;
 //                            cout << plotinfo->dis << " " << plotinfo->azi << " doppVel:" << PreSecPlotBuff[idx][idx1].doppVel << endl;
-                            plotinfo->amp = abs(PreSecPlotBuff[idx][idx1].doppVel);
-//                            printf("plotinfo->amp: %d\n", plotinfo->amp);
+                            if (velocityCoalescenceMethod == 0) {
+                                plotinfo->amp = abs(PreSecPlotBuff[idx][idx1].doppVel);
+                            }
+                            else {
+                                plotinfo->amp = PreSecPlotBuff[idx][idx1].maxDoppDiff;
+                            }
                             /* null ********************************************************
                             plotinfo.saturate = PreSecPlotBuff[idx][idx1].saturate;
                             plotinfo.SNR = PreSecPlotBuff[idx][idx1].SNR;
@@ -954,7 +956,7 @@ void Plot::PlotNetSend(NRx8BitPulse *curPulse) {
                     header->HostToNetEndian(*header);
 
                     // 发送凝聚后的点迹信息
-                    auto sendRes = sendto(sendSocket, m_outbuf, usMsgBytes, 0, (sockaddr *)&sendAddr, sizeof(sendAddr));
+                    auto sendRes = sendto(localSocket, m_outbuf, usMsgBytes, 0, (sockaddr *)&remotePlotAddr, sizeof(remotePlotAddr));
 
                     if (sendRes < 0) {
                         std::cerr << "sendto() in Plot failed!" << std::endl;
@@ -1082,7 +1084,7 @@ void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPul
     //速度过程变量
     double dSumSpeed = 0.0;
     double dMaxSpeed = -65536.0;
-    double dPowerSum = 65536.0;
+    double dPowerSum = 0.0;
 
     uint32 uiDisRowIdx = 0;          // 格子行号
     uint32 uiStartDisRowIdx = 0;     // 格子起始行号
@@ -1144,7 +1146,7 @@ void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPul
                     double tmp_speed = speed[idx3] / 100.0; // 质心法
                     dSumSpeed += tmp_speed * dCurPulseData[idx3]; // 求和
                     dPowerSum += dCurPulseData[idx3]; // 功率求和
-                    dMaxSpeed = max(dMaxSpeed, tmp_speed); // 取大
+                    dMaxSpeed = max(dMaxSpeed, abs(tmp_speed)); // 取大
 
                     if (curBaGAmp != nullptr) {
                         dSumBaGAmp += curBaGAmp->data[idx3];
@@ -1221,7 +1223,7 @@ void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPul
                 // TODO 速度过程变量重置
                 dSumSpeed = 0.0;
                 dPowerSum = 0.0;
-                dMaxSpeed = -65536.0;
+                dMaxSpeed = 0.0;
                 bDisDetStart = false;
                 /* ********************************************************** */
             } else // 如果未开始，则继续滑动
@@ -1393,7 +1395,7 @@ void Plot::PlotsDetect(NRx8BitPulse *curPulse) {
                         int32 dispHeartPort = 8200;
 //                        int32 dispHeartPort = getIntParam("RadarDataDistribution", "dispHeartPort");
 //                        udpSender::udpSendMsg(&swStateInfo, sizeof(NRxSWStateInfo), dispIP, dispHeartPort, "heart");
-                        auto sendRes = sendto(sendSocket, &swStateInfo, sizeof(NRxSWStateInfo), 0, (sockaddr *)&sendAddr, sizeof(sendAddr));
+                        auto sendRes = sendto(localSocket, &swStateInfo, sizeof(NRxSWStateInfo), 0, (sockaddr *)&remotePlotAddr, sizeof(remotePlotAddr));
 
                         if (sendRes < 0) {
                             std::cerr << "sendto() in Plot failed!" << std::endl;
@@ -1497,7 +1499,7 @@ void Plot::PlotsDetect(NRx8BitPulse *curPulse) {
                             // TODO 根据局部变量填写NRxPlot对应的字段，注意单位
                             // cout << PlotInfoBuff[usSectorPlotNum].dis << " " << PlotInfoBuff[usSectorPlotNum].azi / 65536 * 360 << " cal speed:" << dPlotSpeed / dPlotPowerSum * 10 << endl;
                             PlotInfoBuff[usSectorPlotNum].doppVel =  dPlotSpeed / dPlotPowerSum * 10;
-                            PlotInfoBuff[usSectorPlotNum].maxDoppDiff = dPlotMaxSpeed;
+                            PlotInfoBuff[usSectorPlotNum].maxDoppDiff = dPlotMaxSpeed * 10.0;
 
                             PlotInfoBuff[usSectorPlotNum].plotType = 0;
                             PlotInfoBuff[usSectorPlotNum].plotConfLv = 0;

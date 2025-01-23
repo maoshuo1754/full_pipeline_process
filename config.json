@@ -4,12 +4,15 @@
   "num_threads": 4,
   "CAL_WAVE_NUM": 32,
   "INTEGRATION_TIMES": 1,
-  "normFactor": 256,
+  "normFactor": 1024,
 
-  "send_ip": "127.0.0.1",
-  "send_port": 0,
-  "multicast_ip": "127.0.0.1",
-  "multicast_port": 8192,
+  "local_video_ip": "127.0.0.1",
+  "local_video_port": 0,
+  "remote_video_ip": "127.0.0.1",
+  "remote_video_port": 8192,
+  "remote_plot_ip": "127.0.0.1",
+  "remote_plot_port": 8196,
+
   "azi_table": [
     41965, 41965, 41965, 41965, 43008, 45056, 47104, 49152,
     51200, 53248, 55296, 57344, 59392, 61440, 63488, 0,
@@ -26,6 +29,8 @@
 
   "Pfa": 1e-8,
   "numGuardCells": 5,
-  "numRefCells": 20
+  "numRefCells": 20,
+
+  "velocityCoalescenceMethod": 0
 }
 

@@ -23,20 +23,20 @@ SendVideo::SendVideo(): plot(){ // , outfile("detectVideo.txt")
         cerr << "Send Socket init failed!" << endl;
     }
 
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(multicast_port);  // 0x2001是8192  0x2002岁8194
-    addr.sin_addr.s_addr = inet_addr(multicast_ip.c_str());
+    memset(&remoteAddr, 0, sizeof(remoteAddr));
+    remoteAddr.sin_family = AF_INET;
+    remoteAddr.sin_port = htons(remote_video_port);  // 0x2001是8192  0x2002岁8194
+    remoteAddr.sin_addr.s_addr = inet_addr(remote_video_ip.c_str());
 
-    memset(&myaddr, 0, sizeof(myaddr));
-    myaddr.sin_family = AF_INET;
-    myaddr.sin_port = htons(send_port);  // 0x2001是8192  0x2002岁8194
-    myaddr.sin_addr.s_addr = inet_addr(send_ip.c_str());
+    memset(&localAddr, 0, sizeof(localAddr));
+    localAddr.sin_family = AF_INET;
+    localAddr.sin_port = htons(local_video_port);  // 0x2001是8192  0x2002岁8194
+    localAddr.sin_addr.s_addr = inet_addr(local_video_ip.c_str());
 
-    std::cout << "send_ip:      " << send_ip << ":" << send_port <<std::endl;
-    std::cout << "multicast_ip: " << multicast_ip << ":" << multicast_port << std::endl;
+    std::cout << "send_ip:      " << local_video_ip << ":" << local_video_port <<std::endl;
+    std::cout << "multicast_ip: " << remote_video_ip << ":" << remote_video_port << std::endl;
 
-    if (bind(sendSocket, (sockaddr*)&myaddr, sizeof(myaddr)) < 0)
+    if (bind(sendSocket, (sockaddr*)&localAddr, sizeof(localAddr)) < 0)
     {
         close(sendSocket);
         std::cerr << "bind error\n";
@@ -44,7 +44,7 @@ SendVideo::SendVideo(): plot(){ // , outfile("detectVideo.txt")
         std::cout << "Socket bind success" << std::endl;
     }
 
-    plot.setSocket(sendSocket, addr);
+    plot.setSocket(sendSocket, remoteAddr);
 
 }
 
@@ -129,7 +129,7 @@ void SendVideo::send(unsigned char *rawMessage, float2 *detectedVideo, vector<in
         dwTemp = UINT16(rAzm / 360.0 * 65536.0f);
         videoMsg.RadarVideoHeader.wAziCode = htons(dwTemp);
 
-        auto sendres = sendto(sendSocket, &videoMsg, sizeof(videoMsg), 0, (sockaddr *)&addr, sizeof(addr));
+        auto sendres = sendto(sendSocket, &videoMsg, sizeof(videoMsg), 0, (sockaddr *)&remoteAddr, sizeof(remoteAddr));
         if (sendres < 0) {
             std::cerr << "Detected video sendto() failed!" << std::endl;
             break;

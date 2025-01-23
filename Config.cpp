@@ -24,10 +24,12 @@ std::vector<int> azi_table;
 double c_speed;
 double d;
 
-std::string send_ip;
-int send_port;
-std::string multicast_ip;
-int multicast_port;
+std::string local_video_ip;
+int local_video_port;
+std::string remote_video_ip;
+int remote_video_port;
+std::string remote_plot_ip;
+int remote_plot_port;
 
 double Fs;
 double Fs_system;
@@ -36,6 +38,8 @@ int system_delay;
 double Pfa;
 int numGuardCells;
 int numRefCells;
+
+int velocityCoalescenceMethod;
 
 // 配置加载函数实现
 void loadConfig(const std::string& filename) {
@@ -57,10 +61,14 @@ void loadConfig(const std::string& filename) {
     c_speed = config["c_speed"];
     d = config["d"];
 
-    send_ip = config["send_ip"].get<std::string>();
-    multicast_ip = config["multicast_ip"].get<std::string>();
-    multicast_port = config["multicast_port"];
-    send_port = config["send_port"];
+    local_video_ip = config["local_video_ip"].get<std::string>();
+    local_video_port = config["local_video_port"];
+
+    remote_video_ip = config["remote_video_ip"].get<std::string>();
+    remote_video_port = config["remote_video_port"];
+
+    remote_plot_ip = config["remote_plot_ip"].get<std::string>();
+    remote_plot_port = config["remote_plot_port"];
 
     Fs = config["Fs"];
     Fs_system = config["Fs_system"];
@@ -69,6 +77,8 @@ void loadConfig(const std::string& filename) {
     Pfa = config["Pfa"];
     numRefCells = config["numRefCells"];
     numGuardCells = config["numGuardCells"];
+
+    velocityCoalescenceMethod = config["velocityCoalescenceMethod"];
 
     std::cout << "Configuration loaded successfully.\n";
 }

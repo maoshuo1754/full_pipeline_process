@@ -249,7 +249,8 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
     auto &Max_res = resources.Max_res;
 
     float scale = 1.0f / sqrt(Bandwidth * pulseWidth) / NUM_PULSE / RANGE_NUM;
-    for (int i = 0; i < CAL_WAVE_NUM; i++) {
+    // for (int i = 0; i < CAL_WAVE_NUM; i++) {
+    for (int i = 18; i < 21; i++) {
 //        string filename = "data" + to_string(i) + "_max.txt";
         /*Pulse Compression*/
         matrices[i].fft(resources.rowPlan);
@@ -267,6 +268,13 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
         for (int j = 0; j < INTEGRATION_TIMES; j++) {
             matrices[i].fft_by_col(resources.colPlan);
         }
+
+        cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
+        if (count == 1) {
+            string name = "pulse_" + to_string(count) + "_wave_" + to_string(i) +  + ".txt";
+            matrices[i].writeMatTxt(name);
+            cout << name << " write finished" << endl;
+        }
         
         /*cfar*/
         matrices[i].abs(streams[threadID]);
@@ -275,11 +283,7 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
 
         auto* pSpeedChannels = resources.pSpeed_d + i * NFFT;
 
-//        cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
-//        if (count == 20 && i == 19) {
-//            CFAR_res[i].writeMatTxt("20_19.txt");
-//            cout << "20_19.txt write finished" << endl;
-//        }
+
 
         CFAR_res[i].max(Max_res[i], pSpeedChannels, streams[threadID]);
         Max_res[i].scale(streams[threadID], 1.0f / normFactor * 255);

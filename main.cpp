@@ -11,6 +11,9 @@ void runCommandDelayed(const string& commond) {
 }
 
 int main(){
+
+    auto p = new cufftComplex[WAVE_NUM * NUM_PULSE * NFFT];
+
     string configFilePath = "/home/csic724/CLionProjects/PcieReader/config.json";
     loadConfig(configFilePath);
     std::thread configMonitor(monitorConfig, configFilePath, loadConfig);

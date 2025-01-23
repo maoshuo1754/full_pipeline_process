@@ -29,10 +29,14 @@ extern std::vector<int> azi_table; // 方位表
 extern double c_speed;          // 光速
 extern double d;                // 距离单元距离
 
-extern std::string send_ip;
-extern std::string multicast_ip;
-extern int multicast_port;
-extern int send_port;
+extern std::string local_video_ip;
+extern int local_video_port;
+
+extern std::string remote_video_ip;
+extern int remote_video_port;
+
+extern std::string remote_plot_ip;
+extern int remote_plot_port;
 
 extern double Fs;               // 采样率
 extern double Fs_system;        // 雷达系统内部时钟频率
@@ -42,7 +46,7 @@ extern double Pfa;
 extern int numGuardCells;
 extern int numRefCells;
 
-
+extern int velocityCoalescenceMethod;  // 0代表质心法，1代表选大
 // 数据缓冲区声明
 
 void loadConfig(const std::string& filename); // 声明配置加载函数
