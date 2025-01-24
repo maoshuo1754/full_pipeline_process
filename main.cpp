@@ -61,7 +61,7 @@ void readDataFromFile(const string& dataPath) {
 
     auto sharedQueue = initSharedMemery(false);
 
-    while(!file.eof() && monitorWriterRunning)
+    while(!file.eof() && monitorWriterRunning.load())
     {
         sem_wait(&sharedQueue->slots_available); // 等待空槽位
         sem_wait(&sharedQueue->mutex); // 锁住共享资源
