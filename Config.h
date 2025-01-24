@@ -17,6 +17,8 @@
 #define CUDA_BLOCK_SIZE 256     // cuda运算分块长度
 
 // 配置参数声明
+extern std::string dataPath;
+
 extern int num_threads;         // 工作线程数
 extern int THREADS_MEM_SIZE;    // 每个线程独立显存大小
 extern int CAL_WAVE_NUM;        // 计算的波束数
@@ -47,11 +49,13 @@ extern int numGuardCells;
 extern int numRefCells;
 
 extern int velocityCoalescenceMethod;  // 0代表质心法，1代表选大
+extern int dataSource;          // 0表示文件，1表示Pcie
 // 数据缓冲区声明
 
 void loadConfig(const std::string& filename); // 声明配置加载函数
 
 inline std::atomic<bool> monitorConfigRunning(true);
+inline std::atomic<bool> monitorWriterRunning(true);
 void monitorConfig(const std::string& filename, void (*loadConfig)(const std::string&)); // 参数实时更新
 
 #endif //READER_CONFIG_H

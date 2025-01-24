@@ -1498,8 +1498,8 @@ void Plot::PlotsDetect(NRx8BitPulse *curPulse) {
                             PlotInfoBuff[usSectorPlotNum].saturate = 0;
                             // TODO 根据局部变量填写NRxPlot对应的字段，注意单位
                             // cout << PlotInfoBuff[usSectorPlotNum].dis << " " << PlotInfoBuff[usSectorPlotNum].azi / 65536 * 360 << " cal speed:" << dPlotSpeed / dPlotPowerSum * 10 << endl;
-                            PlotInfoBuff[usSectorPlotNum].doppVel =  dPlotSpeed / dPlotPowerSum * 10;
-                            PlotInfoBuff[usSectorPlotNum].maxDoppDiff = dPlotMaxSpeed * 10.0;
+                            PlotInfoBuff[usSectorPlotNum].doppVel =  dPlotSpeed / dPlotPowerSum * 100;
+                            PlotInfoBuff[usSectorPlotNum].maxDoppDiff = dPlotMaxSpeed * 100.0;
 
                             PlotInfoBuff[usSectorPlotNum].plotType = 0;
                             PlotInfoBuff[usSectorPlotNum].plotConfLv = 0;

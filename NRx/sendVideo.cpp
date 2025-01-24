@@ -3,10 +3,11 @@
 //
 
 #include "SendVideo.h"
+#include <complex>
 #include "../Config.h"
 #include "../utils.h"
 
-SendVideo::SendVideo(): plot(){ // , outfile("detectVideo.txt")
+SendVideo::SendVideo(){ // , outfile("detectVideo.txt")
     m_sendBufOri = new char[1024 * 1024];
     unMinPRTLen = RANGE_NUM;
     unTmpAzi = 0;
@@ -33,8 +34,8 @@ SendVideo::SendVideo(): plot(){ // , outfile("detectVideo.txt")
     localAddr.sin_port = htons(local_video_port);  // 0x2001是8192  0x2002岁8194
     localAddr.sin_addr.s_addr = inet_addr(local_video_ip.c_str());
 
-    std::cout << "send_ip:      " << local_video_ip << ":" << local_video_port <<std::endl;
-    std::cout << "multicast_ip: " << remote_video_ip << ":" << remote_video_port << std::endl;
+    std::cout << "local Address:      " << local_video_ip << ":" << local_video_port <<std::endl;
+    std::cout << "remote video Address: " << remote_video_ip << ":" << remote_video_port << std::endl;
 
     if (bind(sendSocket, (sockaddr*)&localAddr, sizeof(localAddr)) < 0)
     {

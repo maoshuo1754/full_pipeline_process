@@ -191,9 +191,9 @@ void ThreadPool::processData(ThreadPoolResources &resources) {
     int headLength = headPositions[threadID][1] - headPositions[threadID][0];
     int rangeNum = floor((headLength - DATA_OFFSET) / WAVE_NUM / 4.0);
 
-//        cout << "numHeads: " << numHeads << endl;
-//        cout << "headLength: " << headLength << endl;
-    if (rangeNum != RANGE_NUM) {
+    // cout << "numHeads: " << numHeads << endl;
+    // cout << "headLength: " << headLength << endl;
+    if (numHeads != NUM_PULSE  || rangeNum != RANGE_NUM) {
         throw std::runtime_error("The calculated range num is different from that is set");
     }
 
@@ -240,7 +240,7 @@ void ThreadPool::processData(ThreadPoolResources &resources) {
 void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int rangeNum) {
     static int count = 0;
     count++;
-    int thisCount = count;
+    // int thisCount = count;
     cout << "count:" << count << endl;
     int threadID = resources.threadID;
     auto &matrices = resources.IQmatrices;
@@ -261,7 +261,7 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
         // 归一化，同时连ifft的归一化一起做了
         matrices[i].scale(streams[threadID], scale);
 
-//        IQmatrices[i].MTI(streams[threadID], 3);
+        // matrices[i].MTI(streams[threadID], 3);
 
         /*coherent integration*/
         for (int j = 0; j < INTEGRATION_TIMES; j++) {
@@ -321,8 +321,13 @@ void ThreadPool::copyToThreadMemory() {
     bool startFlag;
     for (int i = 0; i < INDEX_SIZE / sizeof(unsigned int); i++) {
         size_t indexOffset = block_index * INDEX_SIZE + i * 4;
-        indexValue = *(unsigned int *) (sharedQueue->index_buffer + indexOffset);
-        // indexValue = FourChars2Uint(reinterpret_cast<char*>(sharedQueue->index_buffer + indexOffset));
+        if(dataSource == 0) {
+            indexValue = *(unsigned int *) (sharedQueue->index_buffer + indexOffset);
+        }
+        else {
+            indexValue = FourChars2Uint(reinterpret_cast<char*>(sharedQueue->index_buffer + indexOffset));
+        }
+
         // cout << "index:" << indexValue << endl;
         // Check pattern match
         if (indexValue >= block_index * BLOCK_SIZE &&

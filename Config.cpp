@@ -13,6 +13,7 @@
 using json = nlohmann::json;
 
 // 变量定义
+std::string dataPath;
 
 int num_threads;
 int THREADS_MEM_SIZE;
@@ -41,6 +42,7 @@ int numGuardCells;
 int numRefCells;
 
 int velocityCoalescenceMethod;
+int dataSource;
 
 // 配置加载函数实现
 void loadConfig(const std::string& filename) {
@@ -52,6 +54,7 @@ void loadConfig(const std::string& filename) {
     json config;
     configFile >> config;
 
+    dataPath = config["dataPath"];
     num_threads = config["num_threads"];
     THREADS_MEM_SIZE = config["THREADS_MEM_SIZE"];
     CAL_WAVE_NUM = config["CAL_WAVE_NUM"];
@@ -81,6 +84,7 @@ void loadConfig(const std::string& filename) {
     numGuardCells = config["numGuardCells"];
 
     velocityCoalescenceMethod = config["velocityCoalescenceMethod"];
+    dataSource = config["dataSource"];
 
     std::cout << "Configuration loaded successfully.\n";
 }

@@ -7,17 +7,8 @@
 #include "MyStruct.h"
 #include "fstream"
 #include "../utils.h"
-#include "../queue.h"
-#include <string>
-#include <iostream>
 #include <vector_types.h>
-#include <cmath>
-#include <complex>
-#include <sys/socket.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
-#include <cstring>
-#include <unistd.h>
 #include "plot.h"
 
 #define TAO (5.0e-6)

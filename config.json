@@ -1,4 +1,7 @@
 {
+  "dataPath1": "/home/csic724/Documents/20250120/20250120103458_256GB.dat",
+  "dataPath": "/home/csic724/Documents/sigProcess/data/20241231193504_6MHz.dat",
+
   "THREADS_MEM_SIZE": 1073741824,
 
   "num_threads": 4,
@@ -32,6 +35,7 @@
   "numGuardCells": 5,
   "numRefCells": 20,
 
-  "velocityCoalescenceMethod": 0
+  "velocityCoalescenceMethod": 0,
+  "dataSource": 0
 }
 
