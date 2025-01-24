@@ -7,7 +7,6 @@
 
 #include <vector>
 #include <string>
-
 #include <atomic>
 
 #define WAVE_NUM 32             // 波束数
@@ -41,6 +40,7 @@ extern int remote_plot_port;
 extern double Fs;               // 采样率
 extern double Fs_system;        // 雷达系统内部时钟频率
 extern int system_delay;        // 系统处理延时, 低通滤波等系统延时
+extern int initCarryFreq;       // 初始载频
 
 extern double Pfa;
 extern int numGuardCells;

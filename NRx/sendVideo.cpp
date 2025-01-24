@@ -74,9 +74,8 @@ void SendVideo::send(unsigned char *rawMessage, float2 *detectedVideo, vector<in
     float rAzm;
 
     auto rawMsg = reinterpret_cast<uint32*>(rawMessage);
-    uint32 freqPoint = ((rawMsg[12]) & 0x00000fff);
-    freqPoint = 3;
-    double lambda_0 = c_speed / ((freqPoint * 10 + 8110) * 1e6);
+    uint32 freqPoint = ((rawMsg[11]) & 0x00000fff);
+    double lambda_0 = c_speed / ((freqPoint * 10 + initCarryFreq) * 1e6);
     float data_amp;
 
     videoMsg.CommonHeader.wCOUNTER = rawMsg[4];  // 触发计数器

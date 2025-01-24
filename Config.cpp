@@ -34,6 +34,7 @@ int remote_plot_port;
 double Fs;
 double Fs_system;
 int system_delay;
+int initCarryFreq;
 
 double Pfa;
 int numGuardCells;
@@ -73,6 +74,7 @@ void loadConfig(const std::string& filename) {
     Fs = config["Fs"];
     Fs_system = config["Fs_system"];
     system_delay = config["system_delay"];
+    initCarryFreq = config["initCarryFreq"];
 
     Pfa = config["Pfa"];
     numRefCells = config["numRefCells"];

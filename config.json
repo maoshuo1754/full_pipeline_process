@@ -26,6 +26,7 @@
   "Fs_system": 125e6,
   "Fs": 31.25e6,
   "system_delay": 25,
+  "initCarryFreq": 8080,
 
   "Pfa": 1e-8,
   "numGuardCells": 5,

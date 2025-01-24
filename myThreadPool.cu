@@ -2,7 +2,6 @@
 #include "Config.h"
 #include <cuda_runtime.h>
 #include <iostream>
-#include <algorithm>
 
 ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue) :
         stop(false),
@@ -144,9 +143,8 @@ void ThreadPool::generatePCcoefMatrix(unsigned char *rawMessage, cufftHandle &pc
         cout << "Param changed, regenerate pulse compress coefficient." << endl;
         numSamples = round(pulseWidth * Fs);  // 31.25e6
         Bandwidth = (Fs_system - fLFMStartWord / pow(2.0f, 32) * Fs_system) * 2.0;
-        int freqPoint = (*(uint32_t *)(rawMessage + 12 * 4) & 0x00000fff);
-        freqPoint = 3;
-        double lambda = c_speed / ((freqPoint * 10 + 9600) * 1e6);
+        int freqPoint = (*(uint32_t *)(rawMessage + 11 * 4) & 0x000000ff);
+        double lambda = c_speed / ((freqPoint * 10 + initCarryFreq) * 1e6);
 
         cout << "Bandwidth:" << Bandwidth << endl;
         cout << "PulseWidth:" << pulseWidth << endl;
@@ -242,6 +240,7 @@ void ThreadPool::processData(ThreadPoolResources &resources) {
 void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int rangeNum) {
     static int count = 0;
     count++;
+    int thisCount = count;
     cout << "count:" << count << endl;
     int threadID = resources.threadID;
     auto &matrices = resources.IQmatrices;
@@ -250,7 +249,7 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
 
     float scale = 1.0f / sqrt(Bandwidth * pulseWidth) / NUM_PULSE / RANGE_NUM;
     // for (int i = 0; i < CAL_WAVE_NUM; i++) {
-    for (int i = 18; i < 21; i++) {
+    for (int i = 0; i < CAL_WAVE_NUM; i++) {
 //        string filename = "data" + to_string(i) + "_max.txt";
         /*Pulse Compression*/
         matrices[i].fft(resources.rowPlan);
@@ -270,11 +269,11 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
         }
 
         cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
-        if (count == 1) {
-            string name = "pulse_" + to_string(count) + "_wave_" + to_string(i) +  + ".txt";
-            matrices[i].writeMatTxt(name);
-            cout << name << " write finished" << endl;
-        }
+        // if (thisCount == 1) {
+        //     string name = "pulse_" + to_string(thisCount) + "_wave_" + to_string(i) +  + ".txt";
+        //     matrices[i].writeMatTxt(name);
+        //     cout << name << " write finished" << endl;
+        // }
         
         /*cfar*/
         matrices[i].abs(streams[threadID]);
@@ -282,8 +281,6 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
                          numSamples + rangeNum);
 
         auto* pSpeedChannels = resources.pSpeed_d + i * NFFT;
-
-
 
         CFAR_res[i].max(Max_res[i], pSpeedChannels, streams[threadID]);
         Max_res[i].scale(streams[threadID], 1.0f / normFactor * 255);
