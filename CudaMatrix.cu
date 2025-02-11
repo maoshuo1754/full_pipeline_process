@@ -709,12 +709,7 @@ __global__ void maxKernelDim1(cufftComplex *data, cufftComplex *maxValues, int *
     if (col < ncols) {
         float maxVal;
 
-        if (channel_0_enable) {
-            maxVal = data[col].x;
-        }
-        else {
-            maxVal = -100;
-        }
+        maxVal = channel_0_enable ? data[col].x : -100;
         int maxChannel = 0;
         for (int row = 1; row < nrows; ++row) {
             ind = row * ncols + col;

@@ -1,4 +1,5 @@
 {
+  "dataPath3": "/backup2/data/20250211091840_256GB.dat",
   "dataPath": "/backup2/data/20250120/20250120103458_256GB.dat",
   "dataPath1": "/home/csic724/Documents/sigProcess/data/20241231193504_6MHz.dat",
   "dataPath2": "/backup2/data/20250209151526_256GB.dat",
@@ -40,7 +41,7 @@
   "numRefCells": 20,
 
   "0表示质心法": "1表示选大",
-  "velocityCoalescenceMethod": 1
+  "velocityCoalescenceMethod": 0
 
 }
 

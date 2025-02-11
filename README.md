@@ -27,8 +27,8 @@
 ├── CudaMatrix.cu
 ├── utils.h             # 工具函数
 ├── utils.cu 
-├── myThreadPool.h      # 线程池
-├── myThreadPool.cu
+├── ThreadPool.h      # 线程池
+├── ThreadPool.cu
 ├── main.h              # 主函数
 ├── main.cpp
 ├── NRx/

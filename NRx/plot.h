@@ -34,7 +34,8 @@ typedef struct sTempPlotBuff
     // TODO 新增速度过程变量
     double dSumSpeed; // 速度和
     double dMaxSpeed; // 最大速度
-    double dPowerSum; // 最小速度
+    double dPowerSum; // 幅度和
+    double dMaxPower; // 最大幅度
     uint32 unSamCellSum;  // 过门限单元数
     uint32 unPulseSum;    // 脉冲计数
     uint32 unStartAziIdx; // 起始方位码
@@ -67,6 +68,7 @@ typedef struct sTempPlotBuff
         // TODO 新增速度过程变量
         dSumSpeed = 0.0;
         dMaxSpeed = -1.0;
+        dMaxPower = -1.0;
         dPowerSum = -1.0;
         unSamCellSum = 0;
         unPulseSum = 0;

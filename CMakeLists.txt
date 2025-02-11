@@ -19,7 +19,7 @@ enable_language(CUDA)
 set(SOURCE_FILES
         CudaMatrix.cu
         utils.cu
-        myThreadPool.cu
+        ThreadPool.cu
         main.cpp
         NRx/sendVideo.cpp
         NRx/plot.cpp

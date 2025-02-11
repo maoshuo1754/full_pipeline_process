@@ -7,6 +7,7 @@
 #include "arpa/inet.h"
 #include <include/otherInterface.h>
 #include <../Config.h>
+#include <crt/device_double_functions.h>
 
 static const int32 TEMP_MAX_SECTOR_NUM(32);
 static const int32 MaxPlotNumInPlotDataSet(1024);
@@ -1085,6 +1086,7 @@ void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPul
     double dSumSpeed = 0.0;
     double dMaxSpeed = -65536.0;
     double dPowerSum = 0.0;
+    double dMaxPower = - 65536.0;
 
     uint32 uiDisRowIdx = 0;          // 格子行号
     uint32 uiStartDisRowIdx = 0;     // 格子起始行号
@@ -1146,7 +1148,10 @@ void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPul
                     double tmp_speed = speed[idx3] / 100.0; // 质心法
                     dSumSpeed += tmp_speed * dCurPulseData[idx3]; // 求和
                     dPowerSum += dCurPulseData[idx3]; // 功率求和
-                    dMaxSpeed = max(dMaxSpeed, abs(tmp_speed)); // 取大
+                    if (dCurPulseData[idx3] > dMaxPower) {
+                        dMaxPower = dCurPulseData[idx3];
+                        dMaxSpeed = abs(tmp_speed); // 取大
+                    }
 
                     if (curBaGAmp != nullptr) {
                         dSumBaGAmp += curBaGAmp->data[idx3];
@@ -1208,6 +1213,7 @@ void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPul
                 CurPlotBuff_Row.dSumSpeed = dSumSpeed;
                 CurPlotBuff_Row.dMaxSpeed = dMaxSpeed;
                 CurPlotBuff_Row.dPowerSum = dPowerSum;
+                CurPlotBuff_Row.dMaxPower = dMaxPower;
 
                 CurPlotBuff[uiDisRowIdx] = CurPlotBuff_Row;
 
@@ -1224,6 +1230,7 @@ void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPul
                 dSumSpeed = 0.0;
                 dPowerSum = 0.0;
                 dMaxSpeed = 0.0;
+                dMaxPower = -65536.0;
                 bDisDetStart = false;
                 /* ********************************************************** */
             } else // 如果未开始，则继续滑动
@@ -1585,7 +1592,9 @@ sTempPlotBuff Plot::GridCombine(sTempPlotBuff plotGrid_1, sTempPlotBuff plotGrid
     // TODO 合并plotGrid_1和plotGrid_2的速度信息
     plotGrid_1.dSumSpeed += plotGrid_2.dSumSpeed;
     plotGrid_1.dPowerSum += plotGrid_2.dPowerSum;
-    plotGrid_1.dMaxSpeed = max(plotGrid_1.dMaxSpeed, plotGrid_2.dMaxSpeed);
+    if (plotGrid_1.dMaxPower < plotGrid_2.dMaxPower) {
+        plotGrid_1.dMaxSpeed = plotGrid_2.dMaxSpeed;
+    }
 
     if (plotGrid_1.dStartAzi > plotGrid_2.dStartAzi) {
         plotGrid_1.dStartAzi = plotGrid_2.dStartAzi;
