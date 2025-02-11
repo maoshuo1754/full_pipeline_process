@@ -19,7 +19,7 @@ using namespace std;
 using namespace std::chrono;
 
 // 线程池中各个线程独占的资源
-// 线程的独立显存拷贝空间和stream不在这是因为，拷贝线程要用
+// 线程的独立显存拷贝空间和stream不在这，是因为拷贝线程要用
 struct ThreadPoolResources {
     int threadID;                   // 线程ID
     cudaStream_t stream;            // cuda流，用于异步处理

@@ -15,8 +15,7 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue) :
         inPacket(false),
         cur_thread_id(0),
         prevSeqNum(0),
-        PcCoefMatrix(1, NFFT),
-        sender() {
+        PcCoefMatrix(1, NFFT) {
     // 初始化 conditionVariables 和 mutexes
     // 创建并初始化线程
 
@@ -182,8 +181,15 @@ void ThreadPool::generatePCcoefMatrix(unsigned char *rawMessage, cufftHandle &pc
 
 // 线程池中的数据处理函数
 void ThreadPool::processData(ThreadPoolResources &resources) {
+
     int threadID = resources.threadID;
     cout << "thread " << threadID << " start" << endl;
+
+    static int count = 0;
+    count++;
+    // int thisCount = count;
+    cout << "count:" << count << endl;
+
 
     checkCudaErrors(cudaMemsetAsync(resources.pComplex_d, 0, sizeof(cufftComplex) * WAVE_NUM * NUM_PULSE * NFFT,
                                     resources.stream));
@@ -238,18 +244,14 @@ void ThreadPool::processData(ThreadPoolResources &resources) {
 
 // 在GPU处理一个脉组的所有波束的数据，全流程处理，包括脉压、积累、CFAR、选大。
 void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int rangeNum) {
-    static int count = 0;
-    count++;
-    // int thisCount = count;
-    cout << "count:" << count << endl;
     int threadID = resources.threadID;
     auto &matrices = resources.IQmatrices;
     auto &CFAR_res = resources.CFAR_res;
     auto &Max_res = resources.Max_res;
 
     float scale = 1.0f / sqrt(Bandwidth * pulseWidth) / NUM_PULSE / RANGE_NUM;
-    // for (int i = 0; i < CAL_WAVE_NUM; i++) {
     for (int i = 0; i < CAL_WAVE_NUM; i++) {
+    // for (int i = 20; i < 24; i++) {
 //        string filename = "data" + to_string(i) + "_max.txt";
         /*Pulse Compression*/
         matrices[i].fft(resources.rowPlan);
@@ -267,6 +269,9 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
         for (int j = 0; j < INTEGRATION_TIMES; j++) {
             matrices[i].fft_by_col(resources.colPlan);
         }
+
+        string name = to_string(i) + ".txt";
+        // matrices[i].writeMatTxt(name);
 
         cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
         // if (thisCount == 1) {

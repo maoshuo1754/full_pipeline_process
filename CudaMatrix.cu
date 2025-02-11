@@ -643,6 +643,14 @@ void CudaMatrix::writeMatTxt(const std::string &filePath) const {
 
 __global__ void cfarKernel(const cufftComplex* data, cufftComplex* cfar_signal, int nrows, int ncols,
                            double alpha, int numGuardCells, int numRefCells, int leftBoundary, int rightBoundary) {
+    /*
+     * blockIdx - 块的索引
+     * blockIdx.x - [0, gridDim.x-1]
+     * blockIdx.y - [0, gridDim.y-1]
+     * blockDim - 每个块的维度
+     * threadIdx - 线程在块内的索引
+     * threadIdx.x - [0, blockDim-1]
+     */
 
     int row = blockIdx.y;
     int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -699,8 +707,14 @@ __global__ void maxKernelDim1(cufftComplex *data, cufftComplex *maxValues, int *
     int ind;
 
     if (col < ncols) {
-        // float maxVal = data[col].x;
-        float maxVal = -100;
+        float maxVal;
+
+        if (channel_0_enable) {
+            maxVal = data[col].x;
+        }
+        else {
+            maxVal = -100;
+        }
         int maxChannel = 0;
         for (int row = 1; row < nrows; ++row) {
             ind = row * ncols + col;

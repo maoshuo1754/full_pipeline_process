@@ -32,8 +32,8 @@
 ├── main.h              # 主函数
 ├── main.cpp
 ├── NRx/
-│  ├── sendVideo.cpp    # 检测视频发送
-│  ├── SendVideo.h
+│  ├── sendVideo.h    # 检测视频发送
+│  ├── SendVideo.cpp
 │  ├── plot.h           # 点迹凝聚文件
 │  ├── plot.cpp         
 │  ├── include/         # 动态加载的其他源文件
@@ -51,4 +51,4 @@
 
 
 ## 作者姓名
-毛硕
+ms

@@ -15,6 +15,7 @@
 #define RANGE_NUM  3748         // 一个脉冲的距离单元数
 #define CFAR_LENGTH 16          // 分段fft长度
 #define CUDA_BLOCK_SIZE 256     // cuda运算分块长度
+#define channel_0_enable 0      // 0通道是否开启
 
 // 配置参数声明
 extern std::string dataPath;
@@ -49,7 +50,7 @@ extern int numGuardCells;
 extern int numRefCells;
 
 extern int velocityCoalescenceMethod;  // 0代表质心法，1代表选大
-extern int dataSource;          // 0表示文件，1表示Pcie
+extern int dataSource;                 // 0表示文件，1表示Pcie
 // 数据缓冲区声明
 
 void loadConfig(const std::string& filename); // 声明配置加载函数
