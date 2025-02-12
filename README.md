@@ -14,7 +14,7 @@
 
 - CMake: version >= 3.27
 - CUDA Toolkit: version >= 11.8
-- GCC/G++: version >= 9.4
+- GCC/G++: version >= 9.4 (11编译不成功)
 - nlohmann_json: version >= 3.7.3
 
 ### 文件目录

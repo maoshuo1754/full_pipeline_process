@@ -8,6 +8,8 @@
   "dataSource": 0,
   "THREADS_MEM_SIZE": 1073741824,
 
+  "hamming_window_enable": 0,
+
   "num_threads": 4,
   "CAL_WAVE_NUM": 32,
   "INTEGRATION_TIMES": 1,

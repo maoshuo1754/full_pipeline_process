@@ -42,6 +42,7 @@ int numRefCells;
 
 int velocityCoalescenceMethod;
 int dataSource;
+int hamming_window_enable;
 
 // 配置加载函数实现
 void loadConfig(const std::string& filename) {
@@ -84,6 +85,7 @@ void loadConfig(const std::string& filename) {
 
     velocityCoalescenceMethod = config["velocityCoalescenceMethod"];
     dataSource = config["dataSource"];
+    hamming_window_enable = config["hamming_window_enable"];
 
     std::cout << "Configuration loaded successfully.\n";
 }

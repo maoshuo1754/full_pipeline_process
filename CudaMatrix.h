@@ -2,17 +2,13 @@
 #define CUDA_MATRIX_H
 
 #include <cuda_runtime.h>
-#include <cublas_v2.h>
 #include <cufft.h>
 #include <vector>
 #include <complex>
 #include <iomanip>
-#include <stdexcept>
 #include <fstream>
-#include <utility>
 #include <thrust/device_ptr.h>
-#include <thrust/transform.h>
-#include <thrust/functional.h>
+
 
 
 class CudaMatrix {
@@ -20,6 +16,8 @@ private:
     int nrows, ncols;
     cufftComplex* data;
     bool initFromDevice;
+    void allocateMemory();
+    void deallocateMemory();
 
 public:
     CudaMatrix() : nrows(0), ncols(0), data(nullptr) {}
@@ -77,10 +75,6 @@ public:
     void scale(cudaStream_t _stream, float _scale);
 
     void MTI(cudaStream_t _stream, int numCancellerPulses);
-
-private:
-    void allocateMemory();
-    void deallocateMemory();
 };
 
 #endif // CUDA_MATRIX_H

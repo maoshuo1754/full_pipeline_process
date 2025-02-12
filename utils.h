@@ -15,7 +15,7 @@
 #include <chrono>
 #include <sys/time.h>
 
-std::vector<cufftComplex> PCcoef(double BandWidth, double PulseWidth, double Fs, int _NFFT);
+std::vector<cufftComplex> PCcoef(double BandWidth, double PulseWidth, double Fs, int _NFFT, int hamming_window_enable);
 
 unsigned int nextpow2(unsigned int x);
 

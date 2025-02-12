@@ -35,7 +35,6 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue) :
 }
 
 ThreadPool::~ThreadPool() {
-
     stop = true;
     for (auto &cv: conditionVariables) cv.notify_all(); // 通知所有线程退出
     for (std::thread &thread: threads) {
@@ -170,7 +169,7 @@ void ThreadPool::generatePCcoefMatrix(unsigned char *rawMessage, cufftHandle &pc
 //        }
 
 
-        vector<cufftComplex> PcCoef = PCcoef(Bandwidth, pulseWidth, Fs, NFFT);
+        vector<cufftComplex> PcCoef = PCcoef(Bandwidth, pulseWidth, Fs, NFFT, hamming_window_enable);
         PcCoefMatrix.copyFromHost(_stream, 1, NFFT, PcCoef.data());
         PcCoefMatrix.fft(pcPlan);
         prevPRT = PRT;
@@ -188,9 +187,6 @@ void ThreadPool::processData(ThreadPoolResources &resources) {
     count++;
     int thisCount = count;
     cout << "count:" << count << endl;
-    if (thisCount != 1) {
-        return;
-    }
 
     checkCudaErrors(cudaMemsetAsync(resources.pComplex_d, 0, sizeof(cufftComplex) * WAVE_NUM * NUM_PULSE * NFFT,
                                     resources.stream));
@@ -266,16 +262,13 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
     auto &Max_res = resources.Max_res;
 
     float scale = 1.0f / sqrt(Bandwidth * pulseWidth) / NUM_PULSE / RANGE_NUM;
-    // for (int i = 0; i < CAL_WAVE_NUM; i++) {
-    for (int i = 19; i < 20; i++) {
+    for (int i = 0; i < CAL_WAVE_NUM; i++) {
+    // for (int i = 19; i < 20; i++) {
         string filename = "data" + to_string(i) + "_max.txt";
-        PcCoefMatrix.writeMatTxt("PcCoefMatrix.txt");
-
         /*Pulse Compression*/
         matrices[i].fft(resources.rowPlan);
 
         matrices[i].rowWiseMul(PcCoefMatrix, streams[threadID]);
-        matrices[i].writeMatTxt(filename);
 
         matrices[i].ifft(streams[threadID], resources.rowPlan);
 

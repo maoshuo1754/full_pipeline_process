@@ -8,7 +8,7 @@
 
 
 int main(){
-    string configFilePath = "/home/csic724/CLionProjects/PcieReader/config.json";
+    string configFilePath = "../config.json";
     loadConfig(configFilePath);
     std::thread configMonitor(monitorConfig, configFilePath, loadConfig);
 

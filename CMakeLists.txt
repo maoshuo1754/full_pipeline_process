@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.27)
 set(PROJECT_NAME  "reader")
 
 set(CMAKE_PREFIX_PATH "/usr/local/cuda")
+
 # Set CUDA architectures
 set(CMAKE_CUDA_ARCHITECTURES 80)
 
@@ -36,16 +37,13 @@ endif ()
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILES} ${MYSRCS})
 
-# Find and link CUDA Toolkit libraries
 find_package(CUDAToolkit REQUIRED)
-#find_package(nlohmann_json 3.7.3 REQUIRED)
 
 target_link_libraries(${PROJECT_NAME}
         pthread
         rt
         CUDA::cublas
         CUDA::cufft
-#        nlohmann_json::nlohmann_json
         ${DLLFILES}
 )
 
