@@ -123,5 +123,23 @@ unsigned int FourChars2Uint(char *startAddr) {
            | static_cast<uint8_t>(startAddr[1]) << 16
            | static_cast<uint8_t>(startAddr[2]) << 8
            | static_cast<uint8_t>(startAddr[3]);
+}
 
+void saveToBinaryFile(const cufftComplex* d_data, size_t size, const char* filename) {
+    auto* h_data = new cufftComplex[size]; // 在主机上分配内存
+
+    // 将数据从显存复制到主机内存
+    cudaMemcpy(h_data, d_data, size * sizeof(cufftComplex), cudaMemcpyDeviceToHost);
+
+    // 打开文件并以二进制方式写入
+    std::ofstream file(filename, std::ios::binary);
+    if (file.is_open()) {
+        file.write(reinterpret_cast<char*>(h_data), size * sizeof(cufftComplex));
+        file.close();
+        std::cout << "Data saved to " << filename << std::endl;
+    } else {
+        std::cerr << "Failed to open file for writing." << std::endl;
+    }
+
+    delete[] h_data; // 释放主机内存
 }

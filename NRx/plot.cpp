@@ -7,7 +7,6 @@
 #include "arpa/inet.h"
 #include <include/otherInterface.h>
 #include <../Config.h>
-#include <crt/device_double_functions.h>
 
 static const int32 TEMP_MAX_SECTOR_NUM(32);
 static const int32 MaxPlotNumInPlotDataSet(1024);

@@ -81,9 +81,6 @@ public:
 private:
     void allocateMemory();
     void deallocateMemory();
-
-
-
 };
 
 #endif // CUDA_MATRIX_H

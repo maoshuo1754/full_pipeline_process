@@ -35,4 +35,6 @@ void getCurrentTime(uint32_t& second, uint32_t& microsecond);
 
 unsigned int FourChars2Uint(char *startAddr);
 
+void saveToBinaryFile(const cufftComplex* d_data, size_t size, const char* filename);
+
 #endif //CUDAPROJECT_UTILS_H

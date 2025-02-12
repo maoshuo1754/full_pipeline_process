@@ -184,14 +184,13 @@ void ThreadPool::processData(ThreadPoolResources &resources) {
 
     int threadID = resources.threadID;
     cout << "thread " << threadID << " start" << endl;
-
     static int count = 0;
     count++;
-    // int thisCount = count;
+    int thisCount = count;
     cout << "count:" << count << endl;
-    // if (count != 17) {
-    //     return;
-    // }
+    if (thisCount != 1) {
+        return;
+    }
 
     checkCudaErrors(cudaMemsetAsync(resources.pComplex_d, 0, sizeof(cufftComplex) * WAVE_NUM * NUM_PULSE * NFFT,
                                     resources.stream));
@@ -224,6 +223,21 @@ void ThreadPool::processData(ThreadPoolResources &resources) {
     processKernel<<<gridDim1, CUDA_BLOCK_SIZE, 0, streams[threadID]>>>(threadsMemory[threadID], resources.pComplex_d,
                                                                        resources.pHeadPositions_d, numHeads, rangeNum);
 
+    if (false && thisCount == 1) {
+        cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
+        int oneWaveSize = NUM_PULSE * NFFT;
+        int startWaveID = 19;
+        int endWaveID = 23;
+        int waveNum = endWaveID - startWaveID;
+        cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
+        string filename = dataPath.substr(dataPath.rfind('/') + 1) + "_wave_" + to_string(thisCount) + "_pulse_"
+        + to_string(startWaveID) + "_" + to_string(endWaveID)
+        + "_" + to_string(NUM_PULSE) + "x" + to_string(NFFT);;
+        ;
+        saveToBinaryFile(resources.pComplex_d + startWaveID * oneWaveSize, waveNum * oneWaveSize, filename.c_str());
+    }
+
+
     processPulseGroupData(resources, rangeNum);
     // 选大结果拷贝回内存
     checkCudaErrors(cudaMemcpyAsync(resources.pMaxRes_h, resources.pMaxRes_d, sizeof(cufftComplex) * CAL_WAVE_NUM * NFFT,
@@ -252,13 +266,16 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
     auto &Max_res = resources.Max_res;
 
     float scale = 1.0f / sqrt(Bandwidth * pulseWidth) / NUM_PULSE / RANGE_NUM;
-    for (int i = 0; i < CAL_WAVE_NUM; i++) {
-    // for (int i = 19; i < 23; i++) {
-//        string filename = "data" + to_string(i) + "_max.txt";
+    // for (int i = 0; i < CAL_WAVE_NUM; i++) {
+    for (int i = 19; i < 20; i++) {
+        string filename = "data" + to_string(i) + "_max.txt";
+        PcCoefMatrix.writeMatTxt("PcCoefMatrix.txt");
+
         /*Pulse Compression*/
         matrices[i].fft(resources.rowPlan);
 
         matrices[i].rowWiseMul(PcCoefMatrix, streams[threadID]);
+        matrices[i].writeMatTxt(filename);
 
         matrices[i].ifft(streams[threadID], resources.rowPlan);
 
