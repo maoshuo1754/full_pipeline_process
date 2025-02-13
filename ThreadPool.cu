@@ -416,7 +416,6 @@ void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr
 //              << (currentAddrOffset + copyLength) / 1024 / 1024 << " MB" << endl;
 
     if ((currentAddrOffset + copyLength) <= THREADS_MEM_SIZE) {  // Ensure within buffer bounds
-
 //        // 内存拷贝到显存
         checkCudaErrors(cudaMemcpyAsync(threadsMemory[cur_thread_id] + currentAddrOffset,
                                         sharedQueue->buffer + startAddr,

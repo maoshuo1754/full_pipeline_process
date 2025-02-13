@@ -45,7 +45,7 @@ public:
     void copyToHost(std::vector<cufftComplex>& hostData) const;
     void copyToHost(cufftComplex *hostData) const;
     std::vector<std::vector<cufftComplex>> to2DVector() const;
-    void fillWithRandomValues();
+    void fillWithRandomValues() const;
     void print() const;
     void print(int row) const;
     void print(int row, float des) const;

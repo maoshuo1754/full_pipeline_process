@@ -100,7 +100,7 @@ void CudaMatrix::copyToHost(cufftComplex* hostData) const {
 vector<vector<cufftComplex>> CudaMatrix::to2DVector() const {
     vector<cufftComplex> flatData;
     copyToHost(flatData);
-    vector<vector<cufftComplex>> result(nrows, vector<cufftComplex>(ncols));
+    vector result(nrows, vector<cufftComplex>(ncols));
 
     for (int i = 0; i < nrows; ++i) {
         for (int j = 0; j < ncols; ++j) {
@@ -111,7 +111,7 @@ vector<vector<cufftComplex>> CudaMatrix::to2DVector() const {
 }
 
 // Fill matrix with random values
-void CudaMatrix::fillWithRandomValues() {
+void CudaMatrix::fillWithRandomValues() const {
     vector<cufftComplex> hostData(nrows * ncols);
     for (int i = 0; i < nrows * ncols; ++i) {
         hostData[i].x = static_cast<float>(rand()) / RAND_MAX;
@@ -661,24 +661,36 @@ __global__ void cfarKernel(const cufftComplex* data, cufftComplex* cfar_signal, 
 
     if (col_start >= ncols || row >= nrows) return;
 
-    double noiseLevel = 0.0;
+    double noiseLevel_left = 0.0;
+    double noiseLevel_right = 0.0;
+
     for (int i = col_start; i < col_end; ++i) {
         if (i == col_start) {
             for (int j = i - totalTrainingCells; j < i - numGuardCells; ++j) {
-                noiseLevel += data[row * ncols + j].x;
+                noiseLevel_left += data[row * ncols + j].x;
             }
             for (int j = i + numGuardCells + 1; j <= i + totalTrainingCells; ++j) {
-                noiseLevel += data[row * ncols + j].x;
+                noiseLevel_right += data[row * ncols + j].x;
             }
         }
         else {
-            noiseLevel += data[row * ncols + i + totalTrainingCells].x;
-            noiseLevel += data[row * ncols + i - numGuardCells - 1].x;
-            noiseLevel -= data[row * ncols + i + numGuardCells].x;
-            noiseLevel -= data[row * ncols + (i - totalTrainingCells - 1)].x;
+            noiseLevel_left += data[row * ncols + i - numGuardCells - 1].x;
+            noiseLevel_left -= data[row * ncols + (i - totalTrainingCells - 1)].x;
+            noiseLevel_right += data[row * ncols + i + totalTrainingCells].x;
+            noiseLevel_right -= data[row * ncols + i + numGuardCells].x;
         }
 
-        double threshold = alpha * noiseLevel / (2 * numRefCells);
+        double threshold;
+        if (CFAR_METHOD == 0) {
+            threshold = alpha * (noiseLevel_left + noiseLevel_right) / (2 * numRefCells);
+        }
+        else if (CFAR_METHOD == 1) {
+            threshold = alpha * ( noiseLevel_left > noiseLevel_right ? noiseLevel_left : noiseLevel_right) / numRefCells;
+        }
+        else if (CFAR_METHOD == 2) {
+            threshold = alpha * ( noiseLevel_left > noiseLevel_right ? noiseLevel_right : noiseLevel_left) / numRefCells;
+        }
+
         cfar_signal[row * ncols + i].x = (data[row * ncols + i].x > threshold) ? sqrt(data[row * ncols + i].x) : 0.0;
         cfar_signal[row * ncols + i].y = 0.0;
     }
