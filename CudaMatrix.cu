@@ -222,7 +222,7 @@ void CudaMatrix::setElement(int x, int y, cufftComplex value) {
 
 // Kernel for element-wise multiplication
 __global__ void elementWiseMulKernel(cufftComplex *d_a, cufftComplex *d_b, cufftComplex *d_c, int size) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < size) {
         cufftComplex temp_a = d_a[idx];
         cufftComplex temp_b = d_b[idx];

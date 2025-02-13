@@ -4,8 +4,8 @@
 
 #ifndef MAIN_H
 #define MAIN_H
+#include "ThreadPool.h"
 
-SharedQueue* initSharedMemery(bool initPara);
 void readDataFromFile(const string& dataPath) ;
 
 #endif //MAIN_H

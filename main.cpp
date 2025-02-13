@@ -1,10 +1,9 @@
 //
 // Created by csic724 on 2024/11/11.
 //
-
-#include "ThreadPool.h"
 #include "Config.h"
 #include "main.h"
+#include "xdma_programe.h"
 
 
 int main(){
@@ -20,6 +19,11 @@ int main(){
         std::thread dataSourceThread(readDataFromFile, dataPath);
         dataSourceThread.detach();
     }
+    else {
+        auto* xdma_programe1 = new xdma_programe();
+        std::thread dataSourceThread(&xdma_programe::run, xdma_programe1);
+        dataSourceThread.detach();
+    }
 
     thread_pool.run();
 
@@ -29,23 +33,23 @@ int main(){
 }
 
 
-SharedQueue* initSharedMemery(bool initPara) {
-    int shmid = shmget(SHM_KEY, sizeof(SharedQueue), 0666 | IPC_CREAT);
-    if (shmid == -1) throw std::runtime_error("Failed to create shared memory");
-
-    auto* sharedQueue = static_cast<SharedQueue*>(shmat(shmid, nullptr, 0));
-
-    if (initPara) {
-        // 初始化信号量和指针
-        sem_init(&sharedQueue->mutex, 1, 1);
-        sem_init(&sharedQueue->slots_available, 1, QUEUE_SIZE);
-        sem_init(&sharedQueue->items_available, 1, 0);
-        sharedQueue->read_index = 0;
-        sharedQueue->write_index = 0;
-    }
-
-    return sharedQueue;
-}
+// SharedQueue* initSharedMemery(bool initPara) {
+//     int shmid = shmget(SHM_KEY, sizeof(SharedQueue), 0666 | IPC_CREAT);
+//     if (shmid == -1) throw std::runtime_error("Failed to create shared memory");
+//
+//     auto* sharedQueue = static_cast<SharedQueue*>(shmat(shmid, nullptr, 0));
+//
+//     if (initPara) {
+//         // 初始化信号量和指针
+//         sem_init(&sharedQueue->mutex, 1, 1);
+//         sem_init(&sharedQueue->slots_available, 1, QUEUE_SIZE);
+//         sem_init(&sharedQueue->items_available, 1, 0);
+//         sharedQueue->read_index = 0;
+//         sharedQueue->write_index = 0;
+//     }
+//
+//     return sharedQueue;
+// }
 
 void readDataFromFile(const string& dataPath) {
 
@@ -59,7 +63,7 @@ void readDataFromFile(const string& dataPath) {
     file.seekg(0, ios::beg);
     cout << "fileSize:" << fileSize / 1024 / 1024 / 1024 << " GB" << endl;
 
-    auto sharedQueue = initSharedMemery(false);
+    auto* sharedQueue = initSharedMemery(false);
 
     while(!file.eof() && monitorWriterRunning.load())
     {

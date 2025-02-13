@@ -23,6 +23,7 @@
 ```
 .
 ├── queue.h             # 共享内存管理队列
+├── queue.cpp
 ├── CudaMatrix.h        # GPU矩阵处理
 ├── CudaMatrix.cu
 ├── utils.h             # 工具函数

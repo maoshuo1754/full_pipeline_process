@@ -9,8 +9,6 @@
 #include <fstream>
 #include <thrust/device_ptr.h>
 
-
-
 class CudaMatrix {
 private:
     int nrows, ncols;

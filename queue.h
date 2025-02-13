@@ -31,4 +31,6 @@ const unsigned char pattern[] = {
         0x09, 0x00, 0x09, 0x00,
 };
 
+SharedQueue* initSharedMemery(bool);
+
 #endif // QUEUE_H
