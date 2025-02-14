@@ -26,7 +26,7 @@ set(SOURCE_FILES
         NRx/plot.cpp
         Config.cpp
         queue.cpp
-        xdma_programe.cpp
+        xdma_program.cpp
 )
 
 file(GLOB MYSRCS "${PROJECT_SOURCE_DIR}/NRx/include/*.cpp")

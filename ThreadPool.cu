@@ -164,11 +164,6 @@ void ThreadPool::generatePCcoefMatrix(unsigned char *rawMessage, cufftHandle &pc
             chnSpeeds.push_back(v);
         }
 
-//        for(int i = 1930; i < 1940; i++) {
-//                cout << "speed channel" << i << " " << chnSpeeds[i] << endl;
-//        }
-
-
         vector<cufftComplex> PcCoef = PCcoef(Bandwidth, pulseWidth, Fs, NFFT, hamming_window_enable);
         PcCoefMatrix.copyFromHost(_stream, 1, NFFT, PcCoef.data());
         PcCoefMatrix.fft(pcPlan);
@@ -329,6 +324,7 @@ void ThreadPool::waitForProcessingSignal(int threadID) {
 // 循环将内存的数据拷贝到显存(未解包)，每个线程对应一个脉组的数据
 void ThreadPool::copyToThreadMemory() {
     int block_index = sharedQueue->read_index;
+    // TODO: 添加数据计时， xx GB/s
     // std::cout << "Block index: " << block_index << std::endl << std::endl;
 
     unsigned int seqNum;

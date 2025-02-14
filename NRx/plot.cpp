@@ -9,7 +9,6 @@
 #include <../Config.h>
 
 static const int32 TEMP_MAX_SECTOR_NUM(32);
-static const int32 MaxPlotNumInPlotDataSet(1024);
 using namespace ::libParam;
 // PlotDet Param
 static const string tagName{"PlotDet"};

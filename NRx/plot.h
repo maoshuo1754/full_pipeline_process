@@ -7,7 +7,6 @@
 #include <vector>
 #include <sys/time.h>
 
-//static const int32 TEMP_MAX_SECTOR_NUM (32);               // 方位扇区数
 static const int32 MaxPlotInSector                (NRxMaxPlotsNum);
 
 static const unsigned int BUFF_MAX_SECTOR_GRID_NUM (512);           // 副瓣点迹判决缓存方位扇区格子数

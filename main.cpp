@@ -3,8 +3,7 @@
 //
 #include "Config.h"
 #include "main.h"
-#include "xdma_programe.h"
-
+#include "xdma_program.h"
 
 int main(){
     string configFilePath = "../config.json";
@@ -20,8 +19,8 @@ int main(){
         dataSourceThread.detach();
     }
     else {
-        auto* xdma_programe1 = new xdma_programe();
-        std::thread dataSourceThread(&xdma_programe::run, xdma_programe1);
+        auto* xdma_programe1 = new xdma_program();
+        std::thread dataSourceThread(&xdma_program::run, xdma_programe1);
         dataSourceThread.detach();
     }
 
@@ -31,25 +30,6 @@ int main(){
     monitorWriterRunning = false;
     configMonitor.join();
 }
-
-
-// SharedQueue* initSharedMemery(bool initPara) {
-//     int shmid = shmget(SHM_KEY, sizeof(SharedQueue), 0666 | IPC_CREAT);
-//     if (shmid == -1) throw std::runtime_error("Failed to create shared memory");
-//
-//     auto* sharedQueue = static_cast<SharedQueue*>(shmat(shmid, nullptr, 0));
-//
-//     if (initPara) {
-//         // 初始化信号量和指针
-//         sem_init(&sharedQueue->mutex, 1, 1);
-//         sem_init(&sharedQueue->slots_available, 1, QUEUE_SIZE);
-//         sem_init(&sharedQueue->items_available, 1, 0);
-//         sharedQueue->read_index = 0;
-//         sharedQueue->write_index = 0;
-//     }
-//
-//     return sharedQueue;
-// }
 
 void readDataFromFile(const string& dataPath) {
 

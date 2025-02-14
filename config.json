@@ -1,11 +1,8 @@
 {
-  "dataPath3": "/backup2/data/20250211091840_256GB.dat",
-  "dataPath2": "/backup2/data/20250120/20250120103458_256GB.dat",
-  "dataPath1": "/home/csic724/Documents/sigProcess/data/20241231193504_6MHz.dat",
-  "dataPath": "/backup2/data/20250209143316_256GB.dat",
+  "dataPath": "/backup2/data/20250213/20250213142451_256GB.dat",
 
   "0表示文件": "1表示Pcie",
-  "dataSource": 1,
+  "dataSource": 0,
   "THREADS_MEM_SIZE": 1073741824,
 
   "hamming_window_enable": 0,

@@ -1,9 +1,8 @@
-#include "xdma_programe.h"
+#include "xdma_program.h"
 
 #include <unistd.h>
 #include <fcntl.h>
 #include <cstring>
-
 #include <sys/mman.h>
 
 #define DEVICE_NAME_READ "/dev/xdma0_c2h_0"
@@ -13,7 +12,7 @@
 #define DEVICE_NAME_EVENT2 "/dev/xdma0_events_2"
 #define DEVICE_NAME_EVENT3 "/dev/xdma0_events_3"
 
-xdma_programe::xdma_programe() {
+xdma_program::xdma_program() {
     dev_fd = open(DEVICE_NAME_READ, O_RDWR | O_NONBLOCK);
     dev_fd_user = open(DEVICE_NAME_USER, O_RDWR | O_SYNC);
     dev_fd_events[0] = open(DEVICE_NAME_EVENT0, O_RDWR | O_SYNC);
@@ -35,8 +34,15 @@ xdma_programe::xdma_programe() {
     writeXDMAUserByte(0x00008080, 0x02); // trigger ready signal
 }
 
+xdma_program::~xdma_program() {
+    close(dev_fd_user);
+    close(dev_fd);
+    for (int i = 0; i < 4; i++) {
+        close(dev_fd_events[i]);
+    }
+}
 
-void xdma_programe::run() {
+void xdma_program::run() {
     int eventVal;
     while (monitorWriterRunning.load()) {
         for (int blockIdx = 0; blockIdx < 4; blockIdx++) {
@@ -55,7 +61,7 @@ void xdma_programe::run() {
 }
 
 
-void xdma_programe::readXDMAUser(int index_addr, int readSize) {
+void xdma_program::readXDMAUser(int index_addr, int readSize) {
     off_t pgsz, target_aligned, offset;
     off_t target = index_addr;
     pgsz = sysconf(_SC_PAGESIZE);
@@ -70,7 +76,7 @@ void xdma_programe::readXDMAUser(int index_addr, int readSize) {
     }
 }
 
-void xdma_programe::writeXDMAUserByte(int index_addr, char data) {
+void xdma_program::writeXDMAUserByte(int index_addr, char data) {
     //define some parameters
     off_t target;
     off_t pgsz, target_aligned, offset;
@@ -103,7 +109,7 @@ void xdma_programe::writeXDMAUserByte(int index_addr, char data) {
     }
 }
 
-void xdma_programe::readXDMAData(int blockIdx) {
+void xdma_program::readXDMAData(int blockIdx) {
     int read_addr = blockIdx * BLOCK_SIZE;
     int index_addr = blockIdx * INDEX_SIZE;
     lseek(dev_fd, read_addr, SEEK_SET);
