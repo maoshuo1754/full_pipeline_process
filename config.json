@@ -1,16 +1,17 @@
 {
-  "dataPath": "/backup2/data/20250213/20250213142451_256GB.dat",
+  "dataPath": "/backup2/data/20250213/20250213141446_256GB.dat",
 
   "0表示文件": "1表示Pcie",
   "dataSource": 0,
   "THREADS_MEM_SIZE": 1073741824,
 
   "hamming_window_enable": 0,
+  "MTI_enable": 0,
 
   "num_threads": 4,
   "CAL_WAVE_NUM": 32,
   "INTEGRATION_TIMES": 1,
-  "normFactor": 512,
+  "normFactor": 1024,
 
   "local_video_ip": "127.0.0.1",
   "local_video_port": 0,
@@ -38,11 +39,11 @@
   "numGuardCells": 5,
   "numRefCells": 20,
 
-  "debug_mode": 1,
-  "start_frame": 43,
-  "end_frame": 271,
-  "start_wave": 12,
-  "end_wave": 15,
+  "debug_mode": 0,
+  "start_frame": 1,
+  "end_frame": 160,
+  "start_wave": 19,
+  "end_wave": 22,
 
   "0表示质心法": "1表示选大",
   "velocityCoalescenceMethod": 1

@@ -38,7 +38,7 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue) :
         if (!std::filesystem::exists(input_file_name)) {
             std::filesystem::create_directory(input_file_name);
         }
-        string debug_file_path =  input_file_name + "/" + input_file_name +
+        string debug_file_path =  input_file_name +
         "_frame_" + to_string(start_frame) + "_" + to_string(end_frame) +
         "_pulse_" + to_string(start_wave) + "_" + to_string(end_wave) +
         "_" + to_string(NUM_PULSE) + "x" + to_string(NFFT);
@@ -269,7 +269,7 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
 
     float scale = 1.0f / sqrt(Bandwidth * pulseWidth) / NUM_PULSE / RANGE_NUM;
     for (int i = 0; i < CAL_WAVE_NUM; i++) {
-    // for (int i = 12; i < 15; i++) {
+    // for (int i = 19; i < 22; i++) {
         string filename = "data" + to_string(i) + "_max.txt";
         /*Pulse Compression*/
         matrices[i].fft(resources.rowPlan);
@@ -281,7 +281,9 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
         // 归一化，同时连ifft的归一化一起做了
         matrices[i].scale(streams[threadID], scale);
 
-        matrices[i].MTI(streams[threadID], 3);
+        if (MTI_enable) {
+            matrices[i].MTI(streams[threadID], 3);
+        }
 
         /*coherent integration*/
         for (int j = 0; j < INTEGRATION_TIMES; j++) {

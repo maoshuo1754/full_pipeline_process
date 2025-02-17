@@ -43,6 +43,7 @@ int numRefCells;
 int velocityCoalescenceMethod;
 int dataSource;
 int hamming_window_enable;
+int MTI_enable;
 
 int debug_mode;
 int start_frame;
@@ -92,6 +93,7 @@ void loadConfig(const std::string& filename) {
     velocityCoalescenceMethod = config["velocityCoalescenceMethod"];
     dataSource = config["dataSource"];
     hamming_window_enable = config["hamming_window_enable"];
+    MTI_enable = config["MTI_enable"];
 
     debug_mode = config["debug_mode"];
     start_frame = config["start_frame"];
