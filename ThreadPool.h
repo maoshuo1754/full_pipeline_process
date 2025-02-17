@@ -14,6 +14,7 @@
 #include "utils.h"
 #include <chrono>
 #include <string>
+#include <sstream>
 
 using namespace std;
 using namespace std::chrono;
@@ -125,6 +126,7 @@ private:
 
     char timebuf[100];
     ofstream logFile;
+    ofstream debugFile;
 
     int numSamples;             // 脉压采样点数
     CudaMatrix PcCoefMatrix;
@@ -149,6 +151,8 @@ private:
     void freeThreadMemory();
 
     void generatePCcoefMatrix(unsigned char *rawMessage, cufftHandle &pcPlan, cudaStream_t _stream);
+
+    void writeToDebugFile(unsigned char *rawMessage, const cufftComplex* d_data);
 
 };
 

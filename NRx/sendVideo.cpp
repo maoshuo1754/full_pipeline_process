@@ -7,7 +7,8 @@
 #include "../Config.h"
 #include "../utils.h"
 
-SendVideo::SendVideo(){ // , outfile("detectVideo.txt")
+SendVideo::SendVideo() { // , outfile("detectVideo.txt")
+
     m_sendBufOri = new char[1024 * 1024];
     unMinPRTLen = RANGE_NUM;
     unTmpAzi = 0;

@@ -1,10 +1,7 @@
 #ifndef QUEUE_H
 #define QUEUE_H
 
-#include <sys/ipc.h>
-#include <sys/shm.h>
 #include <semaphore.h>
-#include <stdexcept>
 #include "Config.h"
 
 #define SHM_KEY 0x1234

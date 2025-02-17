@@ -1,6 +1,7 @@
 #include "ThreadPool.h"
 #include "Config.h"
 #include <cuda_runtime.h>
+#include <filesystem>
 #include <iostream>
 
 ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue) :
@@ -31,6 +32,21 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue) :
 
     circleStartTime = high_resolution_clock::now();
 
+    if (debug_mode) {
+        string input_file_name = dataPath.substr(dataPath.rfind('/') + 1, dataPath.rfind('.') - dataPath.rfind('/') - 1);
+        // get file path and name
+        if (!std::filesystem::exists(input_file_name)) {
+            std::filesystem::create_directory(input_file_name);
+        }
+        string debug_file_path =  input_file_name + "/" + input_file_name +
+        "_frame_" + to_string(start_frame) + "_" + to_string(end_frame) +
+        "_pulse_" + to_string(start_wave) + "_" + to_string(end_wave) +
+        "_" + to_string(NUM_PULSE) + "x" + to_string(NFFT);
+
+        debugFile.open(debug_file_path, std::ios::binary);
+    }
+
+
     cout << "Initial Finished" << endl;
 }
 
@@ -42,6 +58,7 @@ ThreadPool::~ThreadPool() {
     }
     freeThreadMemory();
     logFile.close();
+    debugFile.close();
 }
 
 void ThreadPool::allocateThreadMemory() {
@@ -182,6 +199,10 @@ void ThreadPool::processData(ThreadPoolResources &resources) {
     count++;
     int thisCount = count;
     cout << "count:" << count << endl;
+    // if (count < 43) {
+    //     // stop = true;
+    //     return;
+    // }
 
     checkCudaErrors(cudaMemsetAsync(resources.pComplex_d, 0, sizeof(cufftComplex) * WAVE_NUM * NUM_PULSE * NFFT,
                                     resources.stream));
@@ -214,18 +235,8 @@ void ThreadPool::processData(ThreadPoolResources &resources) {
     processKernel<<<gridDim1, CUDA_BLOCK_SIZE, 0, streams[threadID]>>>(threadsMemory[threadID], resources.pComplex_d,
                                                                        resources.pHeadPositions_d, numHeads, rangeNum);
 
-    if (false && thisCount == 1) {
-        cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
-        int oneWaveSize = NUM_PULSE * NFFT;
-        int startWaveID = 19;
-        int endWaveID = 23;
-        int waveNum = endWaveID - startWaveID;
-        cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
-        string filename = dataPath.substr(dataPath.rfind('/') + 1) + "_wave_" + to_string(thisCount) + "_pulse_"
-        + to_string(startWaveID) + "_" + to_string(endWaveID)
-        + "_" + to_string(NUM_PULSE) + "x" + to_string(NFFT);;
-        ;
-        saveToBinaryFile(resources.pComplex_d + startWaveID * oneWaveSize, waveNum * oneWaveSize, filename.c_str());
+    if (debug_mode && thisCount >= start_frame && thisCount < end_frame) {
+        writeToDebugFile(resources.rawMessage, resources.pComplex_d);
     }
 
 
@@ -258,7 +269,7 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
 
     float scale = 1.0f / sqrt(Bandwidth * pulseWidth) / NUM_PULSE / RANGE_NUM;
     for (int i = 0; i < CAL_WAVE_NUM; i++) {
-    // for (int i = 19; i < 20; i++) {
+    // for (int i = 12; i < 15; i++) {
         string filename = "data" + to_string(i) + "_max.txt";
         /*Pulse Compression*/
         matrices[i].fft(resources.rowPlan);
@@ -270,7 +281,7 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
         // 归一化，同时连ifft的归一化一起做了
         matrices[i].scale(streams[threadID], scale);
 
-        // matrices[i].MTI(streams[threadID], 3);
+        matrices[i].MTI(streams[threadID], 3);
 
         /*coherent integration*/
         for (int j = 0; j < INTEGRATION_TIMES; j++) {
@@ -428,4 +439,26 @@ void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr
         inPacket = false;
         currentAddrOffset = 0;
     }
+}
+
+void ThreadPool::writeToDebugFile(unsigned char *rawMessage, const cufftComplex* d_data) {
+    int oneWaveSize = NUM_PULSE * NFFT;
+    int waveNum = end_wave - start_wave;
+
+    auto* startAddr = d_data + start_wave * oneWaveSize;
+    size_t size = waveNum * oneWaveSize;
+
+    auto* h_data = new cufftComplex[size]; // 在主机上分配内存
+
+    // 将数据从显存复制到主机内存
+    cudaMemcpy(h_data, startAddr, size * sizeof(cufftComplex), cudaMemcpyDeviceToHost);
+
+    // 打开文件并以二进制方式写入
+    auto rawMsg = reinterpret_cast<uint32*>(rawMessage);
+    auto time = rawMsg[6] / 10 + 8*60*60*1000; // FPGA时间 //0.1ms->1ms + 8h
+
+    debugFile.write(reinterpret_cast<char*>(&time), 4);
+    debugFile.write(reinterpret_cast<char*>(h_data), size * sizeof(cufftComplex));
+
+    delete[] h_data; // 释放主机内存
 }

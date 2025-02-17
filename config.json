@@ -10,7 +10,7 @@
   "num_threads": 4,
   "CAL_WAVE_NUM": 32,
   "INTEGRATION_TIMES": 1,
-  "normFactor": 1024,
+  "normFactor": 512,
 
   "local_video_ip": "127.0.0.1",
   "local_video_port": 0,
@@ -37,6 +37,12 @@
   "Pfa": 1e-8,
   "numGuardCells": 5,
   "numRefCells": 20,
+
+  "debug_mode": 1,
+  "start_frame": 43,
+  "end_frame": 271,
+  "start_wave": 12,
+  "end_wave": 15,
 
   "0表示质心法": "1表示选大",
   "velocityCoalescenceMethod": 1

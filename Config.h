@@ -52,6 +52,12 @@ extern int numRefCells;
 extern int velocityCoalescenceMethod;  // 0代表质心法，1代表选大
 extern int dataSource;                 // 0表示文件，1表示Pcie
 extern int hamming_window_enable;      // hamming窗
+
+extern int debug_mode;
+extern int start_frame;
+extern int end_frame;
+extern int start_wave;
+extern int end_wave;
 // 数据缓冲区声明
 
 void loadConfig(const std::string& filename); // 声明配置加载函数

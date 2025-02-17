@@ -44,6 +44,12 @@ int velocityCoalescenceMethod;
 int dataSource;
 int hamming_window_enable;
 
+int debug_mode;
+int start_frame;
+int end_frame;
+int start_wave;
+int end_wave;
+
 // 配置加载函数实现
 void loadConfig(const std::string& filename) {
     std::ifstream configFile(filename);
@@ -86,6 +92,12 @@ void loadConfig(const std::string& filename) {
     velocityCoalescenceMethod = config["velocityCoalescenceMethod"];
     dataSource = config["dataSource"];
     hamming_window_enable = config["hamming_window_enable"];
+
+    debug_mode = config["debug_mode"];
+    start_frame = config["start_frame"];
+    end_frame = config["end_frame"];
+    start_wave = config["start_wave"];
+    end_wave = config["end_wave"];
 
     std::cout << "Configuration loaded successfully.\n";
 }

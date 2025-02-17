@@ -3,6 +3,11 @@
 //
 #include "queue.h"
 
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <stdexcept>
+
+
 SharedQueue* initSharedMemery(bool initPara)
 {
     int shmid = shmget(SHM_KEY, sizeof(SharedQueue), 0666 | IPC_CREAT);
