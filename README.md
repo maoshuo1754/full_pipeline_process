@@ -2,7 +2,7 @@
 
 ## 项目简介
 本项目是一个基于C++和CUDA的高性能数据读取和数据处理系统，专注于从PCIe设备高效读取和处理大规模二进制数据，支持多线程处理和GPU加速，
-项目以来CUDA Toolkit和其他第三方库 (如nlohmann_json)。
+项目依赖CUDA Toolkit。
 
 ## 环境要求
 ### 系统要求
@@ -15,25 +15,24 @@
 - CMake: version >= 3.27
 - CUDA Toolkit: version >= 11.8
 - GCC/G++: version >= 9.4 (11编译不成功)
-- nlohmann_json: version >= 3.7.3
 
 ### 文件目录
 项目的文件目录结构如下：
 
 ```
 .
-├── queue.h             # 共享内存管理队列
+├── SharedQueue.h             # 共享内存管理队列
 ├── queue.cpp
 ├── CudaMatrix.h        # GPU矩阵处理
 ├── CudaMatrix.cu
 ├── utils.h             # 工具函数
 ├── utils.cu 
-├── ThreadPool.h      # 线程池
+├── ThreadPool.h        # 线程池
 ├── ThreadPool.cu
 ├── main.h              # 主函数
 ├── main.cpp
 ├── NRx/
-│  ├── sendVideo.h    # 检测视频发送
+│  ├── sendVideo.h      # 检测视频发送
 │  ├── SendVideo.cpp
 │  ├── plot.h           # 点迹凝聚文件
 │  ├── plot.cpp         

@@ -8,7 +8,7 @@
 #include <fstream>
 #include <ctime>
 #include "memory"
-#include "queue.h"      // 包含 SharedQueue 的定义
+#include "SharedQueue.h"      // 包含 SharedQueue 的定义
 #include "CudaMatrix.h" // 包含 CudaMatrix 的定义
 #include "SendVideo.h"  // 包含 SendVideo 的定义
 #include "utils.h"
@@ -46,6 +46,7 @@ struct ThreadPoolResources {
         threadID = threadID_;
         stream = stream_;
 
+        memset(rawMessage, 0, sizeof(rawMessage));
         checkCudaErrors(cudaMalloc(&pComplex_d, sizeof(cufftComplex) * WAVE_NUM * NUM_PULSE * NFFT));
         checkCudaErrors(cudaMalloc(&pHeadPositions_d, NUM_PULSE * 1.1 * sizeof(size_t)));
         checkCudaErrors(cudaMalloc(&pMaxRes_d, sizeof(cufftComplex) * WAVE_NUM * NFFT));

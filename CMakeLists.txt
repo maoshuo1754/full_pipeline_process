@@ -25,8 +25,8 @@ set(SOURCE_FILES
         NRx/sendVideo.cpp
         NRx/plot.cpp
         Config.cpp
-        queue.cpp
-        xdma_program.cpp
+        SharedQueue.cpp
+        DataSource.cpp
 )
 
 file(GLOB MYSRCS "${PROJECT_SOURCE_DIR}/NRx/include/*.cpp")

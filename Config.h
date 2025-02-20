@@ -50,7 +50,7 @@ extern int numGuardCells;
 extern int numRefCells;
 
 extern int velocityCoalescenceMethod;  // 0代表质心法，1代表选大
-extern int dataSource;                 // 0表示文件，1表示Pcie
+extern int dataSource_type;                 // 0表示文件，1表示Pcie
 extern int hamming_window_enable;      // hamming窗
 extern int MTI_enable;
 

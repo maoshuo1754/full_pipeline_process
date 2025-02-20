@@ -41,7 +41,7 @@ int numGuardCells;
 int numRefCells;
 
 int velocityCoalescenceMethod;
-int dataSource;
+int dataSource_type;
 int hamming_window_enable;
 int MTI_enable;
 
@@ -91,7 +91,7 @@ void loadConfig(const std::string& filename) {
     numGuardCells = config["numGuardCells"];
 
     velocityCoalescenceMethod = config["velocityCoalescenceMethod"];
-    dataSource = config["dataSource"];
+    dataSource_type = config["dataSource_type"];
     hamming_window_enable = config["hamming_window_enable"];
     MTI_enable = config["MTI_enable"];
 

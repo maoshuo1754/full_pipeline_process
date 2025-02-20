@@ -17,7 +17,7 @@ delta_range = c / Fs / 2;
 
 fs = 1 / PRT;
 
-Num_V_chnnels = 2048;
+Num_V_chnnels = 4096;
 f = -fs/2:fs/Num_V_chnnels:fs/2-fs/Num_V_chnnels;
 v_chnls = f .* lambda / 2;
 % v_chnls = fftshift(v_chnls);
@@ -35,69 +35,74 @@ PCcoef = fft(PCcoef, NFFT);
 PCcoef = repmat(PCcoef, pulseNum, 1);
 
 %% 数据读取
-timePath = '20250213142451_256GB_res/time.txt';
-times = readmatrix(timePath);
+folderPath = '/home/csic724/CLionProjects/PcieReader/cmake-build-release/20250219171427_128GB_frame_1_200_pulse_10_21_2048x4096';
 
-outMatrix = zeros(length(times), 19);
-outMatrix(:, 3) = times./1000;
-
-folderPath = '/home/csic724/CLionProjects/PcieReader/cmake-build-release/20250213142451_256GB/';
-fileList = dir(folderPath);
-filenames = strings(0);
-
-for i = 1:length(fileList)
-    if ~fileList(i).isdir
-        filenames = [filenames; fileList(i).name];
-    end
+fid = fopen(folderPath, 'rb');
+if fid == -1
+    error("can't open file %s", folderPath);
 end
 
-figure;
-for ii = 1:length(filenames)
-    if ii ~= 146
-        continue
-    end
-    disp(ii)
-    filename = filenames(ii);
-    suffix = split(filename, '.');
-    suffix = split(suffix{2}, '_');
-    waveIdx = str2double(suffix{3});
-    
-    startPulseIdx = str2double(suffix{5});
-    endPulseIdx = str2double(suffix{6});
-    waveNum = endPulseIdx - startPulseIdx;
-    
-    matrixDims = split(suffix{7}, 'x');
-    M = str2double(matrixDims{1});
-    N = str2double(matrixDims{2});
-    
-    data = readBinaryIQFile(folderPath + filename, waveNum, M, N);
+fileInfos = getFileInfos(folderPath);
+startWaveIdx = fileInfos('startWaveIdx');
+endWaveIdx = fileInfos('endWaveIdx');
+waveNum = endWaveIdx - startWaveIdx;
 
-    for jj = 1:1
+
+figure;
+% h = waitbar(0, 'processing...');
+
+outMatrix = zeros(fileInfos('numFrames'), 19);
+
+aziTable = readmatrix("azi.txt");
+
+for ii = 1:fileInfos('numFrames')
+    msg = [num2str(ii), '/', num2str(fileInfos('numFrames'))];
+    % waitbar(ii/fileInfos('numFrames'), h, msg);
+
+    [time, data] = readBinaryIQFile(fid, fileInfos);
+
+    if ii ~= 1
+        continue;
+    end
+
+    for jj = 1:waveNum
+
+        azi = aziTable(aziTable(:,1) == startWaveIdx+jj-1, 2);
+
         A = data(:,:,jj);
         A = fft(A, [], 2);
         A = A .* PCcoef;
         A = ifft(A, [], 2);
+
+        % A(1:end-1, :) = A(2:end, :) - A(1:end-1, :);
+        A(end, :) = 0;
         A = fft(A, Num_V_chnnels, 1);
             
         
         A = fftshift(A,1);
-        inds = find(v_chnls < -20 | v_chnls > -10);
-        A(inds, :) = 0;
+        % inds = find(v_chnls < -20 | v_chnls > -10);
+        % A(inds, :) = 0;
         A = A ./ (sqrt(bandwidth * pulsewidth) * pulseNum);
         A = abs(A);
         
-        A = A(:, (N_pc-1) + 52 - 2:end);
-        A(:, 1:round(89+0.7822*ii)) = 0;
+        A = A(:, N_pc + 53:end);
+        % A(:, 1:round(165+0.7822*ii)) = 0;
         [maxVaule, ind] = max(A, [], "all");
         [row, col] = ind2sub(size(A), ind);
         range = col * delta_range;
         v = v_chnls(row);
-        disp(v);
     end
+    outMatrix(ii, 3) = time / 1000;
     outMatrix(ii, end) = abs(v) * 100;
     outMatrix(ii, end-1) = 4.8*col;
-    disp(['v:', num2str(v_chnls(row)), 'm/s range:', num2str(4.8*col)]);
-    imagesc((1:length(A))*delta_range, v_chnls,A);
+    disp(['ind:', num2str(ii), ' v:', num2str(v_chnls(row)), 'm/s range:', num2str(4.8*col)]);
+    % imagesc((1:length(A))*delta_range, v_chnls,A);
 end
 
-writematrix(outMatrix, '20250213142451_256GB_res/out2.txt', 'Delimiter', 'tab');
+fclose(fid);
+close(h);
+
+if ~exist(fileInfos('dataname'), 'dir')
+    mkdir(fileInfos('dataname'));
+end
+writematrix(outMatrix, [fileInfos('dataname'), '/20250213141446_4096.txt'], 'Delimiter', 'tab');

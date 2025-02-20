@@ -1,8 +1,8 @@
 {
-  "dataPath": "/backup2/data/20250213/20250213141446_256GB.dat",
+  "dataPath": "/backup2/data/20250219/20250219171427_128GB.dat",
 
   "0表示文件": "1表示Pcie",
-  "dataSource": 0,
+  "dataSource_type": 1,
   "THREADS_MEM_SIZE": 1073741824,
 
   "hamming_window_enable": 0,
@@ -39,11 +39,11 @@
   "numGuardCells": 5,
   "numRefCells": 20,
 
-  "debug_mode": 0,
+  "debug_mode": 1,
   "start_frame": 1,
-  "end_frame": 160,
-  "start_wave": 19,
-  "end_wave": 22,
+  "end_frame": 200,
+  "start_wave": 10,
+  "end_wave": 21,
 
   "0表示质心法": "1表示选大",
   "velocityCoalescenceMethod": 1

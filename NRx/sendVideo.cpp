@@ -32,7 +32,7 @@ SendVideo::SendVideo() { // , outfile("detectVideo.txt")
 
     memset(&localAddr, 0, sizeof(localAddr));
     localAddr.sin_family = AF_INET;
-    localAddr.sin_port = htons(local_video_port);  // 0x2001是8192  0x2002岁8194
+    localAddr.sin_port = htons(local_video_port);    // 0x2001是8192  0x2002岁8194
     localAddr.sin_addr.s_addr = inet_addr(local_video_ip.c_str());
 
     std::cout << "local Address:      " << local_video_ip << ":" << local_video_port <<std::endl;
@@ -108,7 +108,7 @@ void SendVideo::send(unsigned char *rawMessage, float2 *detectedVideo, vector<in
         if (rAzm < 0)
             rAzm += 360.f;
 
-//        cout << "[rAzm:]" << ii << " " << rAzm << endl;
+        // cout << ii << " " << rAzm << endl;
         dwTemp = UINT16(rAzm / 360.0f * 65536.0f);
         videoMsg.RadarVideoHeader.wAziCode = htons(dwTemp);
 

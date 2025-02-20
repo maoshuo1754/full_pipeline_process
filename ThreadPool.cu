@@ -34,10 +34,7 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue) :
 
     if (debug_mode) {
         string input_file_name = dataPath.substr(dataPath.rfind('/') + 1, dataPath.rfind('.') - dataPath.rfind('/') - 1);
-        // get file path and name
-        if (!std::filesystem::exists(input_file_name)) {
-            std::filesystem::create_directory(input_file_name);
-        }
+
         string debug_file_path =  input_file_name +
         "_frame_" + to_string(start_frame) + "_" + to_string(end_frame) +
         "_pulse_" + to_string(start_wave) + "_" + to_string(end_wave) +
@@ -268,8 +265,8 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
     auto &Max_res = resources.Max_res;
 
     float scale = 1.0f / sqrt(Bandwidth * pulseWidth) / NUM_PULSE / RANGE_NUM;
-    for (int i = 0; i < CAL_WAVE_NUM; i++) {
-    // for (int i = 19; i < 22; i++) {
+    // for (int i = 0; i < CAL_WAVE_NUM; i++) {
+    for (int i = 10; i < 21; i++) {
         string filename = "data" + to_string(i) + "_max.txt";
         /*Pulse Compression*/
         matrices[i].fft(resources.rowPlan);
@@ -290,16 +287,8 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
             matrices[i].fft_by_col(resources.colPlan);
         }
 
-        string name = "pulse17_wave_" + to_string(i) + ".txt";
-        // matrices[i].writeMatTxt(name);
-
         cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
-        // if (thisCount == 1) {
-        //     string name = "pulse_" + to_string(thisCount) + "_wave_" + to_string(i) +  + ".txt";
-        //     matrices[i].writeMatTxt(name);
-        //     cout << name << " write finished" << endl;
-        // }
-        
+
         /*cfar*/
         matrices[i].abs(streams[threadID]);
         matrices[i].cfar(CFAR_res[i], streams[threadID], Pfa, numGuardCells, numRefCells, numSamples - 1,
@@ -347,7 +336,7 @@ void ThreadPool::copyToThreadMemory() {
     bool startFlag;
     for (int i = 0; i < INDEX_SIZE / sizeof(unsigned int); i++) {
         size_t indexOffset = block_index * INDEX_SIZE + i * 4;
-        if(dataSource == 0) {
+        if(dataSource_type == 0) {
             indexValue = *(unsigned int *) (sharedQueue->index_buffer + indexOffset);
         }
         else {
