@@ -2,7 +2,7 @@
   "dataPath": "/backup2/data/20250219/20250219171427_128GB.dat",
 
   "0表示文件": "1表示Pcie",
-  "dataSource_type": 1,
+  "dataSource_type": 0,
   "THREADS_MEM_SIZE": 1073741824,
 
   "hamming_window_enable": 0,
@@ -40,8 +40,8 @@
   "numRefCells": 20,
 
   "debug_mode": 1,
-  "start_frame": 1,
-  "end_frame": 200,
+  "start_frame": 2,
+  "end_frame": 3,
   "start_wave": 10,
   "end_wave": 21,
 

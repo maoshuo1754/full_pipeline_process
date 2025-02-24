@@ -128,6 +128,7 @@ private:
     char timebuf[100];
     ofstream logFile;
     ofstream debugFile;
+    DataRateTracker dataRateTracker;
 
     int numSamples;             // 脉压采样点数
     CudaMatrix PcCoefMatrix;

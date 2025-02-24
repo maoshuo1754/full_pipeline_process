@@ -265,8 +265,8 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
     auto &Max_res = resources.Max_res;
 
     float scale = 1.0f / sqrt(Bandwidth * pulseWidth) / NUM_PULSE / RANGE_NUM;
-    // for (int i = 0; i < CAL_WAVE_NUM; i++) {
-    for (int i = 10; i < 21; i++) {
+    for (int i = 0; i < CAL_WAVE_NUM; i++) {
+    // for (int i = 10; i < 21; i++) {
         string filename = "data" + to_string(i) + "_max.txt";
         /*Pulse Compression*/
         matrices[i].fft(resources.rowPlan);
@@ -326,7 +326,7 @@ void ThreadPool::waitForProcessingSignal(int threadID) {
 // 循环将内存的数据拷贝到显存(未解包)，每个线程对应一个脉组的数据
 void ThreadPool::copyToThreadMemory() {
     int block_index = sharedQueue->read_index;
-    // TODO: 添加数据计时， xx GB/s
+    dataRateTracker.dataArrived();
     // std::cout << "Block index: " << block_index << std::endl << std::endl;
 
     unsigned int seqNum;

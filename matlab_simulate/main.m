@@ -17,7 +17,7 @@ delta_range = c / Fs / 2;
 
 fs = 1 / PRT;
 
-Num_V_chnnels = 4096;
+Num_V_chnnels = 2048;
 f = -fs/2:fs/Num_V_chnnels:fs/2-fs/Num_V_chnnels;
 v_chnls = f .* lambda / 2;
 % v_chnls = fftshift(v_chnls);
@@ -35,7 +35,7 @@ PCcoef = fft(PCcoef, NFFT);
 PCcoef = repmat(PCcoef, pulseNum, 1);
 
 %% 数据读取
-folderPath = '/home/csic724/CLionProjects/PcieReader/cmake-build-release/20250219171427_128GB_frame_1_200_pulse_10_21_2048x4096';
+folderPath = '/home/csic724/CLionProjects/PcieReader/cmake-build-release/20250219171232_128GB_frame_2_3_pulse_10_21_2048x4096';
 
 fid = fopen(folderPath, 'rb');
 if fid == -1
@@ -48,7 +48,7 @@ endWaveIdx = fileInfos('endWaveIdx');
 waveNum = endWaveIdx - startWaveIdx;
 
 
-figure;
+
 % h = waitbar(0, 'processing...');
 
 outMatrix = zeros(fileInfos('numFrames'), 19);
@@ -65,7 +65,7 @@ for ii = 1:fileInfos('numFrames')
         continue;
     end
 
-    for jj = 1:waveNum
+    for jj = 1:1
 
         azi = aziTable(aziTable(:,1) == startWaveIdx+jj-1, 2);
 
@@ -77,15 +77,20 @@ for ii = 1:fileInfos('numFrames')
         % A(1:end-1, :) = A(2:end, :) - A(1:end-1, :);
         A(end, :) = 0;
         A = fft(A, Num_V_chnnels, 1);
-            
-        
-        A = fftshift(A,1);
+
+        % A = fftshift(A,1);
         % inds = find(v_chnls < -20 | v_chnls > -10);
-        % A(inds, :) = 0;
-        A = A ./ (sqrt(bandwidth * pulsewidth) * pulseNum);
+        A(1:2, :) = 0;
+        A = A ./ (sqrt(bandwidth * pulsewidth) * pulseNum);                
         A = abs(A);
         
         A = A(:, N_pc + 53:end);
+
+        A = 20*log10(A);
+        figure;
+        % imagesc(A);
+        mesh(A(:, 1:end-2048));
+        title([num2str(jj), '波束'])
         % A(:, 1:round(165+0.7822*ii)) = 0;
         [maxVaule, ind] = max(A, [], "all");
         [row, col] = ind2sub(size(A), ind);
@@ -96,11 +101,10 @@ for ii = 1:fileInfos('numFrames')
     outMatrix(ii, end) = abs(v) * 100;
     outMatrix(ii, end-1) = 4.8*col;
     disp(['ind:', num2str(ii), ' v:', num2str(v_chnls(row)), 'm/s range:', num2str(4.8*col)]);
-    % imagesc((1:length(A))*delta_range, v_chnls,A);
+    % imagesc((1:length(A))*delta_range, v_chnls, A);
 end
 
 fclose(fid);
-close(h);
 
 if ~exist(fileInfos('dataname'), 'dir')
     mkdir(fileInfos('dataname'));

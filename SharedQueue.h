@@ -30,4 +30,58 @@ const unsigned char pattern[] = {
 
 SharedQueue* initSharedMemery(bool);
 
+#include <iostream>
+#include <chrono>  // 用于计时
+#include <iomanip> // 用于格式化输出
+
+class DataRateTracker {
+private:
+    const size_t DATA_SIZE_MB = 256; // 每次调用代表256MB
+    size_t call_count = 0;           // 调用次数计数
+    std::chrono::steady_clock::time_point start_time;
+    std::chrono::steady_clock::time_point last_reset_time; // 上次重置时间
+    double interval_seconds;         // 输出间隔（秒）
+
+public:
+    DataRateTracker(double interval = 1.0) : interval_seconds(interval) {
+        last_reset_time = std::chrono::steady_clock::now(); // 初始化起始时间
+        start_time = last_reset_time;
+    }
+
+    ~DataRateTracker() {
+        auto end_time = std::chrono::steady_clock::now();
+        std::chrono::duration<double> elapsed_seconds = end_time - start_time;
+        if (elapsed_seconds.count() > 0) {
+            double total_data_MB = call_count * DATA_SIZE_MB;
+            double total_rate_gbps = (total_data_MB / 1024.0 / elapsed_seconds.count());
+            std::cout << std::fixed << std::setprecision(2)
+                      << "Total data rate: " << total_rate_gbps << " GB/s over "
+                      << elapsed_seconds.count() << " seconds" << std::endl;
+            ;
+        }
+    }
+
+    // 每次有数据到来时调用此函数
+    void dataArrived() {
+        call_count++;
+
+        // 计算当前时间与上次重置时间的时间差
+        auto current_time = std::chrono::steady_clock::now();
+        std::chrono::duration<double> elapsed = current_time - last_reset_time;
+
+        // 如果超过指定间隔，输出数据率并重置
+        if (elapsed.count() >= interval_seconds) {
+            double data_mb = call_count * DATA_SIZE_MB; // 总数据量（MB）
+            double rate_gbps = (data_mb / 1024.0) / elapsed.count(); // GB/s
+
+            std::cout << std::fixed << std::setprecision(2) // 保留两位小数
+                      << "Data rate: " << rate_gbps << " GB/s" << std::endl;
+
+            // 重置计数器和时间
+            call_count = 0;
+            last_reset_time = current_time;
+        }
+    }
+};
+
 #endif // QUEUE_H
