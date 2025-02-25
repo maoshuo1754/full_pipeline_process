@@ -35,7 +35,7 @@ PCcoef = fft(PCcoef, NFFT);
 PCcoef = repmat(PCcoef, pulseNum, 1);
 
 %% 数据读取
-folderPath = '20250209143437_256GB_frame_1_60_pulse_13_16_2048x4096';
+folderPath = '20250209143437_256GB_frame_1_200_pulse_13_16_2048x4096';
 
 fid = fopen(folderPath, 'rb');
 if fid == -1
@@ -51,36 +51,50 @@ waveNum = endWaveIdx - startWaveIdx;
 
 aziTable = readmatrix("azi.txt");
 
-
-
+tic;
+figure;
 for ii = 1:fileInfos('numFrames')
-    msg = [num2str(ii), '/', num2str(fileInfos('numFrames'))];
-    % waitbar(ii/fileInfos('numFrames'), h, msg);
-    if ii ~= 1
+    if ii > 20
         continue;
     end
-    figure;
-    [time, data] = readBinaryIQFile(fid, fileInfos);
+    msg = [num2str(ii), '/', num2str(fileInfos('numFrames'))];
+    % waitbar(ii/fileInfos('numFrames'), h, msg);
 
-    for jj = 1:waveNum
-        azi = aziTable(aziTable(:,1) == startWaveIdx+jj-1, 2);
-        A = data(:,:,jj);
-        A = fft(A, [], 2);
-        A = A .* PCcoef;
-        A = ifft(A, [], 2);
-        A = A(:, N_pc+53:500);
+    
+    [time, A] = readBinaryIQFile(fid, fileInfos);
+    
+    % Get all azimuth values at once
+    azi = aziTable(aziTable(:,1) >= startWaveIdx & aziTable(:,1) < startWaveIdx+waveNum, 2);
+    azi = fliplr(azi);
 
-        A = fft(A, Num_V_chnnels, 1);
-        A = fftshift(A, 1);
-        % inds = find(v_chnls < -20 | v_chnls > -10);
-        
-        A = A ./ (sqrt(bandwidth * pulsewidth) * pulseNum);                
-        A = abs(A);
-        A = 20*log10(A);
-        A(1:2, :) = 0;
-        A = max(A);
-    end
+    % A = data; % Shape: [channels, samples, waves]
+    A = fft(A, [], 2); % FFT along time dimension (2nd dim)
+    A = A .* PCcoef; % Apply coefficients
+    A = ifft(A, [], 2); % IFFT along time dimension
+    A = A(:, N_pc+53:2000, :); % Range cut
+    A = fft(A, Num_V_chnnels, 1); % FFT along channel dimension
+    A(1, :, :) = 0;
+    % A = fftshift(A, 1); % Shift zero-frequency component
+    
+    % Normalize entire array
+    A = A ./ (sqrt(bandwidth * pulsewidth) * pulseNum);
+     % Magnitude
+
+    % Set first two channels to zero
+    
+    
+    A = cfar4(A);
+    A = A ./ 1024 .* 255;
+    % Get maximum along wave dimension (3rd dim)
+    % A = max(A, [], 1);
+    % A = permute(A, [3, 2, 1]);
+    imagesc((1:length(A))*4.8, azi, A);
+    title([num2str(ii), '帧']);
+    xlabel('距离(m)');ylabel('方位角');
+    saveas(gcf, ['res/', num2str(ii), '.png']);
 end
 
+t = toc;
+fprintf('%.2f\n', t);
 fclose(fid);
 

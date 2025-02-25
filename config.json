@@ -42,7 +42,7 @@
 
   "debug_mode": 1,
   "start_frame": 1,
-  "end_frame": 60,
+  "end_frame": 200,
   "start_wave": 13,
   "end_wave": 16,
 
