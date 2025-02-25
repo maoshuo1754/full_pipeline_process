@@ -73,6 +73,7 @@ public:
     void scale(cudaStream_t _stream, float _scale);
 
     void MTI(cudaStream_t _stream, int numCancellerPulses);
+    void columnFilter(cudaStream_t _stream);
 };
 
 #endif // CUDA_MATRIX_H

@@ -146,3 +146,23 @@ void saveToBinaryFile(const cufftComplex* d_data, size_t size, const char* filen
 
     delete[] h_data; // 释放主机内存
 }
+
+
+std::vector<cufftComplex> readFilterFromFile(const string& filename) {
+    std::ifstream file(filename);
+    std::vector<cufftComplex> filter;
+    if (file.is_open()) {
+        float real;
+        while (file >> real) {
+            cufftComplex temp = {real, 0};
+            filter.push_back(temp);
+        }
+    }
+    else {
+        std::cerr << "Failed to open file " << filename << " for reading." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    file.close();
+    return filter;
+}
+

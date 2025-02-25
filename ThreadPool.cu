@@ -266,8 +266,7 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
 
     float scale = 1.0f / sqrt(Bandwidth * pulseWidth) / NUM_PULSE / RANGE_NUM;
     for (int i = 0; i < CAL_WAVE_NUM; i++) {
-    // for (int i = 10; i < 21; i++) {
-        string filename = "data" + to_string(i) + "_max.txt";
+    // for (int i = 13; i < 16; i++) {
         /*Pulse Compression*/
         matrices[i].fft(resources.rowPlan);
 
@@ -281,6 +280,7 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
         if (MTI_enable) {
             matrices[i].MTI(streams[threadID], 3);
         }
+        // matrices[i].columnFilter(streams[threadID]);
 
         /*coherent integration*/
         for (int j = 0; j < INTEGRATION_TIMES; j++) {

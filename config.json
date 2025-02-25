@@ -1,5 +1,6 @@
 {
-  "dataPath": "/backup2/data/20250219/20250219171427_128GB.dat",
+  "dataPath": "/backup2/data/20250209143437_256GB.dat",
+  "filterPath": "/home/csic724/CLionProjects/PcieReader/filterCoef.txt",
 
   "0表示文件": "1表示Pcie",
   "dataSource_type": 0,
@@ -40,10 +41,10 @@
   "numRefCells": 20,
 
   "debug_mode": 1,
-  "start_frame": 2,
-  "end_frame": 3,
-  "start_wave": 10,
-  "end_wave": 21,
+  "start_frame": 1,
+  "end_frame": 60,
+  "start_wave": 13,
+  "end_wave": 16,
 
   "0表示质心法": "1表示选大",
   "velocityCoalescenceMethod": 1

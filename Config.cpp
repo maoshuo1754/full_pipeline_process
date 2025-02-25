@@ -13,6 +13,7 @@ using json = nlohmann::json;
 
 // 变量定义
 std::string dataPath;
+std::string filterPath;
 
 int num_threads;
 int THREADS_MEM_SIZE;
@@ -62,6 +63,7 @@ void loadConfig(const std::string& filename) {
     configFile >> config;
 
     dataPath = config["dataPath"];
+    filterPath = config["filterPath"];
     num_threads = config["num_threads"];
     THREADS_MEM_SIZE = config["THREADS_MEM_SIZE"];
     CAL_WAVE_NUM = config["CAL_WAVE_NUM"];

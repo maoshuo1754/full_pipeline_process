@@ -35,7 +35,7 @@ PCcoef = fft(PCcoef, NFFT);
 PCcoef = repmat(PCcoef, pulseNum, 1);
 
 %% 数据读取
-folderPath = '/home/csic724/CLionProjects/PcieReader/cmake-build-release/20250219171232_128GB_frame_2_3_pulse_10_21_2048x4096';
+folderPath = '20250209143437_256GB_frame_1_60_pulse_13_16_2048x4096';
 
 fid = fopen(folderPath, 'rb');
 if fid == -1
@@ -47,66 +47,40 @@ startWaveIdx = fileInfos('startWaveIdx');
 endWaveIdx = fileInfos('endWaveIdx');
 waveNum = endWaveIdx - startWaveIdx;
 
-
-
 % h = waitbar(0, 'processing...');
 
-outMatrix = zeros(fileInfos('numFrames'), 19);
-
 aziTable = readmatrix("azi.txt");
+
+
 
 for ii = 1:fileInfos('numFrames')
     msg = [num2str(ii), '/', num2str(fileInfos('numFrames'))];
     % waitbar(ii/fileInfos('numFrames'), h, msg);
-
-    [time, data] = readBinaryIQFile(fid, fileInfos);
-
     if ii ~= 1
         continue;
     end
+    figure;
+    [time, data] = readBinaryIQFile(fid, fileInfos);
 
-    for jj = 1:1
-
+    for jj = 1:waveNum
         azi = aziTable(aziTable(:,1) == startWaveIdx+jj-1, 2);
-
         A = data(:,:,jj);
         A = fft(A, [], 2);
         A = A .* PCcoef;
         A = ifft(A, [], 2);
+        A = A(:, N_pc+53:500);
 
-        % A(1:end-1, :) = A(2:end, :) - A(1:end-1, :);
-        A(end, :) = 0;
         A = fft(A, Num_V_chnnels, 1);
-
-        % A = fftshift(A,1);
+        A = fftshift(A, 1);
         % inds = find(v_chnls < -20 | v_chnls > -10);
-        A(1:2, :) = 0;
+        
         A = A ./ (sqrt(bandwidth * pulsewidth) * pulseNum);                
         A = abs(A);
-        
-        A = A(:, N_pc + 53:end);
-
         A = 20*log10(A);
-        figure;
-        % imagesc(A);
-        mesh(A(:, 1:end-2048));
-        title([num2str(jj), '波束'])
-        % A(:, 1:round(165+0.7822*ii)) = 0;
-        [maxVaule, ind] = max(A, [], "all");
-        [row, col] = ind2sub(size(A), ind);
-        range = col * delta_range;
-        v = v_chnls(row);
+        A(1:2, :) = 0;
+        A = max(A);
     end
-    outMatrix(ii, 3) = time / 1000;
-    outMatrix(ii, end) = abs(v) * 100;
-    outMatrix(ii, end-1) = 4.8*col;
-    disp(['ind:', num2str(ii), ' v:', num2str(v_chnls(row)), 'm/s range:', num2str(4.8*col)]);
-    % imagesc((1:length(A))*delta_range, v_chnls, A);
 end
 
 fclose(fid);
 
-if ~exist(fileInfos('dataname'), 'dir')
-    mkdir(fileInfos('dataname'));
-end
-writematrix(outMatrix, [fileInfos('dataname'), '/20250213141446_4096.txt'], 'Delimiter', 'tab');

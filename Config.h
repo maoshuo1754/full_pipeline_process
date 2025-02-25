@@ -19,6 +19,7 @@
 #define CFAR_METHOD 0          // 0是CA_CFAR, 1是GO_CFAR， 2是SO_CFAR
 // 配置参数声明
 extern std::string dataPath;
+extern std::string filterPath;
 
 extern int num_threads;         // 工作线程数
 extern int THREADS_MEM_SIZE;    // 每个线程独立显存大小

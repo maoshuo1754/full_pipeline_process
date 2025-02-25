@@ -522,6 +522,57 @@ void CudaMatrix::MTI(cudaStream_t _stream, int numCancellerPulses) {
 }
 
 
+__global__ void columnFilterKernel(cufftComplex* input, cufftComplex* output,
+                                   cufftComplex* filter, int nrows, int ncols,
+                                   int filter_length) {
+    // 计算当前线程处理的列索引
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (col < ncols) {
+        // 对每一列进行滤波
+        for (int i = 0; i < nrows; i++) {
+            cufftComplex result = {0.0f, 0.0f}; // 初始化结果为 0
+
+            // 卷积操作
+            for (int j = 0; j < filter_length; j++) {
+                int row_idx = i - j; // 当前行索引减去滤波器索引
+                if (row_idx >= 0 && row_idx < nrows) {
+                    cufftComplex input_val = input[row_idx * ncols + col];
+                    cufftComplex filter_val = filter[j];
+                    result.x += input_val.x * filter_val.x - input_val.y * filter_val.y; // 实部
+                    result.y += input_val.x * filter_val.y + input_val.y * filter_val.x; // 虚部
+                }
+            }
+
+            // 将结果写入输出矩阵
+            output[i * ncols + col] = result;
+        }
+    }
+}
+
+void CudaMatrix::columnFilter(cudaStream_t _stream) {
+    static cufftComplex* d_filter = nullptr;
+    static int filter_length = 0;
+    if (d_filter == NULL) {
+        auto filter = readFilterFromFile(filterPath);
+        filter_length = filter.size();
+
+        cudaMalloc((void**)&d_filter, filter_length * sizeof(cufftComplex));
+        cudaMemcpy(d_filter, filter.data(), filter_length * sizeof(cufftComplex), cudaMemcpyHostToDevice);
+    }
+
+
+    dim3 blockDim(CUDA_BLOCK_SIZE);
+    dim3 gridDim((ncols + blockDim.x - 1) / blockDim.x);
+
+    cufftComplex* d_output;
+    checkCudaErrors(cudaMalloc(&d_output, sizeof(cufftComplex) * nrows * ncols));
+
+    columnFilterKernel<<<gridDim, blockDim, 0, _stream>>>(data, d_output, d_filter, nrows, ncols, filter_length);
+
+    cudaMemcpy(data, d_output, sizeof(cufftComplex) * nrows * ncols, cudaMemcpyDeviceToDevice);
+    checkCudaErrors(cudaFree(d_output));
+}
 
 // Kernel to extract segments from each row
 __global__ void
