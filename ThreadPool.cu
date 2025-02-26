@@ -189,7 +189,6 @@ void ThreadPool::generatePCcoefMatrix(unsigned char *rawMessage, cufftHandle &pc
 
 // 线程池中的数据处理函数
 void ThreadPool::processData(ThreadPoolResources &resources) {
-
     int threadID = resources.threadID;
     cout << "thread " << threadID << " start" << endl;
     static int count = 0;
@@ -205,6 +204,16 @@ void ThreadPool::processData(ThreadPoolResources &resources) {
                                     resources.stream));
     int numHeads = headPositions[threadID].size();       // 2048
     int headLength = headPositions[threadID][1] - headPositions[threadID][0];
+
+    // for (int i = 1; i < numHeads; i++) {
+    //     auto diff = headPositions[threadID][i] - headPositions[threadID][i - 1];
+    //
+    //     if (diff != 479936) {
+    //         cout << threadID << " " << i << ", " << diff << endl;
+    //     }
+    // }
+
+
     int rangeNum = floor((headLength - DATA_OFFSET) / WAVE_NUM / 4.0);
 
     // cout << "numHeads: " << numHeads << endl;
@@ -265,8 +274,8 @@ void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int range
     auto &Max_res = resources.Max_res;
 
     float scale = 1.0f / sqrt(Bandwidth * pulseWidth) / NUM_PULSE / RANGE_NUM;
-    for (int i = 0; i < CAL_WAVE_NUM; i++) {
-    // for (int i = 13; i < 16; i++) {
+    // for (int i = 0; i < CAL_WAVE_NUM; i++) {
+    for (int i = start_wave; i < end_wave; i++) {
         /*Pulse Compression*/
         matrices[i].fft(resources.rowPlan);
 

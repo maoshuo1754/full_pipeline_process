@@ -114,7 +114,7 @@ void SendVideo::send(unsigned char *rawMessage, float2 *detectedVideo, vector<in
 
         auto* rowData = detectedVideo + ii * NFFT;
         auto* rowSpeed = speedChannels + ii * NFFT;
-        for (int k = 0; k < unMinPRTLen; ++k) {
+        for (int k = 0; k < unMinPRTLen - numSamples - 52; ++k) {
             // + system_delay
             //TODO: 这个偏移会不会动
             data_amp = rowData[k + numSamples - 1 + 52].x;

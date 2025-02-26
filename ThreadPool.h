@@ -53,6 +53,7 @@ struct ThreadPoolResources {
         pMaxRes_h = new cufftComplex[WAVE_NUM * NFFT];
         checkCudaErrors(cudaMalloc(&pSpeed_d, sizeof(int) * WAVE_NUM * NFFT));
         pSpeed_h = new int[WAVE_NUM * NFFT];
+        memset(pSpeed_h, 0, sizeof(int) * WAVE_NUM * NFFT);
 
         // 初始化 IQmatrices 和 CFAR_res
         for (int i = 0; i < WAVE_NUM; i++) {
