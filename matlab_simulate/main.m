@@ -54,9 +54,6 @@ aziTable = readmatrix("azi.txt");
 tic;
 figure;
 for ii = 1:fileInfos('numFrames')
-    if ii > 20
-        continue;
-    end
     msg = [num2str(ii), '/', num2str(fileInfos('numFrames'))];
     % waitbar(ii/fileInfos('numFrames'), h, msg);
 
@@ -71,19 +68,15 @@ for ii = 1:fileInfos('numFrames')
     A = fft(A, [], 2); % FFT along time dimension (2nd dim)
     A = A .* PCcoef; % Apply coefficients
     A = ifft(A, [], 2); % IFFT along time dimension
-    A = A(:, N_pc+53:2000, :); % Range cut
+    A = A(:, N_pc+53:500, :); % Range cut
     A = fft(A, Num_V_chnnels, 1); % FFT along channel dimension
     A(1, :, :) = 0;
     % A = fftshift(A, 1); % Shift zero-frequency component
     
     % Normalize entire array
     A = A ./ (sqrt(bandwidth * pulsewidth) * pulseNum);
-     % Magnitude
 
-    % Set first two channels to zero
-    
-    
-    A = cfar4(A);
+    A = cfar(A);
     A = A ./ 1024 .* 255;
     % Get maximum along wave dimension (3rd dim)
     % A = max(A, [], 1);
