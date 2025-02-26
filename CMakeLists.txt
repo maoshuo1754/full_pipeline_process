@@ -25,7 +25,6 @@ set(SOURCE_FILES
         NRx/sendVideo.cpp
         NRx/plot.cpp
         Config.cpp
-        SharedQueue.cpp
         DataSource.cpp
 )
 

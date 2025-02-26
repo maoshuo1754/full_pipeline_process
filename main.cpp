@@ -12,16 +12,16 @@ int main(){
     std::thread configMonitor(monitorConfig, configFilePath, loadConfig);
 
     // data source thread
+    auto* sharedQueue = new SharedQueue();
     unique_ptr<DataSource> dataSource;
     if(dataSource_type == 0) {
-        dataSource = make_unique<FileDataSource>(dataPath, monitorWriterRunning);
+        dataSource = make_unique<FileDataSource>(dataPath, monitorWriterRunning, sharedQueue);
     } else {
-        dataSource = make_unique<XDMADataSource>(monitorWriterRunning);
+        dataSource = make_unique<XDMADataSource>(monitorWriterRunning, sharedQueue);
     }
     std::thread dataSourceThread(&DataSource::run, dataSource.get());
 
     // thread_pool
-    auto* sharedQueue = initSharedMemery(true);
     cout << "Working Threads Num:" << num_threads << endl;
     ThreadPool thread_pool(num_threads, sharedQueue);
     thread_pool.run();

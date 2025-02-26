@@ -2,7 +2,6 @@
 #define QUEUE_H
 
 #include <semaphore.h>
-#include "Config.h"
 
 #define SHM_KEY 0x1234
 #define QUEUE_SIZE 4                // 队列大小
@@ -17,9 +16,23 @@ struct SharedQueue {
     sem_t items_available; // 表示可用数据
     int read_index;
     int write_index;
-    unsigned char index_buffer[QUEUE_SIZE * INDEX_SIZE];
-    unsigned char buffer[QUEUE_SIZE * BLOCK_SIZE];
+    unsigned char* index_buffer;
+    unsigned char* buffer;
 
+    SharedQueue() {
+        index_buffer = new unsigned char[QUEUE_SIZE * INDEX_SIZE];
+        buffer = new unsigned char[QUEUE_SIZE * BLOCK_SIZE];
+        sem_init(&this->mutex, 1, 1);
+        sem_init(&this->slots_available, 1, QUEUE_SIZE);
+        sem_init(&this->items_available, 1, 0);
+        this->read_index = 0;
+        this->write_index = 0;
+    }
+
+    ~SharedQueue() {
+        delete[] index_buffer;
+        delete[] buffer;
+    }
 };
 
 // 模式串：要匹配的字节数组
@@ -28,19 +41,17 @@ const unsigned char pattern[] = {
         0x09, 0x00, 0x09, 0x00,
 };
 
-SharedQueue* initSharedMemery(bool);
-
 #include <iostream>
 #include <chrono>  // 用于计时
 #include <iomanip> // 用于格式化输出
 
 class DataRateTracker {
 private:
-    const size_t DATA_SIZE_MB = 256; // 每次调用代表256MB
-    size_t call_count = 0;           // 调用次数计数
+    const size_t DATA_SIZE_MB = BLOCK_SIZE / 1024 / 1024; // 每次调用的大小
+    size_t call_count = 0; // 调用次数计数
     std::chrono::steady_clock::time_point start_time;
     std::chrono::steady_clock::time_point last_reset_time; // 上次重置时间
-    double interval_seconds;         // 输出间隔（秒）
+    double interval_seconds; // 输出间隔（秒）
 
 public:
     DataRateTracker(double interval = 1.0) : interval_seconds(interval) {
@@ -55,9 +66,8 @@ public:
             double total_data_MB = call_count * DATA_SIZE_MB;
             double total_rate_gbps = (total_data_MB / 1024.0 / elapsed_seconds.count());
             std::cout << std::fixed << std::setprecision(2)
-                      << "Total data rate: " << total_rate_gbps << " GB/s over "
-                      << elapsed_seconds.count() << " seconds" << std::endl;
-            ;
+                << "Total data rate: " << total_rate_gbps << " GB/s over "
+                << elapsed_seconds.count() << " seconds" << std::endl;;
         }
     }
 
@@ -75,7 +85,7 @@ public:
             double rate_gbps = (data_mb / 1024.0) / elapsed.count(); // GB/s
 
             std::cout << std::fixed << std::setprecision(2) // 保留两位小数
-                      << "Data rate: " << rate_gbps << " GB/s" << std::endl;
+                << "Data rate: " << rate_gbps << " GB/s" << std::endl;
 
             // 重置计数器和时间
             call_count = 0;

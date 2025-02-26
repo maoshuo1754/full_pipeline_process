@@ -26,7 +26,7 @@ protected:
     std::atomic<bool>& monitorWriterRunning;
 
 public:
-    explicit DataSource(std::atomic<bool>& running);
+    explicit DataSource(std::atomic<bool>& running, SharedQueue* sharedQueue);
     virtual ~DataSource() = default;
     virtual void run() = 0;
 
@@ -41,7 +41,7 @@ private:
     string dataPath;
 
 public:
-    FileDataSource(const string& path, std::atomic<bool>& running);
+    FileDataSource(const string& path, std::atomic<bool>& running, SharedQueue* sharedQueue);
     void run() override;
 
 private:
@@ -58,7 +58,7 @@ private:
     char* pBufferAddr;
 
 public:
-    XDMADataSource(std::atomic<bool>& running);
+    XDMADataSource(std::atomic<bool>& running, SharedQueue* sharedQueue);
     ~XDMADataSource();
     void run() override;
 

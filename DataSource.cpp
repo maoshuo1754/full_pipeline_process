@@ -7,9 +7,8 @@
 #include <chrono>
 #include <thread>
 
-DataSource::DataSource(std::atomic<bool>& running)
-    : monitorWriterRunning(running) {
-    sharedQueue = initSharedMemery(false);
+DataSource::DataSource(std::atomic<bool>& running, SharedQueue* sharedQueue)
+    : monitorWriterRunning(running), sharedQueue(sharedQueue) {
 }
 
 void DataSource::acquireSlot() {
@@ -22,8 +21,8 @@ void DataSource::releaseSlot() {
     sem_post(&sharedQueue->items_available);
 }
 
-FileDataSource::FileDataSource(const string& path, std::atomic<bool>& running)
-    : DataSource(running), dataPath(path) {}
+FileDataSource::FileDataSource(const string& path, std::atomic<bool>& running, SharedQueue* sharedQueue)
+    : DataSource(running, sharedQueue), dataPath(path) {}
 
 void FileDataSource::run() {
     ifstream file(dataPath, ios::binary | ios::ate);
@@ -63,7 +62,7 @@ void FileDataSource::processBlock() {
 }
 
 
-XDMADataSource::XDMADataSource(std::atomic<bool>& running) : DataSource(running) {
+XDMADataSource::XDMADataSource(std::atomic<bool>& running, SharedQueue* shared_queue) : DataSource(running, shared_queue) {
     initializeDevices();
     initializeBuffers();
     setupEvents();

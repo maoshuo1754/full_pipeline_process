@@ -1,9 +1,9 @@
 {
-  "dataPath": "/backup2/data/20250209143437_256GB.dat",
+  "dataPath": "/backup2/data/20250209143316_256GB.dat",
   "filterPath": "/home/csic724/CLionProjects/PcieReader/filterCoef.txt",
 
   "0表示文件": "1表示Pcie",
-  "dataSource_type": 1,
+  "dataSource_type": 0,
   "THREADS_MEM_SIZE": 1073741824,
 
   "hamming_window_enable": 0,
