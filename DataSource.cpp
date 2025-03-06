@@ -7,8 +7,9 @@
 #include <chrono>
 #include <thread>
 
-DataSource::DataSource(std::atomic<bool>& running, SharedQueue* sharedQueue)
-    : monitorWriterRunning(running), sharedQueue(sharedQueue) {
+DataSource::DataSource(std::atomic<bool>& running, SharedQueue* sharedQueue):
+    monitorWriterRunning(running), sharedQueue(sharedQueue) {
+
 }
 
 void DataSource::acquireSlot() {
@@ -62,7 +63,7 @@ void FileDataSource::processBlock() {
 }
 
 
-XDMADataSource::XDMADataSource(std::atomic<bool>& running, SharedQueue* shared_queue) : DataSource(running, shared_queue) {
+XDMADataSource::XDMADataSource(std::atomic<bool>& running, SharedQueue* sharedQueue) : DataSource(running, sharedQueue) {
     initializeDevices();
     initializeBuffers();
     setupEvents();
@@ -89,9 +90,18 @@ void XDMADataSource::run() {
 
 void XDMADataSource::initializeDevices() {
     dev_fd = open(DEVICE_NAME_READ, O_RDWR | O_NONBLOCK);
+    if (dev_fd < 0) {
+        cerr << "Can't open device " << DEVICE_NAME_READ << endl;
+    }
     dev_fd_user = open(DEVICE_NAME_USER, O_RDWR | O_SYNC);
+    if (dev_fd_user < 0) {
+        cerr << "Can't open device " << DEVICE_NAME_USER << endl;
+    }
     for (int i = 0; i < 4; i++) {
         dev_fd_events[i] = open(getEventDeviceName(i), O_RDWR | O_SYNC);
+        if (dev_fd_events[i] < 0) {
+            cerr << "Can't open device " << getEventDeviceName(i) << endl;
+        }
     }
 }
 

@@ -6,6 +6,7 @@ function cfar_res = cfar(A)
     Pfa = 1e-6;
     numGuardCells = 4;
     numRefCells = 20;
+    boundary_length = numRefCells + numGuardCells;
     
     % Calculate alpha based on the false alarm probability
     alpha = numRefCells * 2 * (Pfa^(-1/(numRefCells*2)) - 1);
@@ -19,11 +20,9 @@ function cfar_res = cfar(A)
 
     % Prepare kernel for FFT (pad to match range dimension)
     fft_length = 2^nextpow2(RangeNumber + kernel_length - 1); 
-    padded_kernel = zeros(1, fft_length);
-    padded_kernel(1:length(refKernel)) = refKernel;
-    
+
     % Compute kernel FFT (only needs to be done once)
-    kernel_fft = fft(padded_kernel);
+    kernel_fft = fft(padded_kernel, fft_length);
     
     % Compute FFT for all pulses and waves at once
     A_fft = fft(A, fft_length, 2);
@@ -37,6 +36,9 @@ function cfar_res = cfar(A)
 
     % Calculate adaptive thresholds
     thresholds = alpha * conv_result / (numRefCells * 2);
+    
+    thresholds(:, 1:boundary_length, :) = Inf;
+    thresholds(:, RangeNumber-boundary_length+1:RangeNumber,:) = Inf;
     
     % Detect targets (where signal exceeds threshold)
     detections = A > thresholds;

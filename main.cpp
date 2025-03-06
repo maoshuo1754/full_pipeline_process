@@ -6,12 +6,16 @@
 #include "DataSource.h"
 
 int main(){
+
+
+
     // config read and monitor thread
     string configFilePath = "../config.json";
     loadConfig(configFilePath);
     std::thread configMonitor(monitorConfig, configFilePath, loadConfig);
 
     // data source thread
+    std::atomic<bool> monitorWriterRunning(true);
     auto* sharedQueue = new SharedQueue();
     unique_ptr<DataSource> dataSource;
     if(dataSource_type == 0) {

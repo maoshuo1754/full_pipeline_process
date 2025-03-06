@@ -26,6 +26,7 @@ set(SOURCE_FILES
         NRx/plot.cpp
         Config.cpp
         DataSource.cpp
+        WaveGroupProcessor.cu
 )
 
 file(GLOB MYSRCS "${PROJECT_SOURCE_DIR}/NRx/include/*.cpp")

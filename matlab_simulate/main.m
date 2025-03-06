@@ -10,19 +10,19 @@ c = 3e8;
 numsamples = round(Fs*pulsewidth);
 
 lambda = 0.0369658;
-PRT = 120e-6;
-NUM_PULSE = 2048;
+PRT = 125e-6;
+NUM_PULSE = 2000;
 delta_v = lambda / PRT / NUM_PULSE / 2.0;
 delta_range = c / Fs / 2;
 
 fs = 1 / PRT;
 
-Num_V_chnnels = 2048;
+Num_V_chnnels = 2000;
 f = -fs/2:fs/Num_V_chnnels:fs/2-fs/Num_V_chnnels;
 v_chnls = f .* lambda / 2;
 % v_chnls = fftshift(v_chnls);
 
-pulseNum = 2048;
+pulseNum = 2000;
 NFFT = 4096;
 
 %% 脉压系数
@@ -35,7 +35,7 @@ PCcoef = fft(PCcoef, NFFT);
 PCcoef = repmat(PCcoef, pulseNum, 1);
 
 %% 数据读取
-folderPath = '20250209143437_256GB_frame_1_200_pulse_13_16_2048x4096';
+folderPath = '20250227163342_128GB_frame_1_120_pulse_15_18_2000x4096';
 
 fid = fopen(folderPath, 'rb');
 if fid == -1
@@ -60,10 +60,13 @@ for ii = 1:fileInfos('numFrames')
     
     [time, A] = readBinaryIQFile(fid, fileInfos);
     
+    if ii < 90
+        continue
+    end
     % Get all azimuth values at once
     azi = aziTable(aziTable(:,1) >= startWaveIdx & aziTable(:,1) < startWaveIdx+waveNum, 2);
     azi = fliplr(azi);
-
+    
     % A = data; % Shape: [channels, samples, waves]
     A = fft(A, [], 2); % FFT along time dimension (2nd dim)
     A = A .* PCcoef; % Apply coefficients

@@ -208,7 +208,7 @@ void ThreadPool::processData(ThreadPoolResources &resources) {
     // for (int i = 1; i < numHeads; i++) {
     //     auto diff = headPositions[threadID][i] - headPositions[threadID][i - 1];
     //
-    //     if (diff != 479936) {
+    //     if (diff != 499936) {
     //         cout << threadID << " " << i << ", " << diff << endl;
     //     }
     // }
@@ -219,6 +219,8 @@ void ThreadPool::processData(ThreadPoolResources &resources) {
     // cout << "numHeads: " << numHeads << endl;
     // cout << "headLength: " << headLength << endl;
     if (numHeads != NUM_PULSE  || rangeNum != RANGE_NUM) {
+        cout << "numHeads:" << numHeads << endl;
+        cout << "rangeNum:" << rangeNum << endl;
         throw std::runtime_error("The calculated range num is different from that is set");
     }
 
@@ -436,6 +438,7 @@ void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr
         std::cerr << "Copying " << copyLength / 1024 / 1024 << " MB to thread " << cur_thread_id << " :totally "
                   << (currentAddrOffset + copyLength) / 1024 / 1024 << " MB" << endl;
         std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
+        logFile << "[" << timebuf << "] " << "Error: Copy exceeds buffer bounds!" << std::endl;
         inPacket = false;
         currentAddrOffset = 0;
     }
