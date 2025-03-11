@@ -18,7 +18,7 @@ set(CUDA_NVCC_FLAGS_DEBUG "-G -g")
 # Enable CUDA language
 enable_language(CUDA)
 set(SOURCE_FILES
-        CudaMatrix.cu
+#        CudaMatrix.cu
         utils.cu
         ThreadPool.cu
         main.cpp
@@ -27,6 +27,7 @@ set(SOURCE_FILES
         Config.cpp
         DataSource.cpp
         WaveGroupProcessor.cu
+        kelnels.cu
 )
 
 file(GLOB MYSRCS "${PROJECT_SOURCE_DIR}/NRx/include/*.cpp")

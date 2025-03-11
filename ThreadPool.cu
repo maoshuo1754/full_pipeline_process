@@ -11,39 +11,23 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue) :
         conditionVariables(numThreads), mutexes(numThreads),
         headPositions(numThreads, std::vector<int>()),
         currentPos(numThreads, 0),
-        currentAddrOffset(0),
         numThreads(numThreads),
         inPacket(false),
         cur_thread_id(0),
-        prevSeqNum(0),
-        PcCoefMatrix(1, NFFT) {
+        prevSeqNum(0) {
     // 初始化 conditionVariables 和 mutexes
     // 创建并初始化线程
 
-    logFile = ofstream("error_log.txt", ios_base::app);
-
-    allocateThreadMemory();
-
     uint64Pattern = *(uint64_t *) pattern;
+    radar_params_ = new RadarParams();
+
+    for (int i = 0; i < numThreads; i++) {
+        waveGroupProcessors.push_back(std::make_unique<WaveGroupProcessor>(WAVE_NUM, PULSE_NUM, NFFT));
+    }
 
     for (size_t i = 0; i < numThreads; ++i) {
         threads.emplace_back(&ThreadPool::threadLoop, this, i);
     }
-
-    circleStartTime = high_resolution_clock::now();
-
-    if (debug_mode) {
-        string input_file_name = dataPath.substr(dataPath.rfind('/') + 1, dataPath.rfind('.') - dataPath.rfind('/') - 1);
-
-        string debug_file_path =  input_file_name +
-        "_frame_" + to_string(start_frame) + "_" + to_string(end_frame) +
-        "_pulse_" + to_string(start_wave) + "_" + to_string(end_wave) +
-        "_" + to_string(NUM_PULSE) + "x" + to_string(NFFT);
-
-        debugFile.open(debug_file_path, std::ios::binary);
-    }
-
-
     cout << "Initial Finished" << endl;
 }
 
@@ -54,22 +38,9 @@ ThreadPool::~ThreadPool() {
         if (thread.joinable()) thread.join();
     }
     freeThreadMemory();
-    logFile.close();
     debugFile.close();
 }
 
-void ThreadPool::allocateThreadMemory() {
-    cout << "cudaMalloc " << THREADS_MEM_SIZE / 1024 / 1024 << " MB for each thread" << endl;
-    for (size_t i = 0; i < numThreads; ++i) {
-        unsigned char *d_memory = nullptr;
-        checkCudaErrors(cudaMalloc((void **) &d_memory, THREADS_MEM_SIZE));  // 在显存中分配内存
-        threadsMemory.emplace_back(d_memory);
-
-        cudaStream_t stream;
-        checkCudaErrors(cudaStreamCreate(&stream));
-        streams.push_back(stream);
-    }
-}
 
 void ThreadPool::freeThreadMemory() {
     for (size_t i = 0; i < numThreads; ++i) {
@@ -93,7 +64,7 @@ void ThreadPool::run() {
 }
 
 void ThreadPool::threadLoop(int threadID) {
-    ThreadPoolResources resources(threadID, streams[threadID]); // 创建资源对象
+    auto& waveGroupProcessor_ = waveGroupProcessors[threadID];
 
     while (!stop) {
         waitForProcessingSignal(threadID);
@@ -101,7 +72,7 @@ void ThreadPool::threadLoop(int threadID) {
         if (stop) break; // 退出循环
 
         // 调用处理函数，传递资源对象
-        processData(resources);
+        processData(waveGroupProcessor_, threadID);
 
         // 处理完毕后重置标志
         {
@@ -111,206 +82,65 @@ void ThreadPool::threadLoop(int threadID) {
     }
 }
 
-__global__ void processKernel(unsigned char *threadsMemory, cufftComplex *pComplex,
-                              const int *headPositions, int numHeads, int rangeNum) {
-    // 获取线程和网格索引
-    int headIdx = blockIdx.z;  // 每个block.z处理一个头位置
-    int rangeIdx = blockIdx.y * blockDim.x + threadIdx.x; // 每个线程处理一个距离单元
-    int beamIdx = blockIdx.x;  // 每个block.x处理一个波束
-
-    // 检查索引是否越界
-    if (headIdx < numHeads && rangeIdx < rangeNum && beamIdx < WAVE_NUM) {
-        // 计算头位置的起始地址
-        int headOffset = headPositions[headIdx];
-        unsigned char *blockIQstartAddr = threadsMemory + headOffset + DATA_OFFSET;
-        // 计算当前数据块的偏移和新索引
-        int blockOffset = rangeIdx * WAVE_NUM * 4 + beamIdx * 4;
-        int newIndex = beamIdx * NUM_PULSE * NFFT + headIdx * NFFT + rangeIdx;
-
-        // 提取IQ数据并存储到结果数组
-        pComplex[newIndex].x = *(int16_t *) (blockIQstartAddr + blockOffset + 2);
-        pComplex[newIndex].y = *(int16_t *) (blockIQstartAddr + blockOffset);
-    }
-}
 
 
-void ThreadPool::generatePCcoefMatrix(unsigned char *rawMessage, cufftHandle &pcPlan, cudaStream_t _stream) {
-    static double prevPRT = -1;
-    static double prevPulseWidth = -1;
-    static double prevfLFMStartWord = -1;
 
-    if (*(uint64_t *) (rawMessage) != uint64Pattern) {
-        cerr << "data error" << endl;
+
+
+// 线程池中的数据处理函数
+void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProcessor, int threadID) {
+    cout << "thread " << threadID << " start" << endl;
+    static int count = 0;
+    count++;
+    int thisCount = count;
+    cout << "count:" << thisCount << endl;
+    if (thisCount == 1) {
         return;
     }
-//    double BandWidth = 6e6;
-//    double PulseWidth = 5e-6;
+    waveGroupProcessor->unpackData(headPositions[threadID].data());
 
-    auto PRT = *(uint32_t *) (rawMessage + 14 * 4) / Fs_system; //120e-6
-    pulseWidth = ((*(uint32_t *) (rawMessage + 13 * 4)) & 0xfffff) / Fs_system; //5e-6
-
-    auto fLFMStartWord = *(uint32_t *) (rawMessage + 16 * 4);
-
-    if (!isEqual(PRT, prevPRT) || !isEqual(pulseWidth, prevPulseWidth) || !isEqual(fLFMStartWord, prevfLFMStartWord)) {
-        cout << "Param changed, regenerate pulse compress coefficient." << endl;
-        numSamples = round(pulseWidth * Fs);  // 31.25e6
-        Bandwidth = (Fs_system - fLFMStartWord / pow(2.0f, 32) * Fs_system) * 2.0;
-        int freqPoint = (*(uint32_t *)(rawMessage + 11 * 4) & 0x000000ff);
-        double lambda = c_speed / ((freqPoint * 10 + initCarryFreq) * 1e6);
-
-        cout << "Bandwidth:" << Bandwidth << endl;
-        cout << "PulseWidth:" << pulseWidth << endl;
-        cout << "lambda:" << lambda << endl;
+    getRadarParams(waveGroupProcessor);
 
 
-        chnSpeeds.clear();
-        double delta_v = lambda / PRT / NUM_PULSE / 2.0f; //两个滤波器之间的速度间隔
-        double blind_v = lambda / PRT / 2.0f;
 
-        for(int i = 0; i < NUM_PULSE; ++i){
+    cout << "thread " << threadID << " process finished" << endl;
+}
+
+void ThreadPool::getRadarParams(std::unique_ptr<WaveGroupProcessor>& waveGroupProcessor) {
+    static bool isInit = false;
+    if (!isInit) {
+        waveGroupProcessor->getPackegeHeader(radar_params_->rawMessage, DATA_OFFSET);
+
+        auto* packageArr = (uint32_t *)(radar_params_->rawMessage);
+
+        auto freqPoint = packageArr[11] & 0x000000ff;
+        radar_params_->lambda = c_speed / ((freqPoint * 10 + initCarryFreq) * 1e6);
+        radar_params_->pulseWidth = (packageArr[13] & 0xfffff) / Fs_system; //5e-6
+        radar_params_->PRT = packageArr[14] / Fs_system;  //120e-6
+        auto fLFMStartWord = packageArr[16];
+        radar_params_->bandWidth = (Fs_system - fLFMStartWord / pow(2.0f, 32) * Fs_system) * 2.0;
+
+        double delta_v = radar_params_->lambda / radar_params_->PRT / PULSE_NUM / 2.0f; //两个滤波器之间的速度间隔
+        double blind_v = radar_params_->lambda / radar_params_->PRT / 2.0f;
+
+        for(int i = 0; i < PULSE_NUM; ++i){
             int v;
-            if (i < NUM_PULSE / 2){
+            if (i < PULSE_NUM / 2){
                 v = static_cast<int>(std::round(delta_v * i * 100)) ;
             }
             else{
                 v = static_cast<int>(std::round((delta_v * i - blind_v) * 100)) ;
             }
-            chnSpeeds.push_back(v);
+            radar_params_->chnSpeeds.push_back(v);
         }
-
-        vector<cufftComplex> PcCoef = PCcoef(Bandwidth, pulseWidth, Fs, NFFT, hamming_window_enable);
-        PcCoefMatrix.copyFromHost(_stream, 1, NFFT, PcCoef.data());
-        PcCoefMatrix.fft(pcPlan);
-        prevPRT = PRT;
-        prevfLFMStartWord = fLFMStartWord;
-        prevPulseWidth = pulseWidth;
+        radar_params_->scale = 1.0f / sqrt(radar_params_->bandWidth * radar_params_->pulseWidth) / PULSE_NUM / RANGE_NUM;
+        radar_params_->getCoef();
+        WaveGroupProcessor::getCoef(radar_params_->pcCoef, radar_params_->cfarCoef);
+        isInit = true;
     }
 }
 
-// 线程池中的数据处理函数
-void ThreadPool::processData(ThreadPoolResources &resources) {
-    int threadID = resources.threadID;
-    cout << "thread " << threadID << " start" << endl;
-    static int count = 0;
-    count++;
-    int thisCount = count;
-    cout << "count:" << count << endl;
-    // if (count < 43) {
-    //     // stop = true;
-    //     return;
-    // }
 
-    checkCudaErrors(cudaMemsetAsync(resources.pComplex_d, 0, sizeof(cufftComplex) * WAVE_NUM * NUM_PULSE * NFFT,
-                                    resources.stream));
-    int numHeads = headPositions[threadID].size();       // 2048
-    int headLength = headPositions[threadID][1] - headPositions[threadID][0];
-
-    // for (int i = 1; i < numHeads; i++) {
-    //     auto diff = headPositions[threadID][i] - headPositions[threadID][i - 1];
-    //
-    //     if (diff != 499936) {
-    //         cout << threadID << " " << i << ", " << diff << endl;
-    //     }
-    // }
-
-
-    int rangeNum = floor((headLength - DATA_OFFSET) / WAVE_NUM / 4.0);
-
-    // cout << "numHeads: " << numHeads << endl;
-    // cout << "headLength: " << headLength << endl;
-    if (numHeads != NUM_PULSE  || rangeNum != RANGE_NUM) {
-        cout << "numHeads:" << numHeads << endl;
-        cout << "rangeNum:" << rangeNum << endl;
-        throw std::runtime_error("The calculated range num is different from that is set");
-    }
-
-    // 头的位置拷贝到显存
-    checkCudaErrors(cudaMemcpyAsync(resources.pHeadPositions_d, headPositions[threadID].data(), numHeads * sizeof(int),
-                                    cudaMemcpyHostToDevice,
-                                    streams[threadID]));
-
-    // 包头信息拷贝回内存(仅第一个包头)
-    checkCudaErrors(cudaMemcpyAsync(resources.rawMessage, threadsMemory[threadID], sizeof(resources.rawMessage),
-                                    cudaMemcpyDeviceToHost,
-                                    streams[threadID]));
-
-    generatePCcoefMatrix(resources.rawMessage, resources.pcPlan, streams[threadID]);
-
-    // 计算 gridDim 的大小
-    dim3 gridDim1(WAVE_NUM, (rangeNum + CUDA_BLOCK_SIZE - 1) / CUDA_BLOCK_SIZE, numHeads);
-
-    // 在gpu解包
-    processKernel<<<gridDim1, CUDA_BLOCK_SIZE, 0, streams[threadID]>>>(threadsMemory[threadID], resources.pComplex_d,
-                                                                       resources.pHeadPositions_d, numHeads, rangeNum);
-
-    if (debug_mode && thisCount >= start_frame && thisCount < end_frame) {
-        writeToDebugFile(resources.rawMessage, resources.pComplex_d);
-    }
-
-
-    processPulseGroupData(resources, rangeNum);
-    // 选大结果拷贝回内存
-    checkCudaErrors(cudaMemcpyAsync(resources.pMaxRes_h, resources.pMaxRes_d, sizeof(cufftComplex) * CAL_WAVE_NUM * NFFT,
-                            cudaMemcpyDeviceToHost,
-                            streams[threadID]));
-
-    // 速度通道拷贝回内存
-    checkCudaErrors(cudaMemcpyAsync(resources.pSpeed_h, resources.pSpeed_d, sizeof(int) * CAL_WAVE_NUM * NFFT,
-                                    cudaMemcpyDeviceToHost,
-                                    streams[threadID]));
-
-
-    cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
-
-    sender.send(resources.rawMessage, resources.pMaxRes_h, chnSpeeds, resources.pSpeed_h, numSamples, rangeNum);
-
-    cout << "thread " << threadID << " process finished" << endl;
-}
-
-
-// 在GPU处理一个脉组的所有波束的数据，全流程处理，包括脉压、积累、CFAR、选大。
-void ThreadPool::processPulseGroupData(ThreadPoolResources &resources, int rangeNum) {
-    int threadID = resources.threadID;
-    auto &matrices = resources.IQmatrices;
-    auto &CFAR_res = resources.CFAR_res;
-    auto &Max_res = resources.Max_res;
-
-    float scale = 1.0f / sqrt(Bandwidth * pulseWidth) / NUM_PULSE / RANGE_NUM;
-    // for (int i = 0; i < CAL_WAVE_NUM; i++) {
-    for (int i = start_wave; i < end_wave; i++) {
-        /*Pulse Compression*/
-        matrices[i].fft(resources.rowPlan);
-
-        matrices[i].rowWiseMul(PcCoefMatrix, streams[threadID]);
-
-        matrices[i].ifft(streams[threadID], resources.rowPlan);
-
-        // 归一化，同时连ifft的归一化一起做了
-        matrices[i].scale(streams[threadID], scale);
-
-        if (MTI_enable) {
-            matrices[i].MTI(streams[threadID], 3);
-        }
-        // matrices[i].columnFilter(streams[threadID]);
-
-        /*coherent integration*/
-        for (int j = 0; j < INTEGRATION_TIMES; j++) {
-            matrices[i].fft_by_col(resources.colPlan);
-        }
-
-        cudaStreamSynchronize(streams[threadID]); // 等待流中的拷贝操作完成
-
-        /*cfar*/
-        matrices[i].abs(streams[threadID]);
-        matrices[i].cfar(CFAR_res[i], streams[threadID], Pfa, numGuardCells, numRefCells, numSamples - 1,
-                         numSamples + rangeNum);
-
-        auto* pSpeedChannels = resources.pSpeed_d + i * NFFT;
-
-        CFAR_res[i].max(Max_res[i], pSpeedChannels, streams[threadID]);
-        Max_res[i].scale(streams[threadID], 1.0f / normFactor * 255);
-    }
-}
 
 // 通知线程池里的线程开始干活
 void ThreadPool::notifyThread(int threadID) {
@@ -362,12 +192,8 @@ void ThreadPool::copyToThreadMemory() {
             seqNum = *(uint32_t *) (sharedQueue->buffer + indexValue + SEQ_OFFSET);
             if (seqNum != prevSeqNum + 1 && prevSeqNum != 0) {
                 inPacket = false;
-                currentAddrOffset = 0;
                 std::cerr << "Error! Sequence number not continuous!" << prevIndexValue << " " << seqNum << std::endl;
-                std::time_t now = std::time(nullptr);
-                std::strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
-                logFile << "[" << timebuf << "] " << "Error! Sequence number not continuous!" << std::endl;
-            }
+        }
             prevSeqNum = seqNum;
 
             startFlag = *(uint8_t *) (sharedQueue->buffer + indexValue + 20) & 0x02;
@@ -391,7 +217,6 @@ void ThreadPool::copyToThreadMemory() {
                 inPacket = true;
                 currentPos[cur_thread_id] = 0;
                 prevIndexValue = indexValue;
-                currentAddrOffset = 0;
                 headPositions[cur_thread_id].clear();
                 copyStartAddr = indexValue;
 //                std::cout << "Start flag detected, starting at address: " << copyStartAddr << std::endl;
@@ -420,32 +245,19 @@ void ThreadPool::copyToThreadMemory() {
 
 // 从startAddr到endAddr的数据拷贝给线程的独立空间，Addr是相对于共享内存的起始地址
 void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr) {
-    size_t copyLength = endAddr - startAddr;
+    size_t data_size = endAddr - startAddr;
 //    std::cout << "Copying " << copyLength / 1024 / 1024 << " MB to thread " << cur_thread_id << " :totally "
 //              << (currentAddrOffset + copyLength) / 1024 / 1024 << " MB" << endl;
 
-    if ((currentAddrOffset + copyLength) <= THREADS_MEM_SIZE) {  // Ensure within buffer bounds
-//        // 内存拷贝到显存
-        checkCudaErrors(cudaMemcpyAsync(threadsMemory[cur_thread_id] + currentAddrOffset,
-                                        sharedQueue->buffer + startAddr,
-                                        copyLength,
-                                        cudaMemcpyHostToDevice,
-                                        streams[cur_thread_id]
-        ));
-        currentAddrOffset += copyLength;
-    } else {
-//        cout << (currentAddrOffset + copyLength) / 1024 / 1024 << " MB !!!!" << endl;
-        std::cerr << "Copying " << copyLength / 1024 / 1024 << " MB to thread " << cur_thread_id << " :totally "
-                  << (currentAddrOffset + copyLength) / 1024 / 1024 << " MB" << endl;
+    if (waveGroupProcessors[cur_thread_id]->copyRawData(sharedQueue->buffer + startAddr, data_size) != 0) {  // Ensure within buffer bounds
+        std::cerr << "Copying " << data_size / 1024 / 1024 << " MB to thread " << cur_thread_id << endl;
         std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
-        logFile << "[" << timebuf << "] " << "Error: Copy exceeds buffer bounds!" << std::endl;
         inPacket = false;
-        currentAddrOffset = 0;
     }
 }
 
 void ThreadPool::writeToDebugFile(unsigned char *rawMessage, const cufftComplex* d_data) {
-    int oneWaveSize = NUM_PULSE * NFFT;
+    int oneWaveSize = PULSE_NUM * NFFT;
     int waveNum = end_wave - start_wave;
 
     auto* startAddr = d_data + start_wave * oneWaveSize;

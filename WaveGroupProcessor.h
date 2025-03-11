@@ -6,32 +6,27 @@
 #include <vector>
 #include "CudaMatrix.h"
 #include "Config.h"
+#include "utils.h"
+#include "kelnels.cuh"
 
 class WaveGroupProcessor {
 public:
-    WaveGroupProcessor(int waveNum, int pulseNum, int rangeNum, cudaStream_t stream);
+    WaveGroupProcessor(int waveNum, int pulseNum, int rangeNum);
     ~WaveGroupProcessor();
 
     // 禁止拷贝和赋值
     WaveGroupProcessor(const WaveGroupProcessor&) = delete;
     WaveGroupProcessor& operator=(const WaveGroupProcessor&) = delete;
 
-    // 数据接口
-    cufftComplex* deviceData() { return d_data_; }
-    cufftComplex* maxResults() { return d_max_results_; }
-    int* speedChannels() { return d_speed_channels_; }
-
     // 处理流程
-    void unpackData(unsigned char* rawData, const int* headPositions, int numHeads);
-    void processPulseCompression(const CudaMatrix& pcCoefMatrix);
-    void processCoherentIntegration();
-    void processCFAR(double Pfa, int numGuard, int numRef, int leftBound, int rightBound);
+    int copyRawData(const uint8_t* h_raw_data, size_t data_size);
+    void getPackegeHeader(uint8_t* h_rawData, size_t data_size);
+    void unpackData(const int* headPositions);
+    void processPulseCompression(int numSamples);
+    void processCoherentIntegration(float scale);
+    void processCFAR();
     void processMaxSelection();
-
-    // 资源访问
-    cufftHandle rowPlan() const { return row_plan_; }
-    cufftHandle colPlan() const { return col_plan_; }
-    cufftHandle pcPlan() const { return pc_plan_; }
+    void static getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef);
 
 private:
     // 三维数据维度
@@ -43,20 +38,27 @@ private:
     cudaStream_t stream_;
     cufftHandle row_plan_;   // 行FFT
     cufftHandle col_plan_;   // 列FFT
-    cufftHandle pc_plan_;    // 脉压FFT
 
-    // 设备内存
-    cufftComplex* d_data_;           // 原始数据 (wave_num_ x pulse_num_ x range_num_)
-    cufftComplex* d_max_results_;    // 选大结果 (wave_num_ x range_num_)
-    int* d_speed_channels_;          // 速度通道 (wave_num_ x range_num_)
+    // 设备内存 (显存)
+    size_t currentAddrOffset;        // 未解包数据的拷贝偏移量
+    uint8_t* d_unpack_data_;         // 未解包数据
+    int* d_headPositions_;           // 报文头在d_unpack_data_中的位置，用于解包
+    cufftComplex* d_data_;           // 原始数据   (wave_num_ x pulse_num_ x range_num_)
+    float* d_cfar_res_;              // cfar结果  (wave_num_ x pulse_num_ x range_num_)
+    float* d_max_results_;           // 选大结果   (wave_num_ x range_num_)
+    int* d_speed_channels_;          // 速度通道   (wave_num_ x range_num_)
 
-    // 中间结果
-    std::vector<CudaMatrix> cfars_;  // CFAR结果
-    std::vector<CudaMatrix> temps_;  // 临时存储
+    // 脉压系数和cfar系数
+    static cufftHandle pc_plan_;            // 脉压FFT，用于对下面两个系数做脉压
+    static cufftComplex* d_pc_coeffs_;      // 脉压系数    (1 x range_num_)
+    static cufftComplex* d_cfar_coeffs_;    // cfar系数   (1 x range_num_)
 
+    static void cleanup();
     void setupFFTPlans();
     void allocateDeviceMemory();
     void freeDeviceMemory();
 };
+
+
 
 #endif // WAVE_GROUP_PROCESSOR_H
