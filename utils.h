@@ -37,6 +37,8 @@ unsigned int FourChars2Uint(char *startAddr);
 
 void saveToBinaryFile(const cufftComplex* d_data, size_t size, const char* filename);
 
+void writeComplexToFile(cufftComplex* d_data_, int pulse_num_, int range_num_, const std::string& filename);
+
 std::vector<cufftComplex> readFilterFromFile(const std::string& filename);
 
 #endif //CUDAPROJECT_UTILS_H

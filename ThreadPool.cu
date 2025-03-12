@@ -90,7 +90,7 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
     count++;
     int thisCount = count;
     cout << "count:" << thisCount << endl;
-    if (thisCount == 1) {
+    if (thisCount != 1) {
         return;
     }
     waveGroupProcessor->unpackData(headPositions[threadID].data());

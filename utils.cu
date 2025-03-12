@@ -147,6 +147,47 @@ void saveToBinaryFile(const cufftComplex* d_data, size_t size, const char* filen
     delete[] h_data; // 释放主机内存
 }
 
+void writeComplexToFile(cufftComplex* d_data_, int pulse_num_, int range_num_, const std::string& filename) {
+    // 1. 分配主机内存
+    cufftComplex* h_data_ = new cufftComplex[pulse_num_ * range_num_];
+
+    // 2. 将数据从设备内存拷贝到主机内存
+    cudaMemcpy(h_data_, d_data_, pulse_num_ * range_num_ * sizeof(cufftComplex), cudaMemcpyDeviceToHost);
+
+    // 3. 打开文件准备写入
+    std::ofstream outfile(filename, std::ios::out); // 使用a+模式打开文件
+    if (!outfile.is_open()) {
+        std::cerr << "Failed to open file: " << filename << std::endl;
+        delete[] h_data_;
+        return;
+    }
+
+    // 4. 将数据写入文件
+    for (int i = 0; i < pulse_num_; ++i) {
+        for (int j = 0; j < range_num_; ++j) {
+            cufftComplex& complex_num = h_data_[i * range_num_ + j];
+            float real_part = complex_num.x;
+            float imag_part = complex_num.y;
+
+            // 判断虚部的符号
+            if (imag_part >= 0) {
+                outfile << real_part << "+" << imag_part << "i ";
+            } else {
+                outfile << real_part << imag_part << "i ";
+            }
+        }
+        outfile << std::endl; // 每行写入完毕后换行
+    }
+
+    // 5. 关闭文件
+    outfile.close();
+
+    // 6. 释放主机内存
+    delete[] h_data_;
+
+    cout << "================================  file write finished!" << endl;
+}
+
 
 std::vector<cufftComplex> readFilterFromFile(const string& filename) {
     std::ifstream file(filename);

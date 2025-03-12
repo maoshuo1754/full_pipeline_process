@@ -88,7 +88,6 @@ int WaveGroupProcessor::copyRawData(const uint8_t* h_raw_data, size_t data_size)
 
 void WaveGroupProcessor::getPackegeHeader(uint8_t* h_raw_data, size_t data_size) {
     checkCudaErrors(cudaMemcpyAsync(h_raw_data, d_unpack_data_, data_size, cudaMemcpyDeviceToHost, stream_));
-    cudaStreamSynchronize(stream_);
 }
 
 void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef) {
@@ -129,6 +128,7 @@ void WaveGroupProcessor::unpackData(const int* headPositions) {
     unpackKernel3D<<<gridDim1, CUDA_BLOCK_SIZE, 0, stream_>>>(
         d_unpack_data_, d_data_, d_headPositions_, PULSE_NUM, RANGE_NUM);
 
+
 }
 
 void WaveGroupProcessor::streamSynchronize() {
@@ -147,6 +147,10 @@ void WaveGroupProcessor::processPulseCompression(int numSamples) {
     // ifft
     checkCufftErrors(cufftExecC2C(row_plan_, d_data_, d_data_, CUFFT_INVERSE));
 
+    this->streamSynchronize();
+    writeComplexToFile(d_pc_coeffs_, 1, range_num_, "pccoef.txt");
+    writeComplexToFile(d_data_, pulse_num_, range_num_, "2.txt");
+
     // 设置线程块和网格大小
     int nrows = wave_num_ * pulse_num_;
     int blocksPerGrid = (nrows + blockSize - 1) / blockSize;
@@ -155,6 +159,8 @@ void WaveGroupProcessor::processPulseCompression(int numSamples) {
     int startIdx = numSamples;
     int endIdx = startIdx + RANGE_NUM - 1;
     moveAndZeroKernel<<<blocksPerGrid, blockSize, 0, stream_>>>(d_data_, nrows, range_num_, startIdx, endIdx);
+
+
 }
 
 void WaveGroupProcessor::processCoherentIntegration(float scale) {
@@ -198,10 +204,16 @@ void WaveGroupProcessor::processCFAR() {
     // 根据alpha计算噪底
     double alpha = numRefCells * 2 * (pow(Pfa, -1.0 / (numRefCells * 2)) - 1);
     thrust::device_ptr<cufftComplex> cfar_data(d_cfar_res_);
-    thrust::transform(exec_policy, cfar_data, cfar_data + size, cfar_data, ScaleFunctor(alpha/2.0/numRefCells));
+    thrust::transform(exec_policy, cfar_data, cfar_data + size, cfar_data, ScaleFunctor(alpha/2.0/numRefCells/pulse_num_));
+
 
     // 对比噪底选结果
     cmpKernel<<<gridSize, blockSize, 0, stream_>>>(d_data_, d_cfar_res_, wave_num_ * pulse_num_, range_num_);
+
+    thrust::transform(exec_policy, thrust_data, thrust_data + size, thrust_data, ScaleFunctor(1.0f/normFactor));
+    // this->streamSynchronize();
+    // writeComplexToFile(d_data_, pulse_num_, range_num_, "2.txt");
+
 }
 
 void WaveGroupProcessor::processMaxSelection() {
