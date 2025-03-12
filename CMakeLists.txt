@@ -22,12 +22,13 @@ set(SOURCE_FILES
         utils.cu
         ThreadPool.cu
         main.cpp
-        NRx/sendVideo.cpp
+        SendVideo.cpp
         NRx/plot.cpp
         Config.cpp
         DataSource.cpp
         WaveGroupProcessor.cu
         kelnels.cu
+        SendVideo.h
 )
 
 file(GLOB MYSRCS "${PROJECT_SOURCE_DIR}/NRx/include/*.cpp")

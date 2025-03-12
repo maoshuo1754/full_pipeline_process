@@ -13,9 +13,11 @@ __global__ void unpackKernel3D(unsigned char *threadsMemory, cufftComplex *pComp
 
 __global__ void rowWiseMulKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows, int ncols);
 
+__global__ void cmpKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows, int ncols);
+
 __global__ void moveAndZeroKernel(cufftComplex* data, int m, int n, int start, int end);
 
-__global__ void maxKernel(float *data, float *maxValues, int *speedChannels, int nrows, int ncols);
+__global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChannels, int nrows, int ncols);
 
 struct ScaleFunctor {
     float scale;

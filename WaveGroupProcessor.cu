@@ -29,6 +29,7 @@ void WaveGroupProcessor::setupFFTPlans() {
     checkCudaErrors(cudaStreamCreate(&stream_));
 
     // 行FFT (批量处理)
+
     checkCufftErrors(cufftPlan1d(&row_plan_, range_num_, CUFFT_C2C, wave_num_ * pulse_num_));
     checkCufftErrors(cufftSetStream(row_plan_, stream_));
 
@@ -49,7 +50,7 @@ void WaveGroupProcessor::allocateDeviceMemory() {
     checkCudaErrors(cudaMalloc(&d_unpack_data_, THREADS_MEM_SIZE));
     checkCudaErrors(cudaMalloc(&d_headPositions_, sizeof(int) * pulse_num_ * 1.1));
     checkCudaErrors(cudaMalloc(&d_data_, sizeof(cufftComplex) * total_size));
-    checkCudaErrors(cudaMalloc(&d_cfar_res_, sizeof(float) * total_size));
+    checkCudaErrors(cudaMalloc(&d_cfar_res_, sizeof(cufftComplex) * total_size));
     checkCudaErrors(cudaMalloc(&d_max_results_, sizeof(float) * wave_num_ * range_num_));
     checkCudaErrors(cudaMalloc(&d_speed_channels_, sizeof(int) * wave_num_ * range_num_));
 }
@@ -104,6 +105,17 @@ void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<
 
 }
 
+void WaveGroupProcessor::getResult(float* h_max_results_, int* h_speed_channels_) {
+    // 选大结果拷贝回内存
+    checkCudaErrors(cudaMemcpyAsync(h_max_results_, d_max_results_, sizeof(float) * WAVE_NUM * NFFT,
+                            cudaMemcpyDeviceToHost,
+                            stream_));
+
+    // 速度通道拷贝回内存
+    checkCudaErrors(cudaMemcpyAsync(h_speed_channels_, d_speed_channels_, sizeof(int) * WAVE_NUM * NFFT,
+                                    cudaMemcpyDeviceToHost,
+                                    stream_));
+}
 
 void WaveGroupProcessor::unpackData(const int* headPositions) {
     currentAddrOffset = 0;
@@ -117,6 +129,10 @@ void WaveGroupProcessor::unpackData(const int* headPositions) {
     unpackKernel3D<<<gridDim1, CUDA_BLOCK_SIZE, 0, stream_>>>(
         d_unpack_data_, d_data_, d_headPositions_, PULSE_NUM, RANGE_NUM);
 
+}
+
+void WaveGroupProcessor::streamSynchronize() {
+    cudaStreamSynchronize(stream_);
 }
 
 void WaveGroupProcessor::processPulseCompression(int numSamples) {
@@ -136,8 +152,8 @@ void WaveGroupProcessor::processPulseCompression(int numSamples) {
     int blocksPerGrid = (nrows + blockSize - 1) / blockSize;
 
     // 启动kernel
-    int startIdx = 52 + numSamples;
-    int endIdx = startIdx + RANGE_NUM;
+    int startIdx = numSamples;
+    int endIdx = startIdx + RANGE_NUM - 1;
     moveAndZeroKernel<<<blocksPerGrid, blockSize, 0, stream_>>>(d_data_, nrows, range_num_, startIdx, endIdx);
 }
 
@@ -162,23 +178,30 @@ void WaveGroupProcessor::processCFAR() {
     auto exec_policy = thrust::cuda::par.on(stream_);
     thrust::transform(exec_policy, thrust_data, thrust_data + size, thrust_data, SquareFunctor());
 
-    //
     // fft
-    checkCufftErrors(cufftExecC2C(row_plan_, d_data_, d_data_, CUFFT_FORWARD));
+    checkCufftErrors(cufftExecC2C(row_plan_, d_data_, d_cfar_res_, CUFFT_FORWARD));
     // .*
     int blockSize = CUDA_BLOCK_SIZE;
     int gridSize = (size + blockSize - 1) / blockSize;
-    rowWiseMulKernel<<<gridSize, blockSize, 0, stream_>>>(d_data_, d_cfar_coeffs_, wave_num_ * pulse_num_, range_num_);
+    rowWiseMulKernel<<<gridSize, blockSize, 0, stream_>>>(d_cfar_res_, d_cfar_coeffs_, wave_num_ * pulse_num_, range_num_);
     // ifft
-    checkCufftErrors(cufftExecC2C(row_plan_, d_data_, d_data_, CUFFT_INVERSE));
+    checkCufftErrors(cufftExecC2C(row_plan_, d_cfar_res_, d_cfar_res_, CUFFT_INVERSE));
     int cfarKernelSize = 2 * numGuardCells + 2 * numRefCells + 1;
     int startIdx = floor((cfarKernelSize - 1) / 2);
     int endIdx = startIdx + RANGE_NUM;
 
-    // 设置线程块和网格大小
+    // 左移抵消卷积扩展
     int nrows = wave_num_ * pulse_num_;
     int blocksPerGrid = (nrows + blockSize - 1) / blockSize;
-    moveAndZeroKernel<<<blocksPerGrid, blockSize, 0, stream_>>>(d_data_, nrows, range_num_, startIdx, endIdx);
+    moveAndZeroKernel<<<blocksPerGrid, blockSize, 0, stream_>>>(d_cfar_res_, nrows, range_num_, startIdx, endIdx);
+
+    // 根据alpha计算噪底
+    double alpha = numRefCells * 2 * (pow(Pfa, -1.0 / (numRefCells * 2)) - 1);
+    thrust::device_ptr<cufftComplex> cfar_data(d_cfar_res_);
+    thrust::transform(exec_policy, cfar_data, cfar_data + size, cfar_data, ScaleFunctor(alpha/2.0/numRefCells));
+
+    // 对比噪底选结果
+    cmpKernel<<<gridSize, blockSize, 0, stream_>>>(d_data_, d_cfar_res_, wave_num_ * pulse_num_, range_num_);
 }
 
 void WaveGroupProcessor::processMaxSelection() {
@@ -187,7 +210,7 @@ void WaveGroupProcessor::processMaxSelection() {
     dim3 gridDim_((range_num_ + blockDim_.x - 1) / blockDim_.x);
 
     for (int w = 0; w < wave_num_; ++w) {
-        float* cfarPtr = d_cfar_res_ + w * pulse_num_ * range_num_;
+        auto* cfarPtr = d_data_ + w * pulse_num_ * range_num_;
         float* maxPtr = d_max_results_ + w * range_num_;
         int* speedPtr = d_speed_channels_ + w * range_num_;
         maxKernel<<<gridDim_, blockDim_, 0, stream_>>>(cfarPtr, maxPtr, speedPtr, pulse_num_, range_num_);

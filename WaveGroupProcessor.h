@@ -21,7 +21,9 @@ public:
     // 处理流程
     int copyRawData(const uint8_t* h_raw_data, size_t data_size);
     void getPackegeHeader(uint8_t* h_rawData, size_t data_size);
+    void getResult(float* h_max_results_, int* h_speed_channels_);
     void unpackData(const int* headPositions);
+    void streamSynchronize();
     void processPulseCompression(int numSamples);
     void processCoherentIntegration(float scale);
     void processCFAR();
@@ -44,7 +46,7 @@ private:
     uint8_t* d_unpack_data_;         // 未解包数据
     int* d_headPositions_;           // 报文头在d_unpack_data_中的位置，用于解包
     cufftComplex* d_data_;           // 原始数据   (wave_num_ x pulse_num_ x range_num_)
-    float* d_cfar_res_;              // cfar结果  (wave_num_ x pulse_num_ x range_num_)
+    cufftComplex* d_cfar_res_;              // cfar结果  (wave_num_ x pulse_num_ x range_num_)
     float* d_max_results_;           // 选大结果   (wave_num_ x range_num_)
     int* d_speed_channels_;          // 速度通道   (wave_num_ x range_num_)
 

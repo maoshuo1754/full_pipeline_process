@@ -16,12 +16,10 @@
 #include <chrono>
 #include <string>
 
-
 using namespace std;
 using namespace std::chrono;
 
-// 线程池中各个线程独占的资源
-// 线程的独立显存拷贝空间和stream不在这，是因为拷贝线程要用
+
 struct RadarParams
 {
     uint8_t* rawMessage;        // 未解包的报文头
@@ -31,12 +29,23 @@ struct RadarParams
     double lambda;              // 波长
     int numSamples;             // 脉压采样点数
     float scale;                // 归一化系数(脉压和ifft之后)
+    float* h_max_results_;      // 选大结果 (wave_num_ x range_num_)
+    int* h_speed_channels_;     // 速度通道 (wave_num_ x range_num_)
     vector<int> chnSpeeds;      // 速度通道对应的速度
     vector<cufftComplex> pcCoef;    // 脉压系数
     vector<cufftComplex> cfarCoef;  // CFAR系数
 
+
     RadarParams(): cfarCoef(NFFT, {0, 0}) {
         rawMessage = new uint8_t[2 * DATA_OFFSET];
+        h_max_results_ = new float[WAVE_NUM * NFFT];
+        h_speed_channels_ = new int[WAVE_NUM * NFFT];
+    }
+
+    ~RadarParams() {
+        delete[] rawMessage;
+        delete[] h_max_results_;
+        delete[] h_speed_channels_;
     }
 
     void getCoef() {
@@ -52,8 +61,6 @@ struct RadarParams
             cfarCoef[i].x = 1.0f;
         }
     }
-
-
 };
 
 class ThreadPool {

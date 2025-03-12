@@ -6,8 +6,7 @@
 #define READER_SENDVIDEO_H
 #include "MyStruct.h"
 #include "fstream"
-#include "../utils.h"
-#include <vector_types.h>
+#include "utils.h"
 #include <netinet/in.h>
 #include "plot.h"
 
@@ -18,9 +17,7 @@ class SendVideo {
 public:
     SendVideo();
     ~SendVideo();
-    void
-    send(unsigned char *rawMessage, float2 *detectedVideo, vector<int> &chnSpeeds, int *speedChannels, int numSamples,
-         int rangeNum);
+    void send(struct RadarParams* radar_params_);
 
 private:
     unsigned int unMinPRTLen;

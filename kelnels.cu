@@ -3,6 +3,9 @@
 //
 
 #include "kelnels.cuh"
+
+#include <thrust/detail/type_traits/is_call_possible.h>
+
 #include "Config.h"
 #include "SharedQueue.h"
 
@@ -40,6 +43,21 @@ __global__ void rowWiseMulKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows
     }
 }
 
+__global__ void cmpKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows, int ncols) {
+    // d_a 为原始数据
+    // d_b 为CFAR计算出来的噪底
+    // 逐元素对比，大于噪底的，取根号，小于的取0
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < nrows * ncols) {
+        if (d_a[idx].x < d_b[idx].x) {
+            d_a[idx].x = 0;
+            d_a[idx].y = 0;
+        } else {
+            d_a[idx].x = sqrtf(d_a[idx].x);
+        }
+    }
+}
+
 // CUDA kernel
 __global__ void moveAndZeroKernel(cufftComplex* data, int m, int n, int start, int end) {
     // 获取当前处理的行
@@ -62,19 +80,19 @@ __global__ void moveAndZeroKernel(cufftComplex* data, int m, int n, int start, i
     }
 }
 
-__global__ void maxKernel(float *data, float *maxValues, int *speedChannels, int nrows, int ncols) {
+__global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChannels, int nrows, int ncols) {
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     int ind;
 
     if (col < ncols) {
         float maxVal;
 
-        maxVal = channel_0_enable ? data[col] : -100;
+        maxVal = channel_0_enable ? data[col].x : -100;
         int maxChannel = 0;
         for (int row = 1; row < nrows; ++row) {
             ind = row * ncols + col;
-            if (data[ind] > maxVal) {
-                maxVal = data[ind];
+            if (data[ind].x > maxVal) {
+                maxVal = data[ind].x;
                 maxChannel = row;
             }
         }

@@ -3,9 +3,10 @@
 //
 
 #include "SendVideo.h"
+#include "ThreadPool.h"
 #include <complex>
-#include "../Config.h"
-#include "../utils.h"
+#include "Config.h"
+#include "utils.h"
 
 SendVideo::SendVideo() { // , outfile("detectVideo.txt")
 
@@ -68,17 +69,12 @@ double SendVideo::asind(double x) {
 // - chnSpeeds: 通道对应的速度值，0.01m/s
 // - speedChannels: 检查视频每个点从哪个通道选出来的最大值，和detectedVideo大小一样
 
-void SendVideo::send(unsigned char *rawMessage, float2 *detectedVideo, vector<int> &chnSpeeds, int *speedChannels,
-                int numSamples, int rangeNum) {
-//    msgInfo->AziVal = static_cast<unsigned short>(asind(j * lambda_0 / (WAVE_NUM * d)) * 65536.0 / 360.0);
+void SendVideo::send(RadarParams* radar_params_) {
     uint32 dwTemp;
     int nAzmCode;
     float rAzm;
-
-    auto rawMsg = reinterpret_cast<uint32*>(rawMessage);
-    uint32 freqPoint = ((rawMsg[11]) & 0x00000fff);
-    double lambda_0 = c_speed / ((freqPoint * 10 + initCarryFreq) * 1e6);
-    float data_amp;
+    auto numSamples = radar_params_->numSamples;
+    auto rawMsg = reinterpret_cast<uint32*>(radar_params_->rawMessage);
 
     videoMsg.CommonHeader.wCOUNTER = rawMsg[4];  // 触发计数器
     dwTemp = rawMsg[6] / 10 + 8*60*60*1000; // FPGA时间 //0.1ms->1ms + 8h
@@ -93,7 +89,7 @@ void SendVideo::send(unsigned char *rawMessage, float2 *detectedVideo, vector<in
     videoMsg.RadarVideoHeader.dwTxRelMilliSecondTime_L = dwTemp % 1000 * 1000;
 
 //    for (int ii = 0; ii < WAVE_NUM; ii++) {
-    for (int ii = WAVE_NUM - 1; ii >=0; ii--) {
+    for (int ii = WAVE_NUM - 1; ii >= 0; ii--) {
 
         int sec = dwTemp / 1000 % 60 + timeArray[ii];
 //        cout << "time:" << h << ":" << min << ":" << sec << endl;
@@ -103,7 +99,7 @@ void SendVideo::send(unsigned char *rawMessage, float2 *detectedVideo, vector<in
         if (nAzmCode > 32768)
             nAzmCode -= 65536;
 
-        rAzm = 60 + asin((nAzmCode * lambda_0) / (65536 * d)) / 3.1415926 * 180.0f;
+        rAzm = 60 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0f;
 
         if (rAzm < 0)
             rAzm += 360.f;
@@ -112,18 +108,18 @@ void SendVideo::send(unsigned char *rawMessage, float2 *detectedVideo, vector<in
         dwTemp = UINT16(rAzm / 360.0f * 65536.0f);
         videoMsg.RadarVideoHeader.wAziCode = htons(dwTemp);
 
-        auto* rowData = detectedVideo + ii * NFFT;
-        auto* rowSpeed = speedChannels + ii * NFFT;
+        auto* rowData = radar_params_->h_max_results_ + ii * NFFT;
+        auto* rowSpeed = radar_params_->h_speed_channels_ + ii * NFFT;
         for (int k = 0; k < unMinPRTLen - numSamples - 52; ++k) {
             // + system_delay
             //TODO: 这个偏移会不会动
-            data_amp = rowData[k + numSamples - 1 + 52].x;
+            auto data_amp = rowData[k + numSamples - 1 + 52];
             data_amp = data_amp * 1.0;
             if(data_amp > 255)
                 data_amp = 255;
 
             videoMsg.bytVideoData[k] = (unsigned char)data_amp;
-            rowSpeed[k] = chnSpeeds[rowSpeed[k + numSamples - 1 + 52]];
+            rowSpeed[k] = radar_params_->chnSpeeds[rowSpeed[k + numSamples - 1 + 52]];
         }
 
 //        cout << "ii:" << ii << " [rAzm]:" << rAzm << endl;
