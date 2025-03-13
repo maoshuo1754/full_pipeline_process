@@ -89,7 +89,7 @@ __global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChanne
 
         maxVal = channel_0_enable ? data[col].x : -100;
         int maxChannel = 0;
-        for (int row = 1; row < nrows; ++row) {
+        for (int row = 2; row < nrows-2; ++row) {
             ind = row * ncols + col;
             if (data[ind].x > maxVal) {
                 maxVal = data[ind].x;
@@ -97,7 +97,6 @@ __global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChanne
             }
         }
         maxValues[col] = maxVal;
-        maxValues[col] = 0;
         speedChannels[col] = maxChannel;
     }
 }

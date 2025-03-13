@@ -90,9 +90,9 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
     count++;
     int thisCount = count;
     cout << "count:" << thisCount << endl;
-    if (thisCount != 1) {
-        return;
-    }
+    // if (thisCount != 1) {
+    //     return;
+    // }
     waveGroupProcessor->unpackData(headPositions[threadID].data());
 
     getRadarParams(waveGroupProcessor);
@@ -136,7 +136,7 @@ void ThreadPool::getRadarParams(std::unique_ptr<WaveGroupProcessor>& waveGroupPr
             }
             radar_params_->chnSpeeds.push_back(v);
         }
-        radar_params_->scale = 1.0f / sqrt(radar_params_->bandWidth * radar_params_->pulseWidth) / PULSE_NUM / RANGE_NUM;
+        radar_params_->scale = 1.0f / sqrt(radar_params_->bandWidth * radar_params_->pulseWidth) / PULSE_NUM;
         radar_params_->getCoef();
         WaveGroupProcessor::getCoef(radar_params_->pcCoef, radar_params_->cfarCoef);
         isInit = true;
