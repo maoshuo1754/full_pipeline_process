@@ -111,9 +111,9 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
 
 void ThreadPool::getRadarParams(std::unique_ptr<WaveGroupProcessor>& waveGroupProcessor) {
     static bool isInit = false;
-    if (!isInit) {
-        waveGroupProcessor->getPackegeHeader(radar_params_->rawMessage, DATA_OFFSET);
+    waveGroupProcessor->getPackegeHeader(radar_params_->rawMessage, DATA_OFFSET);
 
+    if (!isInit) {
         auto* packageArr = (uint32_t *)(radar_params_->rawMessage);
 
         auto freqPoint = packageArr[11] & 0x000000ff;

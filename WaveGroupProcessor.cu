@@ -128,7 +128,8 @@ void WaveGroupProcessor::unpackData(const int* headPositions) {
     unpackKernel3D<<<gridDim1, CUDA_BLOCK_SIZE, 0, stream_>>>(
         d_unpack_data_, d_data_, d_headPositions_, PULSE_NUM, RANGE_NUM);
 
-
+    // this->streamSynchronize();
+    // writeComplexToFile(d_data_ + pulse_num_ * range_num_, pulse_num_, range_num_, "data2.txt");
 }
 
 void WaveGroupProcessor::streamSynchronize() {
@@ -233,4 +234,7 @@ void WaveGroupProcessor::processMaxSelection() {
         int* speedPtr = d_speed_channels_ + w * range_num_;
         maxKernel<<<gridDim_, blockDim_, 0, stream_>>>(cfarPtr, maxPtr, speedPtr, pulse_num_, range_num_);
     }
+
+    // this->streamSynchronize();
+    // writeFloatToFile(d_max_results_ + range_num_, 1, range_num_, "max2.txt");
 }

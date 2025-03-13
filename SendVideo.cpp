@@ -78,7 +78,7 @@ void SendVideo::send(RadarParams* radar_params_) {
 
     videoMsg.CommonHeader.wCOUNTER = rawMsg[4];  // 触发计数器
     dwTemp = rawMsg[6] / 10 + 8*60*60*1000; // FPGA时间 //0.1ms->1ms + 8h
-
+    // cout << "dwTemp = " << dwTemp << endl;
     videoMsg.CommonHeader.dwTxSecondTime = dwTemp / 1000;
     videoMsg.CommonHeader.dwTxMicroSecondTime = dwTemp % 1000 * 1000;
 
@@ -110,16 +110,16 @@ void SendVideo::send(RadarParams* radar_params_) {
 
         auto* rowData = radar_params_->h_max_results_ + ii * NFFT;
         auto* rowSpeed = radar_params_->h_speed_channels_ + ii * NFFT;
-        for (int k = 0; k < unMinPRTLen - numSamples - 52; ++k) {
+        for (int k = 0; k < unMinPRTLen - 52; ++k) {
             // + system_delay
             //TODO: 这个偏移会不会动
-            auto data_amp = rowData[k + numSamples - 1 + 52];
+            auto data_amp = rowData[k + 52];
             data_amp = data_amp * 1.0;
             if(data_amp > 255)
                 data_amp = 255;
 
             videoMsg.bytVideoData[k] = (unsigned char)data_amp;
-            rowSpeed[k] = radar_params_->chnSpeeds[rowSpeed[k + numSamples - 1 + 52]];
+            rowSpeed[k] = radar_params_->chnSpeeds[rowSpeed[k + 52]];
         }
 
 //        cout << "ii:" << ii << " [rAzm]:" << rAzm << endl;

@@ -12,7 +12,7 @@
   "num_threads": 4,
   "CAL_WAVE_NUM": 32,
   "INTEGRATION_TIMES": 1,
-  "normFactor": 2,
+  "normFactor": 8,
 
   "local_video_ip": "127.0.0.1",
   "local_video_port": 0,
