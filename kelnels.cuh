@@ -17,7 +17,7 @@ __global__ void cmpKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows, int n
 
 __global__ void moveAndZeroKernel(cufftComplex* data, int m, int n, int start, int end);
 
-__global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChannels, int nrows, int ncols);
+__global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChannels, bool* maskPtr, int nrows, int ncols);
 
 struct ScaleFunctor {
     float scale;

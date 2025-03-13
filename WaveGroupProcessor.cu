@@ -6,7 +6,7 @@
 cufftHandle WaveGroupProcessor::pc_plan_ = 0;            // 脉压FFT，用于对下面两个系数做脉压
 cufftComplex* WaveGroupProcessor::d_pc_coeffs_ = nullptr;      // 脉压系数    (1 x range_num_)
 cufftComplex* WaveGroupProcessor::d_cfar_coeffs_ = nullptr;    // cfar系数   (1 x range_num_)
-
+bool* WaveGroupProcessor::d_is_masked_ = nullptr;
 
 WaveGroupProcessor::WaveGroupProcessor(int waveNum, int pulseNum, int rangeNum)
     : wave_num_(waveNum),
@@ -67,6 +67,7 @@ void WaveGroupProcessor::freeDeviceMemory() {
 void WaveGroupProcessor::cleanup() {
     checkCudaErrors(cudaFree(d_pc_coeffs_));
     checkCudaErrors(cudaFree(d_cfar_coeffs_));
+    checkCudaErrors(cudaFree(d_is_masked_));
     checkCufftErrors(cufftDestroy(pc_plan_));
 }
 
@@ -102,6 +103,30 @@ void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<
     checkCufftErrors(cufftExecC2C(pc_plan_, d_pc_coeffs_, d_pc_coeffs_, CUFFT_FORWARD));
     checkCufftErrors(cufftExecC2C(pc_plan_, d_cfar_coeffs_, d_cfar_coeffs_, CUFFT_FORWARD));
 
+    int mask_size = WAVE_NUM * NFFT;
+    checkCudaErrors(cudaMalloc(&d_is_masked_, mask_size));
+    bool* h_isMasked = new bool[mask_size];
+    memset(h_isMasked, 0, mask_size);
+
+    for (const auto& region: clutterRegions) {
+        for (int wave = region.waveStartIdx; wave < region.waveEndIdx; wave++) {
+            float startRange = region.startRange;
+            float endRange = region.endRange;
+            double delta_range = c_speed / Fs / 2.0;
+            int startIdx = static_cast<int>(startRange / delta_range) + range_correct;
+            int endIdx = static_cast<int>(endRange / delta_range) + range_correct;
+            assert(startRange < endRange);
+            assert(startIdx < endIdx);
+            assert(wave >= 0 && wave < WAVE_NUM);
+            assert(startIdx >= 0 && startIdx < NFFT);
+            assert(endIdx >= 0 && endIdx < NFFT);
+            for (int i = startIdx; i < endIdx; i++) {
+                h_isMasked[wave * NFFT + i] = true;
+            }
+        }
+    }
+    checkCudaErrors(cudaMemcpy(d_is_masked_, h_isMasked, mask_size, cudaMemcpyHostToDevice));
+    delete[] h_isMasked;
 }
 
 void WaveGroupProcessor::getResult(float* h_max_results_, int* h_speed_channels_) {
@@ -216,7 +241,7 @@ void WaveGroupProcessor::processCFAR() {
     thrust::device_ptr<cufftComplex> cfar_data(d_cfar_res_);
     thrust::transform(exec_policy, cfar_data, cfar_data + size, cfar_data, ScaleFunctor(alpha/2.0/numRefCells));
 
-    // 对比噪底选结果
+    // 对比噪底选结果，(结果开根号)
     cmpKernel<<<gridSize, blockSize, 0, stream_>>>(d_data_, d_cfar_res_, wave_num_ * pulse_num_, range_num_);
 
     thrust::transform(exec_policy, thrust_data, thrust_data + size, thrust_data, ScaleFunctor(1.0f/normFactor));
@@ -232,7 +257,8 @@ void WaveGroupProcessor::processMaxSelection() {
         auto* cfarPtr = d_data_ + w * pulse_num_ * range_num_;
         float* maxPtr = d_max_results_ + w * range_num_;
         int* speedPtr = d_speed_channels_ + w * range_num_;
-        maxKernel<<<gridDim_, blockDim_, 0, stream_>>>(cfarPtr, maxPtr, speedPtr, pulse_num_, range_num_);
+        bool* maskPtr = d_is_masked_ + w * range_num_;
+        maxKernel<<<gridDim_, blockDim_, 0, stream_>>>(cfarPtr, maxPtr, speedPtr, maskPtr, pulse_num_, range_num_);
     }
 
     // this->streamSynchronize();

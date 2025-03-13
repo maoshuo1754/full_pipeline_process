@@ -52,6 +52,9 @@ int end_frame;
 int start_wave;
 int end_wave;
 
+std::vector<clutterRegion> clutterRegions;
+int range_correct;
+
 // 配置加载函数实现
 void loadConfig(const std::string& filename) {
     std::ifstream configFile(filename);
@@ -102,6 +105,17 @@ void loadConfig(const std::string& filename) {
     end_frame = config["end_frame"];
     start_wave = config["start_wave"];
     end_wave = config["end_wave"];
+
+    for (const auto& item : config["clutter_processing_region"]) {
+        clutterRegion e{};
+        e.waveStartIdx = item[0];
+        e.waveEndIdx = item[1];
+        e.startRange = item[2];
+        e.endRange = item[3];
+        clutterRegions.push_back(e);
+    }
+
+    range_correct = config["range_correct"];
 
     std::cout << "Configuration loaded successfully.\n";
 }

@@ -80,7 +80,7 @@ __global__ void moveAndZeroKernel(cufftComplex* data, int m, int n, int start, i
     }
 }
 
-__global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChannels, int nrows, int ncols) {
+__global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChannels, bool* maskPtr, int nrows, int ncols) {
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     int ind;
 
@@ -89,7 +89,7 @@ __global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChanne
 
         maxVal = channel_0_enable ? data[col].x : -100;
         int maxChannel = 0;
-        for (int row = 2; row < nrows-2; ++row) {
+        for (int row = 1; row < nrows; ++row) {
             ind = row * ncols + col;
             if (data[ind].x > maxVal) {
                 maxVal = data[ind].x;
@@ -97,6 +97,9 @@ __global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChanne
             }
         }
         maxValues[col] = maxVal;
+        if (maskPtr[col]) {
+            maxValues[col] = 1000;
+        }
         speedChannels[col] = maxChannel;
     }
 }

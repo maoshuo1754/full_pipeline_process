@@ -46,7 +46,7 @@ private:
     uint8_t* d_unpack_data_;         // 未解包数据
     int* d_headPositions_;           // 报文头在d_unpack_data_中的位置，用于解包
     cufftComplex* d_data_;           // 原始数据   (wave_num_ x pulse_num_ x range_num_)
-    cufftComplex* d_cfar_res_;              // cfar结果  (wave_num_ x pulse_num_ x range_num_)
+    cufftComplex* d_cfar_res_;       // cfar结果  (wave_num_ x pulse_num_ x range_num_)
     float* d_max_results_;           // 选大结果   (wave_num_ x range_num_)
     int* d_speed_channels_;          // 速度通道   (wave_num_ x range_num_)
 
@@ -54,6 +54,7 @@ private:
     static cufftHandle pc_plan_;            // 脉压FFT，用于对下面两个系数做脉压
     static cufftComplex* d_pc_coeffs_;      // 脉压系数    (1 x range_num_)
     static cufftComplex* d_cfar_coeffs_;    // cfar系数   (1 x range_num_)
+    static bool* d_is_masked_;              // 需要杂波处理的区域
 
     static void cleanup();
     void setupFFTPlans();

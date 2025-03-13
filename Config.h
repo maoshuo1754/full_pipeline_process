@@ -62,6 +62,16 @@ extern int start_wave;
 extern int end_wave;
 // 数据缓冲区声明
 
+struct clutterRegion {
+    int waveStartIdx;
+    int waveEndIdx;
+    float startRange;
+    float endRange;
+};
+
+extern std::vector<clutterRegion> clutterRegions;
+extern int range_correct;
+
 void loadConfig(const std::string& filename); // 声明配置加载函数
 
 inline std::atomic<bool> monitorConfigRunning(true);
