@@ -10,7 +10,7 @@ int main(){
 
 
     // config read and monitor thread
-    string configFilePath = "../config.json";
+    string configFilePath = "/home/csic724/CLionProjects/PcieReader/config.json";
     loadConfig(configFilePath);
     std::thread configMonitor(monitorConfig, configFilePath, loadConfig);
 

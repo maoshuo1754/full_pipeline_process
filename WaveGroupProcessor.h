@@ -28,7 +28,7 @@ public:
     void processCoherentIntegration(float scale);
     void processCFAR();
     void processMaxSelection();
-    void static getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef);
+    void getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef);
     void resetAddr();
 
 private:
@@ -52,10 +52,11 @@ private:
     int* d_speed_channels_;          // 速度通道   (wave_num_ x range_num_)
 
     // 脉压系数和cfar系数
-    static cufftHandle pc_plan_;            // 脉压FFT，用于对下面两个系数做脉压
-    static cufftComplex* d_pc_coeffs_;      // 脉压系数    (1 x range_num_)
-    static cufftComplex* d_cfar_coeffs_;    // cfar系数   (1 x range_num_)
-    static bool* d_is_masked_;              // 需要杂波处理的区域
+    bool coef_is_initialized_;
+    cufftHandle pc_plan_;            // 脉压FFT，用于对下面两个系数做脉压
+    cufftComplex* d_pc_coeffs_;      // 脉压系数    (1 x range_num_)
+    cufftComplex* d_cfar_coeffs_;    // cfar系数   (1 x range_num_)
+    bool* d_is_masked_;              // 需要杂波处理的区域
 
     static void cleanup();
     void setupFFTPlans();

@@ -43,6 +43,32 @@ __global__ void rowWiseMulKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows
     }
 }
 
+
+// __global__ void rowWiseMulKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows, int ncols) {
+//     extern __shared__ cufftComplex s_b[]; // 声明共享内存，大小由调用时指定
+//     int tid = threadIdx.x;
+//
+//     // 协作加载d_b到共享内存s_b中
+//     for (int i = tid; i < ncols; i += blockDim.x) {
+//         if (i < ncols) {
+//             s_b[i] = d_b[i];
+//         }
+//     }
+//     __syncthreads(); // 确保所有线程完成加载
+//
+//     // 计算全局索引
+//     int idx = blockIdx.x * blockDim.x + threadIdx.x;
+//     if (idx < nrows * ncols) {
+//         int col = idx % ncols; // 确定当前列
+//         cufftComplex temp_a = d_a[idx];
+//         cufftComplex temp_b = s_b[col]; // 从共享内存读取
+//
+//         // 执行复数乘法
+//         d_a[idx].x = temp_a.x * temp_b.x - temp_a.y * temp_b.y;
+//         d_a[idx].y = temp_a.x * temp_b.y + temp_a.y * temp_b.x;
+//     }
+// }
+
 __global__ void cmpKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows, int ncols) {
     // d_a 为原始数据
     // d_b 为CFAR计算出来的噪底

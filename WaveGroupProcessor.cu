@@ -3,25 +3,23 @@
 #include "SharedQueue.h"
 #include <vector>
 
-cufftHandle WaveGroupProcessor::pc_plan_ = 0;            // 脉压FFT，用于对下面两个系数做脉压
-cufftComplex* WaveGroupProcessor::d_pc_coeffs_ = nullptr;      // 脉压系数    (1 x range_num_)
-cufftComplex* WaveGroupProcessor::d_cfar_coeffs_ = nullptr;    // cfar系数   (1 x range_num_)
-bool* WaveGroupProcessor::d_is_masked_ = nullptr;
+
 
 WaveGroupProcessor::WaveGroupProcessor(int waveNum, int pulseNum, int rangeNum)
     : wave_num_(waveNum),
       pulse_num_(pulseNum),
-      range_num_(rangeNum) {
+      range_num_(rangeNum),
+      coef_is_initialized_(false) {
     allocateDeviceMemory();
     setupFFTPlans();
 }
 
 WaveGroupProcessor::~WaveGroupProcessor() {
-    cleanup();
+
     freeDeviceMemory();
     checkCufftErrors(cufftDestroy(row_plan_));
     checkCufftErrors(cufftDestroy(col_plan_));
-    // checkCufftErrors(cufftDestroy(pc_plan_));
+    checkCufftErrors(cufftDestroy(pc_plan_));
 }
 
 void WaveGroupProcessor::setupFFTPlans() {
@@ -29,7 +27,7 @@ void WaveGroupProcessor::setupFFTPlans() {
     checkCudaErrors(cudaStreamCreate(&stream_));
 
     // 行FFT (批量处理)
-
+    checkCufftErrors(cufftPlan1d(&pc_plan_, NFFT, CUFFT_C2C, 1));
     checkCufftErrors(cufftPlan1d(&row_plan_, range_num_, CUFFT_C2C, wave_num_ * pulse_num_));
     checkCufftErrors(cufftSetStream(row_plan_, stream_));
 
@@ -47,6 +45,9 @@ void WaveGroupProcessor::setupFFTPlans() {
 void WaveGroupProcessor::allocateDeviceMemory() {
     const size_t total_size = wave_num_ * pulse_num_ * range_num_;
     currentAddrOffset = 0;
+    checkCudaErrors(cudaMalloc(&d_pc_coeffs_, range_num_ * sizeof(cufftComplex)));
+    checkCudaErrors(cudaMalloc(&d_cfar_coeffs_, range_num_ * sizeof(cufftComplex)));
+    checkCudaErrors(cudaMalloc(&d_is_masked_, wave_num_ * range_num_));
     checkCudaErrors(cudaMalloc(&d_unpack_data_, THREADS_MEM_SIZE));
     checkCudaErrors(cudaMalloc(&d_headPositions_, sizeof(int) * pulse_num_ * 1.1));
     checkCudaErrors(cudaMalloc(&d_data_, sizeof(cufftComplex) * total_size));
@@ -56,6 +57,10 @@ void WaveGroupProcessor::allocateDeviceMemory() {
 }
 
 void WaveGroupProcessor::freeDeviceMemory() {
+    checkCudaErrors(cudaFree(d_pc_coeffs_));
+    checkCudaErrors(cudaFree(d_cfar_coeffs_));
+    checkCudaErrors(cudaFree(d_is_masked_));
+    checkCufftErrors(cufftDestroy(pc_plan_));
     checkCudaErrors(cudaFree(d_unpack_data_));
     checkCudaErrors(cudaFree(d_headPositions_));
     checkCudaErrors(cudaFree(d_data_));
@@ -64,12 +69,6 @@ void WaveGroupProcessor::freeDeviceMemory() {
     checkCudaErrors(cudaFree(d_speed_channels_));
 }
 
-void WaveGroupProcessor::cleanup() {
-    checkCudaErrors(cudaFree(d_pc_coeffs_));
-    checkCudaErrors(cudaFree(d_cfar_coeffs_));
-    checkCudaErrors(cudaFree(d_is_masked_));
-    checkCufftErrors(cufftDestroy(pc_plan_));
-}
 
 int WaveGroupProcessor::copyRawData(const uint8_t* h_raw_data, size_t data_size)  {
 
@@ -92,11 +91,10 @@ void WaveGroupProcessor::getPackegeHeader(uint8_t* h_raw_data, size_t data_size)
 }
 
 void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef) {
-
-    checkCufftErrors(cufftPlan1d(&pc_plan_, NFFT, CUFFT_C2C, 1));
-
-    checkCudaErrors(cudaMalloc(&d_pc_coeffs_, NFFT * sizeof(cufftComplex)));
-    checkCudaErrors(cudaMalloc(&d_cfar_coeffs_, NFFT * sizeof(cufftComplex)));
+    if (coef_is_initialized_) {
+        return;
+    }
+    coef_is_initialized_ = true;
     checkCudaErrors(cudaMemcpy(d_pc_coeffs_, pcCoef.data(), NFFT * sizeof(cufftComplex), cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy(d_cfar_coeffs_, cfarCoef.data(), NFFT * sizeof(cufftComplex), cudaMemcpyHostToDevice));
 
@@ -104,7 +102,6 @@ void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<
     checkCufftErrors(cufftExecC2C(pc_plan_, d_cfar_coeffs_, d_cfar_coeffs_, CUFFT_FORWARD));
 
     int mask_size = WAVE_NUM * NFFT;
-    checkCudaErrors(cudaMalloc(&d_is_masked_, mask_size));
     bool* h_isMasked = new bool[mask_size];
     memset(h_isMasked, 0, mask_size);
 
@@ -173,6 +170,8 @@ void WaveGroupProcessor::processPulseCompression(int numSamples) {
     checkCufftErrors(cufftExecC2C(row_plan_, d_data_, d_data_, CUFFT_FORWARD));
     // .*
     rowWiseMulKernel<<<gridSize, blockSize, 0, stream_>>>(d_data_, d_pc_coeffs_, wave_num_ * pulse_num_, range_num_);
+    // int sharedMemSize = range_num_ * sizeof(cufftComplex); // ncols对应range_num_
+    // rowWiseMulKernel<<<gridSize, blockSize, sharedMemSize, stream_>>>(d_data_, d_pc_coeffs_, wave_num_ * pulse_num_, range_num_);
     // ifft
     checkCufftErrors(cufftExecC2C(row_plan_, d_data_, d_data_, CUFFT_INVERSE));
 
@@ -250,7 +249,6 @@ void WaveGroupProcessor::processCFAR() {
 }
 
 void WaveGroupProcessor::processMaxSelection() {
-
     dim3 blockDim_(CUDA_BLOCK_SIZE);
     dim3 gridDim_((range_num_ + blockDim_.x - 1) / blockDim_.x);
 
@@ -261,7 +259,5 @@ void WaveGroupProcessor::processMaxSelection() {
         bool* maskPtr = d_is_masked_ + w * range_num_;
         maxKernel<<<gridDim_, blockDim_, 0, stream_>>>(cfarPtr, maxPtr, speedPtr, maskPtr, pulse_num_, range_num_);
     }
-
-    // this->streamSynchronize();
-    // writeFloatToFile(d_max_results_ + range_num_, 1, range_num_, "max2.txt");
 }
+

@@ -22,7 +22,7 @@ function cfar_res = cfar(A)
     fft_length = 2^nextpow2(RangeNumber + kernel_length - 1); 
 
     % Compute kernel FFT (only needs to be done once)
-    kernel_fft = fft(padded_kernel, fft_length);
+    kernel_fft = fft(refKernel, fft_length);
     
     % Compute FFT for all pulses and waves at once
     A_fft = fft(A, fft_length, 2);

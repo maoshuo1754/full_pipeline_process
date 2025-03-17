@@ -28,6 +28,18 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue) :
     for (size_t i = 0; i < numThreads; ++i) {
         threads.emplace_back(&ThreadPool::threadLoop, this, i);
     }
+
+    if (debug_mode) {
+        string input_file_name = dataPath.substr(dataPath.rfind('/') + 1, dataPath.rfind('.') - dataPath.rfind('/') - 1);
+
+        string debug_file_path =  input_file_name +
+        "_frame_" + to_string(start_frame) + "_" + to_string(end_frame) +
+        "_pulse_" + to_string(start_wave) + "_" + to_string(end_wave) +
+        "_" + to_string(PULSE_NUM) + "x" + to_string(NFFT);
+
+        debugFile.open(debug_file_path, std::ios::binary);
+    }
+
     cout << "Initial Finished" << endl;
 }
 
@@ -104,6 +116,8 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
     // cout << "numHeads: " << numHeads << endl;
     // cout << "headLength: " << headLength << endl;
     if (numHeads != PULSE_NUM  || rangeNum != RANGE_NUM) {
+        cout << "numHeads:" << numHeads << " PULSE_NUM:" << PULSE_NUM << endl;
+        cout << "rangeNum:" << rangeNum << " RANGE_NUM:" << RANGE_NUM << endl;
         throw std::runtime_error("The calculated range num is different from that is set");
     }
 
@@ -153,8 +167,9 @@ void ThreadPool::getRadarParams(std::unique_ptr<WaveGroupProcessor>& waveGroupPr
         }
         radar_params_->scale = 1.0f / sqrt(radar_params_->bandWidth * radar_params_->pulseWidth) / PULSE_NUM;
         radar_params_->getCoef();
-        WaveGroupProcessor::getCoef(radar_params_->pcCoef, radar_params_->cfarCoef);
     }
+
+    waveGroupProcessor->getCoef(radar_params_->pcCoef, radar_params_->cfarCoef);
 }
 
 
@@ -294,3 +309,4 @@ void ThreadPool::writeToDebugFile(unsigned char *rawMessage, const cufftComplex*
 
     delete[] h_data; // 释放主机内存
 }
+
