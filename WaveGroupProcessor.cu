@@ -54,6 +54,8 @@ void WaveGroupProcessor::allocateDeviceMemory() {
     checkCudaErrors(cudaMalloc(&d_cfar_res_, sizeof(cufftComplex) * total_size));
     checkCudaErrors(cudaMalloc(&d_max_results_, sizeof(float) * wave_num_ * range_num_));
     checkCudaErrors(cudaMalloc(&d_speed_channels_, sizeof(int) * wave_num_ * range_num_));
+    thrust_data_ = thrust::device_ptr<cufftComplex>(d_data_);
+    thrust_cfar_ = thrust::device_ptr<cufftComplex>(d_cfar_res_);
 }
 
 void WaveGroupProcessor::freeDeviceMemory() {
@@ -183,15 +185,13 @@ void WaveGroupProcessor::processCoherentIntegration(float scale) {
 
     // 抵消脉压增益，同时除以range_num_是ifft之后必须除以ifft才能和matlab结果一样
     int size = wave_num_ * pulse_num_ * range_num_;
-    thrust::device_ptr<cufftComplex> thrust_data(d_data_);
-    thrust::transform(exec_policy_, thrust_data, thrust_data + size, thrust_data, ScaleFunctor(scale / range_num_ / normFactor));
+    thrust::transform(exec_policy_, thrust_data_, thrust_data_ + size, thrust_data_, ScaleFunctor(scale / range_num_ / normFactor));
 }
 
 void WaveGroupProcessor::processCFAR() {
     // .^2
     int size = wave_num_ * pulse_num_ * range_num_;
-    thrust::device_ptr<cufftComplex> thrust_data(d_data_);
-    thrust::transform(exec_policy_, thrust_data, thrust_data + size, thrust_data, SquareFunctor());
+    thrust::transform(exec_policy_, thrust_data_, thrust_data_ + size, thrust_data_, SquareFunctor());
 
     // fft
     checkCufftErrors(cufftExecC2C(row_plan_, d_data_, d_cfar_res_, CUFFT_FORWARD));
@@ -203,8 +203,7 @@ void WaveGroupProcessor::processCFAR() {
     // ifft
     checkCufftErrors(cufftExecC2C(row_plan_, d_cfar_res_, d_cfar_res_, CUFFT_INVERSE));
 
-    thrust::device_ptr<cufftComplex> thrust_cfar(d_cfar_res_);
-    thrust::transform(exec_policy_, thrust_cfar, thrust_cfar + size, thrust_cfar, ScaleFunctor(1.0 / range_num_ ));
+    thrust::transform(exec_policy_, thrust_cfar_, thrust_cfar_ + size, thrust_cfar_, ScaleFunctor(1.0 / range_num_ ));
 
     int cfarKernelSize = 2 * numGuardCells + 2 * numRefCells + 1;
 
@@ -213,8 +212,7 @@ void WaveGroupProcessor::processCFAR() {
 
     // 根据alpha计算噪底
     double alpha = numRefCells * 2 * (pow(Pfa, -1.0 / (numRefCells * 2)) - 1);
-    thrust::device_ptr<cufftComplex> cfar_data(d_cfar_res_);
-    thrust::transform(exec_policy_, cfar_data, cfar_data + size, cfar_data, ScaleFunctor(alpha/2.0/numRefCells));
+    thrust::transform(exec_policy_, thrust_cfar_, thrust_cfar_ + size, thrust_cfar_, ScaleFunctor(alpha/2.0/numRefCells));
 
     // 对比噪底选结果，(结果开根号)
     cmpKernel<<<gridSize, blockSize, 0, stream_>>>(d_data_, d_cfar_res_, wave_num_ * pulse_num_, range_num_, offset);

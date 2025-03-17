@@ -53,6 +53,9 @@ private:
     float* d_max_results_;           // 选大结果   (wave_num_ x range_num_)
     int* d_speed_channels_;          // 速度通道   (wave_num_ x range_num_)
 
+    thrust::device_ptr<cufftComplex> thrust_data_;
+    thrust::device_ptr<cufftComplex> thrust_cfar_;
+
     // 脉压系数和cfar系数
     bool coef_is_initialized_;
     cufftHandle pc_plan_;            // 脉压FFT，用于对下面两个系数做脉压
