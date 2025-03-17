@@ -111,10 +111,9 @@ void SendVideo::send(RadarParams* radar_params_) {
         auto* rowData = radar_params_->h_max_results_ + ii * NFFT;
         auto* rowSpeed = radar_params_->h_speed_channels_ + ii * NFFT;
 
-        auto offset = range_correct + radar_params_->numSamples - 2;
+        auto offset = range_correct + radar_params_->numSamples - 1;
         for (int k = 0; k < unMinPRTLen - offset; ++k) {
             // + system_delay
-            //TODO: 这个偏移会不会动
             auto data_amp = rowData[k + offset];
             data_amp = data_amp * 1.0;
             if(data_amp > 255)

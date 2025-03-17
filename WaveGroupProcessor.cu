@@ -25,7 +25,7 @@ WaveGroupProcessor::~WaveGroupProcessor() {
 void WaveGroupProcessor::setupFFTPlans() {
     // 创建流
     checkCudaErrors(cudaStreamCreate(&stream_));
-
+    exec_policy_ = thrust::cuda::par.on(stream_);
     // 行FFT (批量处理)
     checkCufftErrors(cufftPlan1d(&pc_plan_, NFFT, CUFFT_C2C, 1));
     checkCufftErrors(cufftPlan1d(&row_plan_, range_num_, CUFFT_C2C, wave_num_ * pulse_num_));
@@ -170,24 +170,8 @@ void WaveGroupProcessor::processPulseCompression(int numSamples) {
     checkCufftErrors(cufftExecC2C(row_plan_, d_data_, d_data_, CUFFT_FORWARD));
     // .*
     rowWiseMulKernel<<<gridSize, blockSize, 0, stream_>>>(d_data_, d_pc_coeffs_, wave_num_ * pulse_num_, range_num_);
-    // int sharedMemSize = range_num_ * sizeof(cufftComplex); // ncols对应range_num_
-    // rowWiseMulKernel<<<gridSize, blockSize, sharedMemSize, stream_>>>(d_data_, d_pc_coeffs_, wave_num_ * pulse_num_, range_num_);
     // ifft
     checkCufftErrors(cufftExecC2C(row_plan_, d_data_, d_data_, CUFFT_INVERSE));
-
-    // 设置线程块和网格大小
-    int nrows = wave_num_ * pulse_num_;
-    int blocksPerGrid = (nrows + blockSize - 1) / blockSize;
-
-    // 启动kernel
-    // int startIdx = numSamples-2;
-    // int endIdx = startIdx + RANGE_NUM - 1;
-    // moveAndZeroKernel<<<blocksPerGrid, blockSize, 0, stream_>>>(d_data_, nrows, range_num_, startIdx, endIdx);
-
-    // thrust::device_ptr<cufftComplex> thrust_data(d_data_);
-    // auto exec_policy = thrust::cuda::par.on(stream_);
-    // thrust::transform(exec_policy, thrust_data, thrust_data + size, thrust_data, ScaleFunctor(1.0 / range_num_));
-
 }
 
 void WaveGroupProcessor::processCoherentIntegration(float scale) {
@@ -200,19 +184,14 @@ void WaveGroupProcessor::processCoherentIntegration(float scale) {
     // 抵消脉压增益，同时除以range_num_是ifft之后必须除以ifft才能和matlab结果一样
     int size = wave_num_ * pulse_num_ * range_num_;
     thrust::device_ptr<cufftComplex> thrust_data(d_data_);
-    auto exec_policy = thrust::cuda::par.on(stream_);
-    thrust::transform(exec_policy, thrust_data, thrust_data + size, thrust_data, ScaleFunctor(scale / range_num_ / normFactor));
-
+    thrust::transform(exec_policy_, thrust_data, thrust_data + size, thrust_data, ScaleFunctor(scale / range_num_ / normFactor));
 }
 
 void WaveGroupProcessor::processCFAR() {
     // .^2
     int size = wave_num_ * pulse_num_ * range_num_;
     thrust::device_ptr<cufftComplex> thrust_data(d_data_);
-    auto exec_policy = thrust::cuda::par.on(stream_);
-    thrust::transform(exec_policy, thrust_data, thrust_data + size, thrust_data, SquareFunctor());
-
-    this->streamSynchronize();
+    thrust::transform(exec_policy_, thrust_data, thrust_data + size, thrust_data, SquareFunctor());
 
     // fft
     checkCufftErrors(cufftExecC2C(row_plan_, d_data_, d_cfar_res_, CUFFT_FORWARD));
@@ -225,7 +204,7 @@ void WaveGroupProcessor::processCFAR() {
     checkCufftErrors(cufftExecC2C(row_plan_, d_cfar_res_, d_cfar_res_, CUFFT_INVERSE));
 
     thrust::device_ptr<cufftComplex> thrust_cfar(d_cfar_res_);
-    thrust::transform(exec_policy, thrust_cfar, thrust_cfar + size, thrust_cfar, ScaleFunctor(1.0 / range_num_ ));
+    thrust::transform(exec_policy_, thrust_cfar, thrust_cfar + size, thrust_cfar, ScaleFunctor(1.0 / range_num_ ));
 
     int cfarKernelSize = 2 * numGuardCells + 2 * numRefCells + 1;
 
@@ -235,13 +214,10 @@ void WaveGroupProcessor::processCFAR() {
     // 根据alpha计算噪底
     double alpha = numRefCells * 2 * (pow(Pfa, -1.0 / (numRefCells * 2)) - 1);
     thrust::device_ptr<cufftComplex> cfar_data(d_cfar_res_);
-    thrust::transform(exec_policy, cfar_data, cfar_data + size, cfar_data, ScaleFunctor(alpha/2.0/numRefCells));
+    thrust::transform(exec_policy_, cfar_data, cfar_data + size, cfar_data, ScaleFunctor(alpha/2.0/numRefCells));
 
     // 对比噪底选结果，(结果开根号)
     cmpKernel<<<gridSize, blockSize, 0, stream_>>>(d_data_, d_cfar_res_, wave_num_ * pulse_num_, range_num_, offset);
-
-    // thrust::transform(exec_policy, thrust_data, thrust_data + size, thrust_data, ScaleFunctor(1.0f/normFactor));
-
 }
 
 void WaveGroupProcessor::processMaxSelection() {

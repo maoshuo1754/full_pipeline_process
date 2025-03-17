@@ -8,6 +8,7 @@
 #include "Config.h"
 #include "utils.h"
 #include "kelnels.cuh"
+#include <thrust/execution_policy.h>
 
 class WaveGroupProcessor {
 public:
@@ -39,6 +40,7 @@ private:
     
     // CUDA资源
     cudaStream_t stream_;
+    thrust::cuda_cub::execute_on_stream exec_policy_;
     cufftHandle row_plan_;   // 行FFT
     cufftHandle col_plan_;   // 列FFT
 

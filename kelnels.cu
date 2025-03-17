@@ -45,10 +45,6 @@ __global__ void rowWiseMulKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows
 
 
 __global__ void cmpKernel(cufftComplex *d_data, cufftComplex *thresholds, int nrows, int ncols, int offset) {
-    // d_data 为原始数据
-    // thresholds 为CFAR计算出来的阈值
-    // offset 为偏移
-    // 逐元素对比，大于噪底的，取根号，小于的取0
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < nrows * ncols) {
         if (idx % ncols < ncols - offset)
