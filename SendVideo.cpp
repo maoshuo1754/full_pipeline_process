@@ -110,20 +110,21 @@ void SendVideo::send(RadarParams* radar_params_) {
 
         auto* rowData = radar_params_->h_max_results_ + ii * NFFT;
         auto* rowSpeed = radar_params_->h_speed_channels_ + ii * NFFT;
-        for (int k = 0; k < unMinPRTLen - range_correct; ++k) {
+
+        auto offset = range_correct + radar_params_->numSamples - 2;
+        for (int k = 0; k < unMinPRTLen - offset; ++k) {
             // + system_delay
             //TODO: 这个偏移会不会动
-            auto data_amp = rowData[k + range_correct];
+            auto data_amp = rowData[k + offset];
             data_amp = data_amp * 1.0;
             if(data_amp > 255)
                 data_amp = 255;
 
             videoMsg.bytVideoData[k] = (unsigned char)data_amp;
-            if (rowSpeed[k + range_correct] > PULSE_NUM || k + range_correct > NFFT)
-            {
+            if (rowSpeed[k + offset] > PULSE_NUM || k + offset > NFFT) {
                 cerr << "rowSpeed array index error!" << endl;
             }
-            rowSpeed[k] = radar_params_->chnSpeeds[rowSpeed[k + range_correct]];
+            rowSpeed[k] = radar_params_->chnSpeeds[rowSpeed[k + offset]];
         }
 
 //        cout << "ii:" << ii << " [rAzm]:" << rAzm << endl;
