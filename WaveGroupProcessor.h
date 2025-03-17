@@ -26,7 +26,7 @@ public:
     void streamSynchronize();
     void processPulseCompression(int numSamples);
     void processCoherentIntegration(float scale);
-    void processCFAR();
+    void processCFAR(int numSamples);
     void processMaxSelection();
     void getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef);
     void resetAddr();

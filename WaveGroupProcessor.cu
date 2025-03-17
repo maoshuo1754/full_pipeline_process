@@ -176,13 +176,13 @@ void WaveGroupProcessor::processPulseCompression(int numSamples) {
     checkCufftErrors(cufftExecC2C(row_plan_, d_data_, d_data_, CUFFT_INVERSE));
 
     // 设置线程块和网格大小
-    int nrows = wave_num_ * pulse_num_;
-    int blocksPerGrid = (nrows + blockSize - 1) / blockSize;
+    // int nrows = wave_num_ * pulse_num_;
+    // int blocksPerGrid = (nrows + blockSize - 1) / blockSize;
 
     // 启动kernel
-    int startIdx = numSamples;
-    int endIdx = startIdx + RANGE_NUM - 1;
-    moveAndZeroKernel<<<blocksPerGrid, blockSize, 0, stream_>>>(d_data_, nrows, range_num_, startIdx, endIdx);
+    // int startIdx = numSamples-2;
+    // int endIdx = startIdx + RANGE_NUM - 1;
+    // moveAndZeroKernel<<<blocksPerGrid, blockSize, 0, stream_>>>(d_data_, nrows, range_num_, startIdx, endIdx);
 
     thrust::device_ptr<cufftComplex> thrust_data(d_data_);
     auto exec_policy = thrust::cuda::par.on(stream_);
@@ -205,7 +205,7 @@ void WaveGroupProcessor::processCoherentIntegration(float scale) {
 
 }
 
-void WaveGroupProcessor::processCFAR() {
+void WaveGroupProcessor::processCFAR(int numSamples) {
     // .^2
     int size = wave_num_ * pulse_num_ * range_num_;
     thrust::device_ptr<cufftComplex> thrust_data(d_data_);
@@ -228,8 +228,11 @@ void WaveGroupProcessor::processCFAR() {
     thrust::transform(exec_policy, thrust_cfar, thrust_cfar + size, thrust_cfar, ScaleFunctor(1.0 / range_num_));
 
     int cfarKernelSize = 2 * numGuardCells + 2 * numRefCells + 1;
-    int startIdx = floor((cfarKernelSize - 1) / 2);
-    int endIdx = startIdx + RANGE_NUM - 1;
+
+    // cfar卷积 和 脉压FFT一起左移了
+    int startIdx = floor((cfarKernelSize - 1) / 2) + (numSamples - 2);
+    // 避免越界
+    int endIdx = min(startIdx + RANGE_NUM - 1, range_num_ - 1);
 
     // 左移抵消卷积扩展
     int nrows = wave_num_ * pulse_num_;
