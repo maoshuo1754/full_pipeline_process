@@ -29,6 +29,7 @@ public:
     void processCFAR();
     void processMaxSelection();
     void static getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef);
+    void resetAddr();
 
 private:
     // 三维数据维度

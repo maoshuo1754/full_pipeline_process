@@ -141,9 +141,12 @@ void WaveGroupProcessor::getResult(float* h_max_results_, int* h_speed_channels_
                                     stream_));
 }
 
-void WaveGroupProcessor::unpackData(const int* headPositions) {
+void WaveGroupProcessor::resetAddr()
+{
     currentAddrOffset = 0;
+}
 
+void WaveGroupProcessor::unpackData(const int* headPositions) {
     checkCudaErrors(cudaMemcpyAsync(d_headPositions_, headPositions, pulse_num_ * sizeof(int),
                                 cudaMemcpyHostToDevice,
                                 stream_));
@@ -233,8 +236,6 @@ void WaveGroupProcessor::processCFAR() {
     int nrows = wave_num_ * pulse_num_;
     int blocksPerGrid = (nrows + blockSize - 1) / blockSize;
     moveAndZeroKernel<<<blocksPerGrid, blockSize, 0, stream_>>>(d_cfar_res_, nrows, range_num_, startIdx, endIdx);
-
-
 
     // 根据alpha计算噪底
     double alpha = numRefCells * 2 * (pow(Pfa, -1.0 / (numRefCells * 2)) - 1);

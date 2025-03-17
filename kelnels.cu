@@ -97,9 +97,9 @@ __global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChanne
             }
         }
         maxValues[col] = maxVal;
-        if (maskPtr[col]) {
-            maxValues[col] = 1000;
-        }
+        // if (maskPtr[col]) {
+        //     maxValues[col] = 1000;
+        // }
         speedChannels[col] = maxChannel;
     }
 }

@@ -85,14 +85,28 @@ void ThreadPool::threadLoop(int threadID) {
 
 // 线程池中的数据处理函数
 void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProcessor, int threadID) {
+
+    waveGroupProcessor->resetAddr();
     cout << "thread " << threadID << " start" << endl;
     static int count = 0;
     count++;
     int thisCount = count;
     cout << "count:" << thisCount << endl;
-    // if (thisCount != 1) {
+
+    // if (threadID != 0)
+    // {
     //     return;
     // }
+    int numHeads = headPositions[threadID].size();       // 2048
+    int headLength = headPositions[threadID][1] - headPositions[threadID][0];
+    int rangeNum = floor((headLength - DATA_OFFSET) / WAVE_NUM / 4.0);
+
+    // cout << "numHeads: " << numHeads << endl;
+    // cout << "headLength: " << headLength << endl;
+    if (numHeads != PULSE_NUM  || rangeNum != RANGE_NUM) {
+        throw std::runtime_error("The calculated range num is different from that is set");
+    }
+
     waveGroupProcessor->unpackData(headPositions[threadID].data());
 
     getRadarParams(waveGroupProcessor);
@@ -114,6 +128,7 @@ void ThreadPool::getRadarParams(std::unique_ptr<WaveGroupProcessor>& waveGroupPr
     waveGroupProcessor->getPackegeHeader(radar_params_->rawMessage, DATA_OFFSET);
 
     if (!isInit) {
+        isInit = true;
         auto* packageArr = (uint32_t *)(radar_params_->rawMessage);
 
         auto freqPoint = packageArr[11] & 0x000000ff;
@@ -139,7 +154,6 @@ void ThreadPool::getRadarParams(std::unique_ptr<WaveGroupProcessor>& waveGroupPr
         radar_params_->scale = 1.0f / sqrt(radar_params_->bandWidth * radar_params_->pulseWidth) / PULSE_NUM;
         radar_params_->getCoef();
         WaveGroupProcessor::getCoef(radar_params_->pcCoef, radar_params_->cfarCoef);
-        isInit = true;
     }
 }
 

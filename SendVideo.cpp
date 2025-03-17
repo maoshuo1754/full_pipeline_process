@@ -119,6 +119,10 @@ void SendVideo::send(RadarParams* radar_params_) {
                 data_amp = 255;
 
             videoMsg.bytVideoData[k] = (unsigned char)data_amp;
+            if (rowSpeed[k + range_correct] > PULSE_NUM || k + range_correct > NFFT)
+            {
+                cerr << "rowSpeed array index error!" << endl;
+            }
             rowSpeed[k] = radar_params_->chnSpeeds[rowSpeed[k + range_correct]];
         }
 

@@ -15,7 +15,7 @@
 #define RANGE_NUM  3905         // 一个脉冲的距离单元数
 #define CFAR_LENGTH 16          // 分段fft长度
 #define CUDA_BLOCK_SIZE 256     // cuda运算分块长度
-#define channel_0_enable 1      // 0通道是否开启
+#define channel_0_enable 0      // 0通道是否开启
 #define CFAR_METHOD 0           // 0是CA_CFAR, 1是GO_CFAR， 2是SO_CFAR
 // 配置参数声明
 extern std::string dataPath;
