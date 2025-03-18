@@ -8,6 +8,7 @@
 #include "Config.h"
 #include "utils.h"
 #include <thrust/execution_policy.h>
+#include <mutex>
 
 class WaveGroupProcessor {
 public:

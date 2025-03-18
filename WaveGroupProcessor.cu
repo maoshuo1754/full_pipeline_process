@@ -190,6 +190,11 @@ void WaveGroupProcessor::processCoherentIntegration(float scale) {
     thrust::transform(exec_policy_, thrust_data_, thrust_data_ + size, thrust_data_, ScaleFunctor(scale / range_num_ / normFactor));
 }
 
+
+
+
+
+
 void WaveGroupProcessor::processCFAR() {
     // .^2
     int size = wave_num_ * pulse_num_ * range_num_;
@@ -269,7 +274,7 @@ void WaveGroupProcessor::processMaxSelection() {
     dim3 gridDim_((range_num_ + blockDim_.x - 1) / blockDim_.x);
 
     for (int w = 0; w < wave_num_; ++w) {
-        auto* cfarPtr = d_data_ + w * pulse_num_ * range_num_;
+        cufftComplex* cfarPtr = d_data_ + w * pulse_num_ * range_num_;
         float* maxPtr = d_max_results_ + w * range_num_;
         int* speedPtr = d_speed_channels_ + w * range_num_;
         bool* maskPtr = d_is_masked_ + w * range_num_;

@@ -120,8 +120,9 @@ void SendVideo::send(RadarParams* radar_params_) {
                 data_amp = 255;
 
             videoMsg.bytVideoData[k] = (unsigned char)data_amp;
-            if (rowSpeed[k + offset] > PULSE_NUM || k + offset > NFFT) {
+            if (rowSpeed[k + offset] >= PULSE_NUM) {
                 cerr << "rowSpeed array index error!" << endl;
+                cout << k << " chennel:" << rowSpeed[k + offset] << endl;
             }
             rowSpeed[k] = radar_params_->chnSpeeds[rowSpeed[k + offset]];
         }
