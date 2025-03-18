@@ -27,6 +27,17 @@ __global__ void fftshift_columns_inplace_kernel(cufftComplex* d_data, int nrows,
 __global__ void cfar_col_kernel(const cufftComplex* data, cufftComplex* cfar_signal, int nrows, int ncols,
                                 double alpha, int numGuardCells, int numRefCells);
 
+__global__ void update_queues_kernel(
+    const cufftComplex* frame, cufftComplex* queues, cufftComplex* queues_speed, int* indices,
+    int wave_num, int pulse_num, int range_num, int queue_size, int speed_channels
+);
+
+__global__ void compute_clutter_kernel(
+    const cufftComplex* queues, const cufftComplex* queues_speed, const int* indices, bool* clutter,
+    int wave_num, int range_num, int queue_size, int speed_channels
+);
+
+
 struct ScaleFunctor {
     float scale;
 

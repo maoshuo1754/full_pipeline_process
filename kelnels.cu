@@ -252,3 +252,124 @@ __global__ void cfar_col_kernel(const cufftComplex* data, cufftComplex* cfar_sig
         }
     }
 }
+
+
+// CUDA 内核：更新队列（0速通道和20个速度通道）
+__global__ void update_queues_kernel(
+    const cufftComplex* frame, cufftComplex* queues, cufftComplex* queues_speed, int* indices,
+    int wave_num, int pulse_num, int range_num, int queue_size, int speed_channels
+) {
+    int w = blockIdx.x * blockDim.x + threadIdx.x;  // 波数索引
+    int r = blockIdx.y * blockDim.y + threadIdx.y;  // 距离索引
+    if (w < wave_num && r < range_num) {
+        int idx = w * range_num + r;                // 全局索引
+        int current_idx = indices[idx];             // 当前写入位置
+
+        // 更新0速通道队列
+        int zero_offset = w * pulse_num * range_num + 0 * range_num + r; // 0速通道位置
+        int queue_base = w * range_num * queue_size + r * queue_size;
+        int write_idx = queue_base + current_idx;
+        queues[write_idx] = frame[zero_offset];     // 写入0速通道队列
+
+        // 更新20个速度通道队列，从 (PULSE_NUM/2 - 10) 开始
+        int speed_start = (pulse_num / 2 - 10);     // 速度通道起始索引
+        for (int s = 0; s < speed_channels; ++s) {
+            int speed_idx = speed_start + s;
+            int speed_offset = w * pulse_num * range_num + speed_idx * range_num + r;
+            int queue_speed_base = w * range_num * speed_channels * queue_size + r * speed_channels * queue_size + s * queue_size;
+            int write_speed_idx = queue_speed_base + current_idx;
+            queues_speed[write_speed_idx] = frame[speed_offset]; // 写入速度通道队列
+        }
+
+        indices[idx] = (current_idx + 1) % queue_size; // 更新索引（循环队列）
+    }
+}
+
+// CUDA 内核：计算自卷积、标准差并判断杂波
+__global__ void compute_clutter_kernel(
+    const cufftComplex* queues, const cufftComplex* queues_speed, const int* indices, bool* clutter,
+    int wave_num, int range_num, int queue_size, int speed_channels
+) {
+    int w = blockIdx.x * blockDim.x + threadIdx.x;  // 波数索引
+    int r = blockIdx.y * blockDim.y + threadIdx.y;  // 距离索引
+    if (w < wave_num && r < range_num) {
+        int idx = w * range_num + r;                // 全局索引
+        int queue_base = w * range_num * queue_size + r * queue_size;
+
+        // **自卷积计算**
+        // 提取0速通道队列数据
+        cufftComplex x[CLUTTER_QUEUE_SIZE];
+        for (int i = 0; i < queue_size; ++i) {
+            x[i] = queues[queue_base + i];
+        }
+
+        // 计算（共轭翻转）
+        cufftComplex xt[CLUTTER_QUEUE_SIZE];
+        for (int i = 0; i < queue_size; ++i) {
+            xt[i].x = x[queue_size - 1 - i].x;      // 实部翻转
+            xt[i].y = -x[queue_size - 1 - i].y;     // 虚部取反（共轭）
+        }
+
+        // 计算自卷积 conv(x, x^t)
+        float conv_result[2 * CLUTTER_QUEUE_SIZE - 1] = {0};
+        for (int n = 0; n < 2 * queue_size - 1; ++n) {
+            float sum = 0.0f;
+            for (int k = 0; k < queue_size; ++k) {
+                int idx_xt = n - k;
+                if (idx_xt >= 0 && idx_xt < queue_size) {
+                    sum += x[k].x * xt[idx_xt].x + x[k].y * xt[idx_xt].y; // 复数乘法实部
+                }
+            }
+            conv_result[n] = sum;
+        }
+
+        // 计算归一化因子 sum(x(i) * x^t(i))
+        float norm_sum = 0.0f;
+        for (int i = 0; i < queue_size; ++i) {
+            norm_sum += x[i].x * xt[i].x + x[i].y * xt[i].y; // 复数乘法实部
+        }
+
+        // 归一化并统计大于3dB的点数
+        int count_above_3db = 0;
+        const float threshold = 2.0f; // 3dB ≈ 10^(3/10) ≈ 2
+        for (int n = 0; n < 2 * queue_size - 1; ++n) {
+            float normalized = (norm_sum != 0) ? (conv_result[n] / norm_sum) : 0.0f;
+            if (normalized > threshold) {
+                count_above_3db++;
+            }
+        }
+
+        // 自卷积条件：count_above_3db > 1
+        bool conv_condition = (count_above_3db > 1);
+
+        // **标准差计算**
+        // 计算20个速度通道的标准差
+        float std_dev_sum = 0.0f;
+        for (int s = 0; s < speed_channels; ++s) {
+            float sum = 0.0f;
+            float sum_sq = 0.0f;
+            int queue_speed_base = w * range_num * speed_channels * queue_size + r * speed_channels * queue_size + s * queue_size;
+            for (int i = 0; i < queue_size; ++i) {
+                cufftComplex val = queues_speed[queue_speed_base + i];
+                float magnitude = sqrtf(val.x * val.x + val.y * val.y); // 幅度
+                sum += magnitude;
+                sum_sq += magnitude * magnitude;
+            }
+            float mean = sum / queue_size;
+            float variance = (sum_sq / queue_size) - (mean * mean);
+            float std_dev = sqrtf(variance);
+            std_dev_sum += std_dev;
+        }
+        float avg_std_dev = std_dev_sum / speed_channels; // 20个通道的标准差平均值
+
+        // 计算0通道的幅度（最新一帧）
+        cufftComplex latest_zero = x[(indices[idx] - 1 + queue_size) % queue_size]; // 最新写入的数据
+        float zero_magnitude = sqrtf(latest_zero.x * latest_zero.x + latest_zero.y * latest_zero.y);
+
+        // 标准差条件：zero_magnitude > 6 * avg_std_dev
+        bool std_dev_condition = (zero_magnitude > 6.0f * avg_std_dev);
+
+        // **杂波判断**：两个条件都满足
+        clutter[idx] = (conv_condition && std_dev_condition);
+    }
+}
