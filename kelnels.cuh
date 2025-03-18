@@ -19,6 +19,14 @@ __global__ void moveAndZeroKernel(cufftComplex* data, int m, int n, int start, i
 
 __global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChannels, bool* maskPtr, int nrows, int ncols);
 
+__global__ void cfarKernel(const cufftComplex* data, cufftComplex* cfar_signal, int nrows, int ncols,
+                           double alpha, int numGuardCells, int numRefCells, int leftBoundary, int rightBoundary);
+
+__global__ void fftshift_columns_inplace_kernel(cufftComplex* d_data, int nrows, int ncols) ;
+
+__global__ void cfar_col_kernel(const cufftComplex* data, cufftComplex* cfar_signal, int nrows, int ncols,
+                                double alpha, int numGuardCells, int numRefCells);
+
 struct ScaleFunctor {
     float scale;
 

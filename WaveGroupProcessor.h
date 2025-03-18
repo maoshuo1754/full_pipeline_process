@@ -7,7 +7,6 @@
 #include "CudaMatrix.h"
 #include "Config.h"
 #include "utils.h"
-#include "kelnels.cuh"
 #include <thrust/execution_policy.h>
 
 class WaveGroupProcessor {
@@ -28,6 +27,8 @@ public:
     void processPulseCompression(int numSamples);
     void processCoherentIntegration(float scale);
     void processCFAR();
+    void cfar(int numSamples);
+    void cfar_by_col();
     void processMaxSelection();
     void getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef);
     void resetAddr();

@@ -93,7 +93,7 @@ __global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChanne
     if (col < ncols) {
         float maxVal;
 
-        maxVal = channel_0_enable ? data[col].x : -100;
+        maxVal = channel_0_enable ? data[col].x : 0;
         int maxChannel = 0;
         for (int row = 1; row < nrows; ++row) {
             ind = row * ncols + col;
@@ -110,3 +110,145 @@ __global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChanne
     }
 }
 
+
+// CUDA kernel 函数 - 原地按列 fftshift // 仅限nrows为偶数的情况
+__global__ void fftshift_columns_inplace_kernel(cufftComplex* d_data, int nrows, int ncols) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (col >= ncols) return;
+
+    int mid = nrows / 2;
+    // 仅交换前mid次，避免重复交换
+    for (int i = 0; i < mid; ++i) {
+        int src = i * ncols + col;
+        int dst = (i + mid + (nrows % 2)) * ncols + col; // 处理奇数情况
+        // 交换元素
+        cufftComplex temp = d_data[src];
+        d_data[src] = d_data[dst];
+        d_data[dst] = temp;
+    }
+}
+
+__global__ void cfarKernel(const cufftComplex* data, cufftComplex* cfar_signal, int nrows, int ncols,
+                           double alpha, int numGuardCells, int numRefCells, int leftBoundary, int rightBoundary) {
+    /*
+     * blockIdx - 块的索引
+     * blockIdx.x - [0, gridDim.x-1]
+     * blockIdx.y - [0, gridDim.y-1]
+     * blockDim - 每个块的维度
+     * threadIdx - 线程在块内的索引
+     * threadIdx.x - [0, blockDim-1]
+     */
+
+    int row = blockIdx.y;
+    int thread_id = blockIdx.x * blockDim.x + threadIdx.x;
+
+    int totalTrainingCells = numGuardCells + numRefCells;
+    int col_start = max(thread_id * CFAR_LENGTH, leftBoundary + totalTrainingCells);
+    int col_end = min(col_start + CFAR_LENGTH, rightBoundary - totalTrainingCells);
+
+    if (col_start >= ncols || row >= nrows) return;
+
+    double noiseLevel_left = 0.0;
+    double noiseLevel_right = 0.0;
+
+    for (int i = col_start; i < col_end; ++i) {
+        if (i == col_start) {
+            for (int j = i - totalTrainingCells; j < i - numGuardCells; ++j) {
+                noiseLevel_left += data[row * ncols + j].x;
+            }
+            for (int j = i + numGuardCells + 1; j <= i + totalTrainingCells; ++j) {
+                noiseLevel_right += data[row * ncols + j].x;
+            }
+        }
+        else {
+            noiseLevel_left += data[row * ncols + i - numGuardCells - 1].x;
+            noiseLevel_left -= data[row * ncols + (i - totalTrainingCells - 1)].x;
+            noiseLevel_right += data[row * ncols + i + totalTrainingCells].x;
+            noiseLevel_right -= data[row * ncols + i + numGuardCells].x;
+        }
+
+        double threshold = alpha * (noiseLevel_left + noiseLevel_right) / (2 * numRefCells);
+
+        cfar_signal[row * ncols + i].x = (data[row * ncols + i].x > threshold) ? sqrtf(data[row * ncols + i].x) : 0.0f;
+        cfar_signal[row * ncols + i].y = 0.0;
+    }
+}
+
+
+__global__ void cfar_col_kernel(const cufftComplex* data, cufftComplex* cfar_signal, int nrows, int ncols,
+                                double alpha, int numGuardCells, int numRefCells) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (col >= ncols) return;
+
+    // 定义检测范围
+    int start_row = numGuardCells + numRefCells;
+    int end_row = nrows - numGuardCells - numRefCells - 1;
+    if (start_row > end_row) return;
+
+    double sum_power = 0.0;
+    int count = 0;
+
+    int row = start_row;
+    int ref_start1 = row - numRefCells - numGuardCells; // 前参考窗口起始
+    int ref_end1 = row - numGuardCells - 1;             // 前参考窗口结束
+    int ref_start2 = row + numGuardCells + 1;           // 后参考窗口起始
+    int ref_end2 = row + numGuardCells + numRefCells;   // 后参考窗口结束
+
+    // 初始计算参考窗口的功率和
+    for (int r = ref_start1; r <= ref_end1; ++r) {
+        int idx = r * ncols + col;
+        sum_power += data[idx].x;  // 直接使用 .x 作为功率
+        count++;
+    }
+    for (int r = ref_start2; r <= ref_end2; ++r) {
+        int idx = r * ncols + col;
+        sum_power += data[idx].x;  // 直接使用 .x 作为功率
+        count++;
+    }
+
+    // 滑动窗口检测
+    for (row = start_row; row <= end_row; ++row) {
+        int cut_idx = row * ncols + col;
+        float cut_power = data[cut_idx].x;  // 直接使用 .x 作为 CUT 的功率
+
+        // 计算阈值
+        double mean_power = sum_power / count;
+        double threshold = alpha * mean_power;
+
+        // 检测并标记结果
+        if (cut_power > threshold) {
+            cfar_signal[cut_idx].x = sqrt(cut_power);  // 标记为目标
+            cfar_signal[cut_idx].y = 0.0f;
+        } else {
+            cfar_signal[cut_idx].x = 0.0f;  // 标记为非目标
+            cfar_signal[cut_idx].y = 0.0f;
+        }
+
+        // 更新滑动窗口
+        if (row < end_row) {
+            // 离开的单元功率
+            int leave_before_idx = ref_start1 * ncols + col;
+            double leave_before_power = data[leave_before_idx].x;
+
+            int leave_after_idx = ref_end2 * ncols + col;
+            double leave_after_power = data[leave_after_idx].x;
+
+            // 进入的单元功率
+            int enter_before_idx = (ref_end1 + 1) * ncols + col;
+            double enter_before_power = data[enter_before_idx].x;
+
+            int enter_after_idx = (ref_start2 - 1) * ncols + col;
+            double enter_after_power = data[enter_after_idx].x;
+
+            // 更新功率和
+            sum_power -= leave_before_power + leave_after_power;
+            sum_power += enter_before_power + enter_after_power;
+
+            // 更新参考窗口索引
+            ref_start1++;
+            ref_end1++;
+            ref_start2++;
+            ref_end2++;
+        }
+    }
+}

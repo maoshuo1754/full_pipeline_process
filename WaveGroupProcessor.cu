@@ -3,6 +3,7 @@
 #include "SharedQueue.h"
 #include <vector>
 
+#include "kelnels.cuh"
 
 
 WaveGroupProcessor::WaveGroupProcessor(int waveNum, int pulseNum, int rangeNum)
@@ -52,6 +53,7 @@ void WaveGroupProcessor::allocateDeviceMemory() {
     checkCudaErrors(cudaMalloc(&d_headPositions_, sizeof(int) * pulse_num_ * 1.1));
     checkCudaErrors(cudaMalloc(&d_data_, sizeof(cufftComplex) * total_size));
     checkCudaErrors(cudaMalloc(&d_cfar_res_, sizeof(cufftComplex) * total_size));
+    checkCudaErrors(cudaMemset(d_cfar_res_, 0, sizeof(cufftComplex) * total_size));
     checkCudaErrors(cudaMalloc(&d_max_results_, sizeof(float) * wave_num_ * range_num_));
     checkCudaErrors(cudaMalloc(&d_speed_channels_, sizeof(int) * wave_num_ * range_num_));
     thrust_data_ = thrust::device_ptr<cufftComplex>(d_data_);
@@ -217,6 +219,50 @@ void WaveGroupProcessor::processCFAR() {
     // 对比噪底选结果，(结果开根号)
     cmpKernel<<<gridSize, blockSize, 0, stream_>>>(d_data_, d_cfar_res_, wave_num_ * pulse_num_, range_num_, offset);
 }
+
+void WaveGroupProcessor::cfar(int numSamples)  {
+    double alpha = (numRefCells * 2 * (pow(Pfa, -1.0 / (numRefCells * 2)) - 1));
+
+    // .^2
+    int size = wave_num_ * pulse_num_ * range_num_;
+    thrust::transform(exec_policy_, thrust_data_, thrust_data_ + size, thrust_data_, SquareFunctor());
+
+    // Configure the CUDA kernel launch parameters
+    int colsPerThread = CFAR_LENGTH; // 每个线程处理的列数
+    int threadsPerBlock = range_num_ / colsPerThread; // 每个线程块中的线程数
+    int blocksPerRow = (range_num_ + colsPerThread - 1) / colsPerThread / threadsPerBlock; // 每行的线程块数
+    dim3 blockDim(threadsPerBlock, 1); // 线程块大小：1 行 x 32 列
+    int nrows = wave_num_ * pulse_num_;
+    dim3 gridDim(blocksPerRow, nrows); // 网格大小：每行 block 数 x 总行数
+
+    cfarKernel<<<gridDim, blockDim, 0, stream_>>>(d_data_, d_cfar_res_, nrows, range_num_, alpha, numGuardCells,
+                                                  numRefCells, numSamples-1, numSamples+RANGE_NUM-200);
+}
+
+void WaveGroupProcessor::cfar_by_col()
+{
+    double alpha = (numRefCells * 2 * (pow(Pfa, -1.0 / (numRefCells * 2)) - 1));
+    dim3 blockDim_(CUDA_BLOCK_SIZE);
+    dim3 gridDim_((range_num_ + blockDim_.x - 1) / blockDim_.x);
+
+    int size = wave_num_ * pulse_num_ * range_num_;
+    thrust::transform(exec_policy_, thrust_data_, thrust_data_ + size, thrust_data_, SquareFunctor());
+
+    for (int w = 0; w < WAVE_NUM; ++w)
+    {
+        auto* waveDataPtr = d_data_ + w * pulse_num_ * range_num_;
+        auto* cfarPtr = d_cfar_res_ + w * pulse_num_ * range_num_;
+        // 先对列做fftshift
+        // this->streamSynchronize();
+
+        fftshift_columns_inplace_kernel<<<gridDim_, blockDim_, 0, stream_>>>(waveDataPtr, pulse_num_, range_num_);
+        cfar_col_kernel<<<gridDim_, blockDim_, 0, stream_>>>(waveDataPtr, cfarPtr, pulse_num_, range_num_, alpha,
+                                                             numGuardCells, numRefCells);
+        // this->streamSynchronize();
+        // writeComplexToFile(d_cfar_res_, pulse_num_, range_num_, "cfarres.txt");
+    }
+}
+
 
 void WaveGroupProcessor::processMaxSelection() {
     dim3 blockDim_(CUDA_BLOCK_SIZE);

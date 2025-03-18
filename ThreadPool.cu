@@ -128,6 +128,8 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
     waveGroupProcessor->processPulseCompression(radar_params_->numSamples);
     waveGroupProcessor->processCoherentIntegration(radar_params_->scale);
     waveGroupProcessor->processCFAR();
+    // waveGroupProcessor->cfar(radar_params_->numSamples);
+    // waveGroupProcessor->cfar_by_col();
     waveGroupProcessor->processMaxSelection();
 
     waveGroupProcessor->getResult(radar_params_->h_max_results_, radar_params_->h_speed_channels_);

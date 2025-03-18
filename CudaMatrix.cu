@@ -731,16 +731,7 @@ __global__ void cfarKernel(const cufftComplex* data, cufftComplex* cfar_signal, 
             noiseLevel_right -= data[row * ncols + i + numGuardCells].x;
         }
 
-        double threshold;
-        if (CFAR_METHOD == 0) {
-            threshold = alpha * (noiseLevel_left + noiseLevel_right) / (2 * numRefCells);
-        }
-        else if (CFAR_METHOD == 1) {
-            threshold = alpha * ( noiseLevel_left > noiseLevel_right ? noiseLevel_left : noiseLevel_right) / numRefCells;
-        }
-        else if (CFAR_METHOD == 2) {
-            threshold = alpha * ( noiseLevel_left > noiseLevel_right ? noiseLevel_right : noiseLevel_left) / numRefCells;
-        }
+        double threshold = alpha * (noiseLevel_left + noiseLevel_right) / (2 * numRefCells);
 
         cfar_signal[row * ncols + i].x = (data[row * ncols + i].x > threshold) ? sqrt(data[row * ncols + i].x) : 0.0;
         cfar_signal[row * ncols + i].y = 0.0;
