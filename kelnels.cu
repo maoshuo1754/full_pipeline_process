@@ -110,6 +110,36 @@ __global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChanne
     }
 }
 
+__global__ void maxKernel2D(cufftComplex *data, float *maxValues, int *speedChannels,
+                           bool* maskPtr, int nrows, int ncols, int nwaves) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;    // range dimension
+    int wave = blockIdx.y * blockDim.y + threadIdx.y;   // wave dimension
+
+    if (col < ncols && wave < nwaves) {
+        // 计算当前wave和col的全局索引
+        int base_idx = wave * nrows * ncols + col;
+        float maxVal = channel_0_enable ? data[base_idx].x : 0;
+        int maxChannel = 0;
+
+        // 在row维度上找最大值
+        for (int row = 1; row < nrows; ++row) {
+            int ind = wave * nrows * ncols + row * ncols + col;
+            if (data[ind].x > maxVal) {
+                maxVal = data[ind].x;
+                maxChannel = row;
+            }
+        }
+
+        // 输出结果的索引
+        int out_idx = wave * ncols + col;
+        maxValues[out_idx] = maxVal;
+        speedChannels[out_idx] = maxChannel;
+        // if (maskPtr[out_idx]) {
+        //     maxValues[out_idx] = 1000;
+        // }
+    }
+}
+
 
 // CUDA kernel 函数 - 原地按列 fftshift // 仅限nrows为偶数的情况
 __global__ void fftshift_columns_inplace_kernel(cufftComplex* d_data, int nrows, int ncols) {
@@ -343,11 +373,10 @@ __global__ void compute_clutter_kernel(
         bool conv_condition = (count_above_3db > 1);
 
         // **标准差计算**
-        // 计算20个速度通道的标准差
-        float std_dev_sum = 0.0f;
+        // 计算所有 speed_channels * queue_size 个点的总标准差
+        float sum = 0.0f;
+        float sum_sq = 0.0f;
         for (int s = 0; s < speed_channels; ++s) {
-            float sum = 0.0f;
-            float sum_sq = 0.0f;
             int queue_speed_base = w * range_num * speed_channels * queue_size + r * speed_channels * queue_size + s * queue_size;
             for (int i = 0; i < queue_size; ++i) {
                 cufftComplex val = queues_speed[queue_speed_base + i];
@@ -355,19 +384,18 @@ __global__ void compute_clutter_kernel(
                 sum += magnitude;
                 sum_sq += magnitude * magnitude;
             }
-            float mean = sum / queue_size;
-            float variance = (sum_sq / queue_size) - (mean * mean);
-            float std_dev = sqrtf(variance);
-            std_dev_sum += std_dev;
         }
-        float avg_std_dev = std_dev_sum / speed_channels; // 20个通道的标准差平均值
+        int total_points = speed_channels * queue_size;
+        float mean = sum / total_points;
+        float variance = (sum_sq / total_points) - (mean * mean);
+        float std_dev = sqrtf(variance);
 
         // 计算0通道的幅度（最新一帧）
         cufftComplex latest_zero = x[(indices[idx] - 1 + queue_size) % queue_size]; // 最新写入的数据
         float zero_magnitude = sqrtf(latest_zero.x * latest_zero.x + latest_zero.y * latest_zero.y);
 
-        // 标准差条件：zero_magnitude > 6 * avg_std_dev
-        bool std_dev_condition = (zero_magnitude > 6.0f * avg_std_dev);
+        // 标准差条件：zero_magnitude > 6 * std_dev
+        bool std_dev_condition = (zero_magnitude > 6.0f * std_dev);
 
         // **杂波判断**：两个条件都满足
         clutter[idx] = (conv_condition && std_dev_condition);

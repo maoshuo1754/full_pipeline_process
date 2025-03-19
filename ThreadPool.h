@@ -108,7 +108,7 @@ private:
 
     void processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProcessor_, int threadID);
 
-    void getRadarParams(std::unique_ptr<WaveGroupProcessor>& waveGroupProcessor);
+    void getRadarParams(std::unique_ptr<WaveGroupProcessor>& waveGroupProcessor, int frame);
 
     void memcpyDataToThread(unsigned int startAddr, unsigned int endAddr);
 

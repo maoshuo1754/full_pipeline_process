@@ -24,6 +24,7 @@ public:
     // 处理流程
     int copyRawData(const uint8_t* h_raw_data, size_t data_size);
     void getPackegeHeader(uint8_t* h_rawData, size_t data_size);
+    cufftComplex* getData();
     void getResult(float* h_max_results_, int* h_speed_channels_);
     void unpackData(const int* headPositions);
     void streamSynchronize();

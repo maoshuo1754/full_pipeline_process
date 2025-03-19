@@ -3,7 +3,7 @@
 #include "SharedQueue.h"
 #include <vector>
 #include "kelnels.cuh"
-
+#include "nlohmann/json.hpp"
 
 
 WaveGroupProcessor::WaveGroupProcessor(int waveNum, int pulseNum, int rangeNum)
@@ -96,6 +96,11 @@ int WaveGroupProcessor::copyRawData(const uint8_t* h_raw_data, size_t data_size)
 
 void WaveGroupProcessor::getPackegeHeader(uint8_t* h_raw_data, size_t data_size) {
     checkCudaErrors(cudaMemcpyAsync(h_raw_data, d_unpack_data_, data_size, cudaMemcpyDeviceToHost, stream_));
+}
+
+cufftComplex* WaveGroupProcessor::getData()
+{
+    return d_data_;
 }
 
 void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef) {
@@ -193,9 +198,16 @@ void WaveGroupProcessor::processCoherentIntegration(float scale) {
     int size = wave_num_ * pulse_num_ * range_num_;
     thrust::transform(exec_policy_, thrust_data_, thrust_data_ + size, thrust_data_, ScaleFunctor(scale / range_num_ / normFactor));
 
-
+    static int count = 0;
+    count++;
+    std::string filename1 = "WaveGroupProcessor_" + std::to_string(count) + ".txt";
+    std::string filename2 = "bool" + std::to_string(count) + ".txt";
+    // this->streamSynchronize();
+    // writeComplexToFile(d_data_ + 16*pulse_num_*range_num_, pulse_num_, range_num_, filename1);
     gpu_manager.update_queues(d_data_);
     gpu_manager.get_clutter_copy(d_is_masked_, wave_num_ * range_num_);
+    // this->streamSynchronize();
+    // writeBoolToFile(d_is_masked_+16*range_num_, 1, range_num_, filename2);
 }
 
 
@@ -278,15 +290,22 @@ void WaveGroupProcessor::cfar_by_col()
 
 
 void WaveGroupProcessor::processMaxSelection() {
-    dim3 blockDim_(CUDA_BLOCK_SIZE);
-    dim3 gridDim_((range_num_ + blockDim_.x - 1) / blockDim_.x);
+    // 使用2D block和grid
+    dim3 blockDim_(16, 16);  // 可以根据需要调整block大小
+    dim3 gridDim_(
+        (range_num_ + blockDim_.x - 1) / blockDim_.x,
+        (wave_num_ + blockDim_.y - 1) / blockDim_.y
+    );
 
-    for (int w = 0; w < wave_num_; ++w) {
-        cufftComplex* cfarPtr = d_data_ + w * pulse_num_ * range_num_;
-        float* maxPtr = d_max_results_ + w * range_num_;
-        int* speedPtr = d_speed_channels_ + w * range_num_;
-        bool* maskPtr = d_is_masked_ + w * range_num_;
-        maxKernel<<<gridDim_, blockDim_, 0, stream_>>>(cfarPtr, maxPtr, speedPtr, maskPtr, pulse_num_, range_num_);
-    }
+    // 直接一次调用处理所有wave
+    maxKernel2D<<<gridDim_, blockDim_, 0, stream_>>>(
+        d_data_,           // 输入数据
+        d_max_results_,    // 最大值输出
+        d_speed_channels_, // 速度通道输出
+        d_is_masked_,      // mask
+        pulse_num_,        // nrows
+        range_num_,        // ncols
+        wave_num_          // nwaves
+    );
 }
 

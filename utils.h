@@ -41,6 +41,8 @@ void writeComplexToFile(cufftComplex* d_data_, int pulse_num_, int range_num_, c
 
 void writeFloatToFile(float* d_data_, int pulse_num_, int range_num_, const std::string& filename);
 
+void writeBoolToFile(bool* d_data_, int wave_num_, int range_num_, const std::string& filename);
+
 std::vector<cufftComplex> readFilterFromFile(const std::string& filename);
 
 #endif //CUDAPROJECT_UTILS_H

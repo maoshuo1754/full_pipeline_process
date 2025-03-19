@@ -189,6 +189,40 @@ void writeComplexToFile(cufftComplex* d_data_, int pulse_num_, int range_num_, c
 }
 
 
+void writeBoolToFile(bool* d_data_, int wave_num_, int range_num_, const std::string& filename) {
+    // 1. 分配主机内存
+    bool* h_data_ = new bool[wave_num_ * range_num_];
+
+    // 2. 将数据从设备内存拷贝到主机内存
+    cudaMemcpy(h_data_, d_data_, wave_num_ * range_num_ * sizeof(bool), cudaMemcpyDeviceToHost);
+
+    // 3. 打开文件准备写入
+    std::ofstream outfile(filename, std::ios::out | std::ios::app); // 使用追加模式
+    if (!outfile.is_open()) {
+        std::cerr << "Failed to open file: " << filename << std::endl;
+        delete[] h_data_;
+        return;
+    }
+
+    // 4. 将数据写入文件
+    for (int i = 0; i < wave_num_; ++i) {
+        for (int j = 0; j < range_num_; ++j) {
+            bool value = h_data_[i * range_num_ + j];
+            outfile << (value ? "1" : "0") << " ";
+        }
+        outfile << std::endl; // 每行写入完毕后换行
+    }
+
+    // 5. 关闭文件
+    outfile.close();
+
+    // 6. 释放主机内存
+    delete[] h_data_;
+
+    std::cout << "================================  file write finished!" << std::endl;
+}
+
+
 
 void writeFloatToFile(float* d_data_, int pulse_num_, int range_num_, const std::string& filename) {
     // 1. 分配主机内存

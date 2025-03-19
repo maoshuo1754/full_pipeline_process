@@ -105,7 +105,7 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
     int thisCount = count;
     cout << "count:" << thisCount << endl;
 
-    // if (threadID != 0)
+    // if (thisCount > 15)
     // {
     //     return;
     // }
@@ -123,7 +123,7 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
 
     waveGroupProcessor->unpackData(headPositions[threadID].data());
 
-    getRadarParams(waveGroupProcessor);
+    getRadarParams(waveGroupProcessor, thisCount);
 
     waveGroupProcessor->processPulseCompression(radar_params_->numSamples);
     waveGroupProcessor->processCoherentIntegration(radar_params_->scale);
@@ -139,9 +139,14 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
     cout << "thread " << threadID << " process finished" << endl;
 }
 
-void ThreadPool::getRadarParams(std::unique_ptr<WaveGroupProcessor>& waveGroupProcessor) {
+void ThreadPool::getRadarParams(std::unique_ptr<WaveGroupProcessor>& waveGroupProcessor, int frame) {
     static bool isInit = false;
     waveGroupProcessor->getPackegeHeader(radar_params_->rawMessage, DATA_OFFSET);
+
+    if (debug_mode && frame >= start_frame && frame < end_frame)
+    {
+        writeToDebugFile(radar_params_->rawMessage, waveGroupProcessor->getData());
+    }
 
     if (!isInit) {
         isInit = true;

@@ -10,7 +10,7 @@ c = 3e8;
 numsamples = round(Fs*pulsewidth);
 
 lambda = 0.0369658;
-PRT = 125e-6;
+PRT = 120e-6;
 NUM_PULSE = 2048;
 delta_v = lambda / PRT / NUM_PULSE / 2.0;
 delta_range = c / Fs / 2;
@@ -35,7 +35,7 @@ PCcoef = fft(PCcoef, NFFT);
 PCcoef = repmat(PCcoef, pulseNum, 1);
 
 %% 数据读取
-folderPath = '20250219171427_128GB_frame_70_80_pulse_16_19_2048x4096';
+folderPath = '20250319145530_128GB_frame_25_30_pulse_15_18_2048x4096';
 
 fid = fopen(folderPath, 'rb');
 if fid == -1
@@ -54,9 +54,9 @@ aziTable = readmatrix("azi.txt");
 tic;
 figure;
 for ii = 1:fileInfos('numFrames')
-    if ii ~= 1
-        continue
-    end
+    % if ii ~= 1
+    %     continue
+    % end
     msg = [num2str(ii), '/', num2str(fileInfos('numFrames'))];
     % waitbar(ii/fileInfos('numFrames'), h, msg);
 

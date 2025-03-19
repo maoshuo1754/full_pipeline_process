@@ -89,7 +89,8 @@ void SendVideo::send(RadarParams* radar_params_) {
     videoMsg.RadarVideoHeader.dwTxRelMilliSecondTime_L = dwTemp % 1000 * 1000;
 
 //    for (int ii = 0; ii < WAVE_NUM; ii++) {
-    for (int ii = WAVE_NUM - 1; ii >= 0; ii--) {
+    // for (int ii = WAVE_NUM - 1; ii >= 0; ii--) {
+    for (int ii = end_wave; ii >= start_wave; ii--) {
 
         int sec = dwTemp / 1000 % 60 + timeArray[ii];
 //        cout << "time:" << h << ":" << min << ":" << sec << endl;
@@ -99,7 +100,7 @@ void SendVideo::send(RadarParams* radar_params_) {
         if (nAzmCode > 32768)
             nAzmCode -= 65536;
 
-        rAzm = 60 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0f;
+        rAzm = 153.4 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0f;
 
         if (rAzm < 0)
             rAzm += 360.f;
@@ -121,7 +122,7 @@ void SendVideo::send(RadarParams* radar_params_) {
 
             videoMsg.bytVideoData[k] = (unsigned char)data_amp;
             if (rowSpeed[k + offset] >= PULSE_NUM) {
-                // cerr << "rowSpeed array index error!" << endl;
+                cerr << "rowSpeed array index error!" << endl;
                 // cout << k << " chennel:" << rowSpeed[k + offset] << endl;
                 rowSpeed[k] = 0;
             }
