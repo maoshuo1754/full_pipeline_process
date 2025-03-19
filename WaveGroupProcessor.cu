@@ -1,16 +1,18 @@
-#include "WaveGroupProcessor.h"
+#include "WaveGroupProcessor.cuh"
 #include "utils.h"
 #include "SharedQueue.h"
 #include <vector>
-
 #include "kelnels.cuh"
+
 
 
 WaveGroupProcessor::WaveGroupProcessor(int waveNum, int pulseNum, int rangeNum)
     : wave_num_(waveNum),
       pulse_num_(pulseNum),
       range_num_(rangeNum),
-      coef_is_initialized_(false) {
+      coef_is_initialized_(false),
+      gpu_manager(GpuQueueManager::getInstance())
+{
     allocateDeviceMemory();
     setupFFTPlans();
 }
@@ -72,6 +74,8 @@ void WaveGroupProcessor::freeDeviceMemory() {
     checkCudaErrors(cudaFree(d_max_results_));
     checkCudaErrors(cudaFree(d_speed_channels_));
 }
+
+
 
 
 int WaveGroupProcessor::copyRawData(const uint8_t* h_raw_data, size_t data_size)  {
@@ -188,6 +192,10 @@ void WaveGroupProcessor::processCoherentIntegration(float scale) {
     // 抵消脉压增益，同时除以range_num_是ifft之后必须除以ifft才能和matlab结果一样
     int size = wave_num_ * pulse_num_ * range_num_;
     thrust::transform(exec_policy_, thrust_data_, thrust_data_ + size, thrust_data_, ScaleFunctor(scale / range_num_ / normFactor));
+
+
+    gpu_manager.update_queues(d_data_);
+    gpu_manager.get_clutter_copy(d_is_masked_, wave_num_ * range_num_);
 }
 
 

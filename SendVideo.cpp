@@ -121,10 +121,15 @@ void SendVideo::send(RadarParams* radar_params_) {
 
             videoMsg.bytVideoData[k] = (unsigned char)data_amp;
             if (rowSpeed[k + offset] >= PULSE_NUM) {
-                cerr << "rowSpeed array index error!" << endl;
-                cout << k << " chennel:" << rowSpeed[k + offset] << endl;
+                // cerr << "rowSpeed array index error!" << endl;
+                // cout << k << " chennel:" << rowSpeed[k + offset] << endl;
+                rowSpeed[k] = 0;
             }
-            rowSpeed[k] = radar_params_->chnSpeeds[rowSpeed[k + offset]];
+            else
+            {
+                rowSpeed[k] = radar_params_->chnSpeeds[rowSpeed[k + offset]];
+            }
+
         }
 
 //        cout << "ii:" << ii << " [rAzm]:" << rAzm << endl;

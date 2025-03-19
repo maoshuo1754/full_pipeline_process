@@ -11,7 +11,7 @@
 #include "SharedQueue.h"      // 包含 SharedQueue 的定义
 #include "CudaMatrix.h" // 包含 CudaMatrix 的定义
 #include "SendVideo.h"  // 包含 SendVideo 的定义
-#include "WaveGroupProcessor.h"
+#include "WaveGroupProcessor.cuh"
 #include "utils.h"
 #include <chrono>
 #include <string>

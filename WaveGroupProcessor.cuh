@@ -9,6 +9,8 @@
 #include "utils.h"
 #include <thrust/execution_policy.h>
 #include <mutex>
+#include "GpuQueueManager.cuh"
+
 
 class WaveGroupProcessor {
 public:
@@ -64,6 +66,9 @@ private:
     cufftComplex* d_pc_coeffs_;      // 脉压系数    (1 x range_num_)
     cufftComplex* d_cfar_coeffs_;    // cfar系数   (1 x range_num_)
     bool* d_is_masked_;              // 需要杂波处理的区域
+
+    // 杂波区域判断类
+    GpuQueueManager& gpu_manager;    // 共享的单例引用
 
     static void cleanup();
     void setupFFTPlans();

@@ -155,7 +155,7 @@ void writeComplexToFile(cufftComplex* d_data_, int pulse_num_, int range_num_, c
     cudaMemcpy(h_data_, d_data_, pulse_num_ * range_num_ * sizeof(cufftComplex), cudaMemcpyDeviceToHost);
 
     // 3. 打开文件准备写入
-    std::ofstream outfile(filename, std::ios::out); // 使用a+模式打开文件
+    std::ofstream outfile(filename, std::ios::out | std::ios::app); // 使用a+模式打开文件
     if (!outfile.is_open()) {
         std::cerr << "Failed to open file: " << filename << std::endl;
         delete[] h_data_;

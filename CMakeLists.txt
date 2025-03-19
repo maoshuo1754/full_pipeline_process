@@ -29,6 +29,8 @@ set(SOURCE_FILES
         WaveGroupProcessor.cu
         kelnels.cu
         SendVideo.h
+        GpuQueueManager.cu
+        GpuQueueManager.cuh
 )
 
 file(GLOB MYSRCS "${PROJECT_SOURCE_DIR}/NRx/include/*.cpp")
