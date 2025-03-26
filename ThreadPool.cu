@@ -105,7 +105,7 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
     int thisCount = count;
     cout << "count:" << thisCount << endl;
 
-    // if (thisCount > 15)
+    // if (thisCount < 3 || thisCount > 20)
     // {
     //     return;
     // }

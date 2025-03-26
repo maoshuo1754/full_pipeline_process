@@ -3,7 +3,7 @@
 //
 
 #include "DataSource.h"
-
+#include "Config.h"
 #include <chrono>
 #include <thread>
 
@@ -46,7 +46,7 @@ void FileDataSource::run() {
 
         sharedQueue->write_index = (sharedQueue->write_index + 1) % QUEUE_SIZE;
         releaseSlot();
-        this_thread::sleep_for(chrono::milliseconds(0));
+        this_thread::sleep_for(chrono::milliseconds(file_data_delay));
     }
 }
 

@@ -100,8 +100,9 @@ void SendVideo::send(RadarParams* radar_params_) {
         if (nAzmCode > 32768)
             nAzmCode -= 65536;
 
-        rAzm = 153.4 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0f;
-
+        //rAzm = 153.4 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0f;
+        // rAzm = 183.4 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0f;//-83
+        rAzm = 253.4 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0f;//-13
         if (rAzm < 0)
             rAzm += 360.f;
 

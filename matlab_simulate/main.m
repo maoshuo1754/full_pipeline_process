@@ -35,7 +35,7 @@ PCcoef = fft(PCcoef, NFFT);
 PCcoef = repmat(PCcoef, pulseNum, 1);
 
 %% 数据读取
-folderPath = '20250319145530_128GB_frame_25_30_pulse_15_18_2048x4096';
+folderPath = '/home/csic724/CLionProjects/PcieReader/cmake-build-release/20250326095501_64GB_frame_1_12_pulse_8_12_2048x4096';
 
 fid = fopen(folderPath, 'rb');
 if fid == -1
@@ -83,8 +83,10 @@ for ii = 1:fileInfos('numFrames')
     
     % Normalize entire array
     A = A ./ (sqrt(bandwidth * pulsewidth) * pulseNum);
-
+    
+    % A = permute(A, [2, 1, 3]);
     A = cfar(A);
+    
     A = A ./ 1024 .* 255;
     % Get maximum along wave dimension (3rd dim)
     % A = max(A, [], 1);

@@ -52,6 +52,8 @@ int end_frame;
 int start_wave;
 int end_wave;
 
+int file_data_delay;
+
 std::vector<clutterRegion> clutterRegions;
 int range_correct;
 
@@ -105,6 +107,8 @@ void loadConfig(const std::string& filename) {
     end_frame = config["end_frame"];
     start_wave = config["start_wave"];
     end_wave = config["end_wave"];
+
+    file_data_delay = config["file_data_delay"];
 
     for (const auto& item : config["clutter_processing_region"]) {
         clutterRegion e{};

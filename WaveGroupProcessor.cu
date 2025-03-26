@@ -189,30 +189,30 @@ void WaveGroupProcessor::processPulseCompression(int numSamples) {
 
 void WaveGroupProcessor::processCoherentIntegration(float scale) {
     // 执行列FFT
+    dim3 blockDim_(CUDA_BLOCK_SIZE);
+    dim3 gridDim_((range_num_ + blockDim_.x - 1) / blockDim_.x);
+
     for (int w = 0; w < wave_num_; ++w) {
         cufftComplex* wavePtr = d_data_ + w * pulse_num_ * range_num_;
         checkCufftErrors(cufftExecC2C(col_plan_, wavePtr, wavePtr, CUFFT_FORWARD));
+        // fftshift_columns_inplace_kernel<<<gridDim_, blockDim_, 0, stream_>>>(wavePtr, pulse_num_, range_num_);
     }
 
     // 抵消脉压增益，同时除以range_num_是ifft之后必须除以ifft才能和matlab结果一样
     int size = wave_num_ * pulse_num_ * range_num_;
     thrust::transform(exec_policy_, thrust_data_, thrust_data_ + size, thrust_data_, ScaleFunctor(scale / range_num_ / normFactor));
 
-    static int count = 0;
-    count++;
-    std::string filename1 = "WaveGroupProcessor_" + std::to_string(count) + ".txt";
-    std::string filename2 = "bool" + std::to_string(count) + ".txt";
+    // static int count = 0;
+    // count++;
+    // std::string filename1 = "WaveGroupProcessor_" + std::to_string(count) + ".txt";
+    // std::string filename2 = "bool" + std::to_string(count) + ".txt";
     // this->streamSynchronize();
     // writeComplexToFile(d_data_ + 16*pulse_num_*range_num_, pulse_num_, range_num_, filename1);
-    gpu_manager.update_queues(d_data_);
-    gpu_manager.get_clutter_copy(d_is_masked_, wave_num_ * range_num_);
+    // gpu_manager.update_queues(d_data_);
+    // gpu_manager.get_clutter_copy(d_is_masked_, wave_num_ * range_num_);
     // this->streamSynchronize();
-    // writeBoolToFile(d_is_masked_+16*range_num_, 1, range_num_, filename2);
+    // writeBoolToFile(d_is_masked_ + 16*range_num_, 1, range_num_, filename2);
 }
-
-
-
-
 
 
 void WaveGroupProcessor::processCFAR() {
@@ -277,14 +277,8 @@ void WaveGroupProcessor::cfar_by_col()
     {
         auto* waveDataPtr = d_data_ + w * pulse_num_ * range_num_;
         auto* cfarPtr = d_cfar_res_ + w * pulse_num_ * range_num_;
-        // 先对列做fftshift
-        // this->streamSynchronize();
-
-        fftshift_columns_inplace_kernel<<<gridDim_, blockDim_, 0, stream_>>>(waveDataPtr, pulse_num_, range_num_);
         cfar_col_kernel<<<gridDim_, blockDim_, 0, stream_>>>(waveDataPtr, cfarPtr, pulse_num_, range_num_, alpha,
                                                              numGuardCells, numRefCells);
-        // this->streamSynchronize();
-        // writeComplexToFile(d_cfar_res_, pulse_num_, range_num_, "cfarres.txt");
     }
 }
 

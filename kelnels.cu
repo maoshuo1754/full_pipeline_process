@@ -320,10 +320,10 @@ __global__ void compute_clutter_kernel(
     const cufftComplex* queues, const cufftComplex* queues_speed, const int* indices, bool* clutter,
     int wave_num, int range_num, int queue_size, int speed_channels
 ) {
-    int w = blockIdx.x * blockDim.x + threadIdx.x;  // 波数索引
-    int r = blockIdx.y * blockDim.y + threadIdx.y;  // 距离索引
+    int w = blockIdx.x * blockDim.x + threadIdx.x; // 波数索引
+    int r = blockIdx.y * blockDim.y + threadIdx.y; // 距离索引
     if (w < wave_num && r < range_num) {
-        int idx = w * range_num + r;                // 全局索引
+        int idx = w * range_num + r; // 全局索引
         int queue_base = w * range_num * queue_size + r * queue_size;
 
         // **自卷积计算**
@@ -333,35 +333,45 @@ __global__ void compute_clutter_kernel(
             x[i] = queues[queue_base + i];
         }
 
-        // 计算（共轭翻转）
+        // 计算共轭翻转
         cufftComplex xt[CLUTTER_QUEUE_SIZE];
         for (int i = 0; i < queue_size; ++i) {
-            xt[i].x = x[queue_size - 1 - i].x;      // 实部翻转
-            xt[i].y = -x[queue_size - 1 - i].y;     // 虚部取反（共轭）
+            xt[i].x = x[queue_size - 1 - i].x; // 实部翻转
+            xt[i].y = -x[queue_size - 1 - i].y; // 虚部取反（共轭）
         }
 
-        // 计算自卷积 conv(x, x^t)
+        // 计算自卷积 conv(x, xt)，并取模
         float conv_result[2 * CLUTTER_QUEUE_SIZE - 1] = {0};
         for (int n = 0; n < 2 * queue_size - 1; ++n) {
-            float sum = 0.0f;
+            float real_sum = 0.0f;
+            float imag_sum = 0.0f;
             for (int k = 0; k < queue_size; ++k) {
-                int idx_xt = n - k;
+                int idx_xt = n - k; // 确保与MATLAB的full卷积一致
                 if (idx_xt >= 0 && idx_xt < queue_size) {
-                    sum += x[k].x * xt[idx_xt].x + x[k].y * xt[idx_xt].y; // 复数乘法实部
+                    // x[k] * xt[idx_xt]
+                    float real_xk = x[k].x;
+                    float imag_xk = x[k].y;
+                    float real_xt = xt[idx_xt].x;
+                    float imag_xt = xt[idx_xt].y;
+                    real_sum += real_xk * real_xt - imag_xk * imag_xt; // 实部
+                    imag_sum += real_xk * imag_xt + imag_xk * real_xt; // 虚部
                 }
             }
-            conv_result[n] = sum;
+            conv_result[n] = sqrtf(real_sum * real_sum + imag_sum * imag_sum); // 模
         }
 
-        // 计算归一化因子 sum(x(i) * x^t(i))
+        // 计算归一化因子 sum(abs(x(i) .* xt(i)))
         float norm_sum = 0.0f;
         for (int i = 0; i < queue_size; ++i) {
-            norm_sum += x[i].x * xt[i].x + x[i].y * xt[i].y; // 复数乘法实部
+            // x[i] * xt[i]
+            float real = x[i].x * xt[i].x - x[i].y * xt[i].y; // 复数乘法实部
+            float imag = x[i].x * xt[i].y + x[i].y * xt[i].x; // 复数乘法虚部
+            norm_sum += sqrtf(real * real + imag * imag); // 计算模并累加
         }
 
         // 归一化并统计大于3dB的点数
         int count_above_3db = 0;
-        const float threshold = 2.0f; // 3dB ≈ 10^(3/10) ≈ 2
+        const float threshold = pow(10, -3.0/20); // 10^(-3/10) ≈ 0.5012，与MATLAB一致
         for (int n = 0; n < 2 * queue_size - 1; ++n) {
             float normalized = (norm_sum != 0) ? (conv_result[n] / norm_sum) : 0.0f;
             if (normalized > threshold) {
@@ -398,6 +408,6 @@ __global__ void compute_clutter_kernel(
         bool std_dev_condition = (zero_magnitude > 6.0f * std_dev);
 
         // **杂波判断**：两个条件都满足
-        clutter[idx] = (conv_condition && std_dev_condition);
+        clutter[idx] = (conv_condition);
     }
 }

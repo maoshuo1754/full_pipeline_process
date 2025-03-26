@@ -45,7 +45,7 @@ function cfar_res = cfar(A)
     
     % Get detection values (zero out non-detections)
     detection_values = A .* detections;
-    
+    % detection_values = permute(detection_values, [2, 1, 3]);
     % Find maximum values across pulses for each range bin and wave
     cfar_res = squeeze(max(detection_values, [], 1));
     

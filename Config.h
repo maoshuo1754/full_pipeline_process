@@ -63,6 +63,8 @@ extern int start_frame;
 extern int end_frame;
 extern int start_wave;
 extern int end_wave;
+
+extern int file_data_delay;
 // 数据缓冲区声明
 
 struct clutterRegion {
