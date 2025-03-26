@@ -1,5 +1,5 @@
 {
-  "dataPath": "/backup2/data/250319/20250319150942_128GB.dat",
+  "dataPath": "/backup2/data/zhibiao/20250326092510_64GB.dat",
   "filterPath": "/home/csic724/CLionProjects/PcieReader/filterCoef.txt",
 
   "0表示文件": "1表示Pcie",
@@ -55,6 +55,10 @@
   "end_wave": 28,
 
   "file_data_delay": 0,
+
+  "速度绝对值在v1和v2之间": "的通道才会参与选大",
+  "v1": 10,
+  "v2": 20,
 
   "0表示质心法": "1表示选大",
   "velocityCoalescenceMethod": 1

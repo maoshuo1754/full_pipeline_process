@@ -159,24 +159,44 @@ void ThreadPool::getRadarParams(std::unique_ptr<WaveGroupProcessor>& waveGroupPr
         auto fLFMStartWord = packageArr[16];
         radar_params_->bandWidth = (Fs_system - fLFMStartWord / pow(2.0f, 32) * Fs_system) * 2.0;
 
-        double delta_v = radar_params_->lambda / radar_params_->PRT / PULSE_NUM / 2.0f; //两个滤波器之间的速度间隔
-        double blind_v = radar_params_->lambda / radar_params_->PRT / 2.0f;
+        // double delta_v = radar_params_->lambda / radar_params_->PRT / PULSE_NUM / 2.0f; //两个滤波器之间的速度间隔
+        // double blind_v = radar_params_->lambda / radar_params_->PRT / 2.0f;
+        //
+        // for(int i = 0; i < PULSE_NUM; ++i){
+        //     int v;
+        //     if (i < PULSE_NUM / 2){
+        //         v = static_cast<int>(std::round(delta_v * i * 100)) ;
+        //     }
+        //     else{
+        //         v = static_cast<int>(std::round((delta_v * i - blind_v) * 100)) ;
+        //     }
+        //     radar_params_->chnSpeeds.push_back(v);
+        // }
 
-        for(int i = 0; i < PULSE_NUM; ++i){
-            int v;
-            if (i < PULSE_NUM / 2){
-                v = static_cast<int>(std::round(delta_v * i * 100)) ;
-            }
-            else{
-                v = static_cast<int>(std::round((delta_v * i - blind_v) * 100)) ;
-            }
-            radar_params_->chnSpeeds.push_back(v);
+        double fs = 1.0 / radar_params_->PRT;
+        double f_step = fs / PULSE_NUM;
+        radar_params_->chnSpeeds.clear();
+
+        for(int i = 0; i < PULSE_NUM; ++i) {
+            double f = -fs/2.0 + (f_step * i);
+            double v = f * radar_params_->lambda / 2.0;
+            int v_int = static_cast<int>(std::round(v * 100));
+            radar_params_->chnSpeeds.push_back(v_int);
         }
+
+        radar_params_->detect_rows.clear();
+        for (int row = 0; row < PULSE_NUM; ++row) {
+            int speed = std::abs(radar_params_->chnSpeeds[row]);
+            if (speed >= v1 && speed <= v2) {
+                radar_params_->detect_rows.push_back(row);
+            }
+        }
+
         radar_params_->scale = 1.0f / sqrt(radar_params_->bandWidth * radar_params_->pulseWidth) / PULSE_NUM;
         radar_params_->getCoef();
     }
 
-    waveGroupProcessor->getCoef(radar_params_->pcCoef, radar_params_->cfarCoef);
+    waveGroupProcessor->getCoef(radar_params_->pcCoef, radar_params_->cfarCoef, radar_params_->detect_rows);
 }
 
 

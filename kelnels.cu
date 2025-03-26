@@ -4,6 +4,7 @@
 
 #include "kelnels.cuh"
 
+#include <cfloat>
 #include <thrust/detail/type_traits/is_call_possible.h>
 
 #include "Config.h"
@@ -110,19 +111,49 @@ __global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChanne
     }
 }
 
+// __global__ void maxKernel2D(cufftComplex *data, float *maxValues, int *speedChannels,
+//                            bool* maskPtr, int nrows, int ncols, int nwaves) {
+//     int col = blockIdx.x * blockDim.x + threadIdx.x;    // range dimension
+//     int wave = blockIdx.y * blockDim.y + threadIdx.y;   // wave dimension
+//
+//     if (col < ncols && wave < nwaves) {
+//         // 计算当前wave和col的全局索引
+//         int base_idx = wave * nrows * ncols + col;
+//         float maxVal = channel_0_enable ? data[base_idx].x : 0;
+//         int maxChannel = 0;
+//
+//         // 在row维度上找最大值
+//         for (int row = 1; row < nrows; ++row) {
+//             int ind = wave * nrows * ncols + row * ncols + col;
+//             if (data[ind].x > maxVal) {
+//                 maxVal = data[ind].x;
+//                 maxChannel = row;
+//             }
+//         }
+//
+//         // 输出结果的索引
+//         int out_idx = wave * ncols + col;
+//         maxValues[out_idx] = maxVal;
+//         speedChannels[out_idx] = maxChannel;
+//         // if (maskPtr[out_idx]) {
+//         //     maxValues[out_idx] = 1000;
+//         // }
+//     }
+// }
+
+// 核函数：只遍历指定的 row 索引来找最大值
 __global__ void maxKernel2D(cufftComplex *data, float *maxValues, int *speedChannels,
-                           bool* maskPtr, int nrows, int ncols, int nwaves) {
-    int col = blockIdx.x * blockDim.x + threadIdx.x;    // range dimension
-    int wave = blockIdx.y * blockDim.y + threadIdx.y;   // wave dimension
+                           int *d_rows, int num_rows, int nrows, int ncols, int nwaves) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;  // 列索引（range 维度）
+    int wave = blockIdx.y * blockDim.y + threadIdx.y; // 波索引（wave 维度）
 
     if (col < ncols && wave < nwaves) {
-        // 计算当前wave和col的全局索引
-        int base_idx = wave * nrows * ncols + col;
-        float maxVal = channel_0_enable ? data[base_idx].x : 0;
-        int maxChannel = 0;
+        float maxVal = -FLT_MAX;  // 初始化最大值为负无穷
+        int maxChannel = -1;      // 初始化通道索引为无效值
 
-        // 在row维度上找最大值
-        for (int row = 1; row < nrows; ++row) {
+        // 只遍历传入的 row 索引
+        for (int i = 0; i < num_rows; ++i) {
+            int row = d_rows[i];
             int ind = wave * nrows * ncols + row * ncols + col;
             if (data[ind].x > maxVal) {
                 maxVal = data[ind].x;
@@ -130,15 +161,15 @@ __global__ void maxKernel2D(cufftComplex *data, float *maxValues, int *speedChan
             }
         }
 
-        // 输出结果的索引
+        // 输出结果
         int out_idx = wave * ncols + col;
-        maxValues[out_idx] = maxVal;
-        speedChannels[out_idx] = maxChannel;
-        // if (maskPtr[out_idx]) {
-        //     maxValues[out_idx] = 1000;
-        // }
+        maxValues[out_idx] = (maxChannel == -1) ? 0 : maxVal; // 如果没有有效值，返回 0
+        speedChannels[out_idx] = maxChannel;                  // 记录对应的通道索引
     }
 }
+
+
+
 
 
 // CUDA kernel 函数 - 原地按列 fftshift // 仅限nrows为偶数的情况

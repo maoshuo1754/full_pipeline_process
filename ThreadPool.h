@@ -32,6 +32,7 @@ struct RadarParams
     float* h_max_results_;      // 选大结果 (wave_num_ x range_num_)
     int* h_speed_channels_;     // 速度通道 (wave_num_ x range_num_)
     vector<int> chnSpeeds;      // 速度通道对应的速度
+    vector<int> detect_rows;           // 速度范围内的行
     vector<cufftComplex> pcCoef;    // 脉压系数
     vector<cufftComplex> cfarCoef;  // CFAR系数
 

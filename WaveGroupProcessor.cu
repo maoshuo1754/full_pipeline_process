@@ -58,6 +58,7 @@ void WaveGroupProcessor::allocateDeviceMemory() {
     checkCudaErrors(cudaMemset(d_cfar_res_, 0, sizeof(cufftComplex) * total_size));
     checkCudaErrors(cudaMalloc(&d_max_results_, sizeof(float) * wave_num_ * range_num_));
     checkCudaErrors(cudaMalloc(&d_speed_channels_, sizeof(int) * wave_num_ * range_num_));
+    checkCudaErrors(cudaMalloc(&d_detect_rows_, sizeof(int) * pulse_num_));
     thrust_data_ = thrust::device_ptr<cufftComplex>(d_data_);
     thrust_cfar_ = thrust::device_ptr<cufftComplex>(d_cfar_res_);
 }
@@ -73,6 +74,7 @@ void WaveGroupProcessor::freeDeviceMemory() {
     checkCudaErrors(cudaFree(d_cfar_res_));
     checkCudaErrors(cudaFree(d_max_results_));
     checkCudaErrors(cudaFree(d_speed_channels_));
+    checkCudaErrors(cudaFree(d_detect_rows_));
 }
 
 
@@ -103,13 +105,15 @@ cufftComplex* WaveGroupProcessor::getData()
     return d_data_;
 }
 
-void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef) {
+void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef, std::vector<int> &detect_rows) {
     if (coef_is_initialized_) {
         return;
     }
     coef_is_initialized_ = true;
     checkCudaErrors(cudaMemcpy(d_pc_coeffs_, pcCoef.data(), NFFT * sizeof(cufftComplex), cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy(d_cfar_coeffs_, cfarCoef.data(), NFFT * sizeof(cufftComplex), cudaMemcpyHostToDevice));
+    detect_rows_num_ = detect_rows.size();
+    checkCudaErrors(cudaMemcpy(d_detect_rows_, detect_rows.data(), detect_rows_num_ * sizeof(int), cudaMemcpyHostToDevice));
 
     checkCufftErrors(cufftExecC2C(pc_plan_, d_pc_coeffs_, d_pc_coeffs_, CUFFT_FORWARD));
     checkCufftErrors(cufftExecC2C(pc_plan_, d_cfar_coeffs_, d_cfar_coeffs_, CUFFT_FORWARD));
@@ -195,7 +199,7 @@ void WaveGroupProcessor::processCoherentIntegration(float scale) {
     for (int w = 0; w < wave_num_; ++w) {
         cufftComplex* wavePtr = d_data_ + w * pulse_num_ * range_num_;
         checkCufftErrors(cufftExecC2C(col_plan_, wavePtr, wavePtr, CUFFT_FORWARD));
-        // fftshift_columns_inplace_kernel<<<gridDim_, blockDim_, 0, stream_>>>(wavePtr, pulse_num_, range_num_);
+        fftshift_columns_inplace_kernel<<<gridDim_, blockDim_, 0, stream_>>>(wavePtr, pulse_num_, range_num_);
     }
 
     // 抵消脉压增益，同时除以range_num_是ifft之后必须除以ifft才能和matlab结果一样
@@ -295,11 +299,12 @@ void WaveGroupProcessor::processMaxSelection() {
     maxKernel2D<<<gridDim_, blockDim_, 0, stream_>>>(
         d_data_,           // 输入数据
         d_max_results_,    // 最大值输出
-        d_speed_channels_, // 速度通道输出
-        d_is_masked_,      // mask
-        pulse_num_,        // nrows
-        range_num_,        // ncols
-        wave_num_          // nwaves
+        d_speed_channels_, // 通道索引输出
+        d_detect_rows_,    // 通道范围（row 索引数组）
+        detect_rows_num_,  // 通道数量
+        pulse_num_,        // 总行数
+        range_num_,        // 总列数
+        wave_num_          // 总波数
     );
 }
 

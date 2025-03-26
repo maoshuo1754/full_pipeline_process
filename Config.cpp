@@ -52,6 +52,9 @@ int end_frame;
 int start_wave;
 int end_wave;
 
+int v1;
+int v2;
+
 int file_data_delay;
 
 std::vector<clutterRegion> clutterRegions;
@@ -117,6 +120,15 @@ void loadConfig(const std::string& filename) {
         e.startRange = item[2];
         e.endRange = item[3];
         clutterRegions.push_back(e);
+    }
+
+    double v1_mps = config["v1"].get<double>(); // 假设单位是 m/s，例如 1.0
+    double v2_mps = config["v2"].get<double>(); // 例如 5.0
+    v1 = static_cast<int>(std::round(v1_mps * 100)); // 转换为 cm/s
+    v2 = static_cast<int>(std::round(v2_mps * 100));
+
+    if (v1 >= v2) {
+        throw std::runtime_error("v1 必须小于 v2");
     }
 
     range_correct = config["range_correct"];

@@ -34,7 +34,7 @@ public:
     void cfar(int numSamples);
     void cfar_by_col();
     void processMaxSelection();
-    void getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef);
+    void getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef, std::vector<int> &detect_rows);
     void resetAddr();
 
 private:
@@ -57,6 +57,9 @@ private:
     cufftComplex* d_cfar_res_;       // cfar结果  (wave_num_ x pulse_num_ x range_num_)
     float* d_max_results_;           // 选大结果   (wave_num_ x range_num_)
     int* d_speed_channels_;          // 速度通道   (wave_num_ x range_num_)
+    int* d_detect_rows_;             // 需要检测的通道
+    int detect_rows_num_;            // 需要检测的通道数
+
 
     thrust::device_ptr<cufftComplex> thrust_data_;
     thrust::device_ptr<cufftComplex> thrust_cfar_;
