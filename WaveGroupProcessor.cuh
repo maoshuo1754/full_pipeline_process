@@ -29,6 +29,7 @@ public:
     void unpackData(const int* headPositions);
     void streamSynchronize();
     void processPulseCompression(int numSamples);
+    void processMTI();
     void processCoherentIntegration(float scale);
     void processClutterMap();
     void processCFAR();

@@ -126,6 +126,11 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
     getRadarParams(waveGroupProcessor, thisCount);
 
     waveGroupProcessor->processPulseCompression(radar_params_->numSamples);
+    if (MTI_enable)
+    {
+        waveGroupProcessor->processMTI();
+    }
+
     waveGroupProcessor->processCoherentIntegration(radar_params_->scale);
     if (do_clutter_map)
     {

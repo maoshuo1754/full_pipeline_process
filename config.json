@@ -7,7 +7,8 @@
   "THREADS_MEM_SIZE": 1073741824,
 
   "hamming_window_enable": 1,
-  "MTI_enable": 1,
+  "MTI_enable": 0,
+  "MTI_pulse_num": 3,
 
   "num_threads": 4,
   "CAL_WAVE_NUM": 32,

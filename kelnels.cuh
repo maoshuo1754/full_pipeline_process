@@ -44,6 +44,9 @@ __global__ void compute_clutter_kernel(
 __global__ void processClutterMapKernel(cufftComplex* d_data, float* d_clutter_map, bool* d_clutterMap_masked, size_t size, int range_num, float alpha, float forgetting_factor);
 
 
+__global__ void MTIkernel2(cufftComplex *data, int nrows, int ncols);
+__global__ void MTIkernel3(cufftComplex *data, int nrows, int ncols);
+
 struct ScaleFunctor {
     float scale;
 

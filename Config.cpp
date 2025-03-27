@@ -47,6 +47,7 @@ int velocityCoalescenceMethod;
 int dataSource_type;
 int hamming_window_enable;
 int MTI_enable;
+int MTI_pulse_num;
 
 int debug_mode;
 int start_frame;
@@ -109,6 +110,10 @@ void loadConfig(const std::string& filename) {
     dataSource_type = config["dataSource_type"];
     hamming_window_enable = config["hamming_window_enable"];
     MTI_enable = config["MTI_enable"];
+    MTI_pulse_num = config["MTI_pulse_num"];
+    if (MTI_pulse_num != 2 && MTI_pulse_num != 3) {
+        throw std::runtime_error("MTI 目前只支持2脉冲或三脉冲");
+    }
 
     debug_mode = config["debug_mode"];
     start_frame = config["start_frame"];

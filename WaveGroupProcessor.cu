@@ -196,6 +196,25 @@ void WaveGroupProcessor::processPulseCompression(int numSamples) {
     checkCufftErrors(cufftExecC2C(row_plan_, d_data_, d_data_, CUFFT_INVERSE));
 }
 
+void WaveGroupProcessor::processMTI()
+{
+    dim3 blockDim_(CUDA_BLOCK_SIZE);
+    dim3 gridDim_((range_num_ + blockDim_.x - 1) / blockDim_.x);
+
+    for (int w = 0; w < WAVE_NUM; ++w)
+    {
+        auto* waveDataPtr = d_data_ + w * pulse_num_ * range_num_;
+        if (MTI_pulse_num == 2)
+        {
+            MTIkernel2<<<gridDim_, blockDim_, 0, stream_>>>(waveDataPtr, pulse_num_, range_num_);
+        }
+        else
+        {
+            MTIkernel3<<<gridDim_, blockDim_, 0, stream_>>>(waveDataPtr, pulse_num_, range_num_);
+        }
+    }
+}
+
 void WaveGroupProcessor::processCoherentIntegration(float scale) {
     // 执行列FFT
     dim3 blockDim_(CUDA_BLOCK_SIZE);

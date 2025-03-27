@@ -463,3 +463,50 @@ __global__ void processClutterMapKernel(cufftComplex* d_data, float* d_clutter_m
         d_clutter_map[idx] = forgetting_factor * d_clutter_map[idx] + (1 - forgetting_factor) * log_magnitude;
     }
 }
+
+
+__global__ void MTIkernel3(cufftComplex *data, int nrows, int ncols) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int currentIndex, nextIndex, lastIndex;
+    cufftComplex current, next, last;
+    if (col < ncols) {
+        for (int row = 0; row < nrows - 2; row++) {
+            currentIndex = row * ncols + col;
+            nextIndex = (row + 1) * ncols + col;
+            lastIndex = (row + 2) * ncols + col;
+
+            current = data[currentIndex];
+            next = data[nextIndex];
+            last = data[lastIndex];
+            data[currentIndex].x = current.x + last.x - 2 * next.x;
+            data[currentIndex].y = current.y + last.y - 2 * next.y;
+        }
+        nextIndex = (nrows - 1) * ncols + col;
+        data[nextIndex].x = 0.0f;
+        data[nextIndex].y = 0.0f;
+
+        nextIndex = (nrows - 2) * ncols + col;
+        data[nextIndex].x = 0.0f;
+        data[nextIndex].y = 0.0f;
+    }
+}
+
+__global__ void MTIkernel2(cufftComplex *data, int nrows, int ncols) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int currentIndex, nextIndex;
+    cufftComplex current, next;
+    if (col < ncols) {
+        for (int row = 0; row < nrows - 1; row++) {
+            currentIndex = row * ncols + col;
+            nextIndex = (row + 1) * ncols + col;
+
+            current = data[currentIndex];
+            next = data[nextIndex];
+            data[currentIndex].x = next.x - current.x;
+            data[currentIndex].y = next.y - current.y;
+        }
+        nextIndex = (nrows - 1) * ncols + col;
+        data[nextIndex].x = 0.0f;
+        data[nextIndex].y = 0.0f;
+    }
+}
