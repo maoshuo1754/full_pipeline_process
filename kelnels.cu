@@ -45,10 +45,10 @@ __global__ void rowWiseMulKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows
 }
 
 
-__global__ void cmpKernel(cufftComplex *d_data, cufftComplex *thresholds, int nrows, int ncols, int offset) {
+__global__ void cmpKernel(cufftComplex *d_data, cufftComplex *thresholds, bool *d_clutterMap_masked_, int nrows, int ncols, int offset) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < nrows * ncols) {
-        if (idx % ncols < ncols - offset)
+        if (d_clutterMap_masked_[idx] && idx % ncols < ncols - offset)
         {
             if (d_data[idx].x < thresholds[idx + offset].x) {
                 d_data[idx].x = 0;
@@ -439,6 +439,27 @@ __global__ void compute_clutter_kernel(
         bool std_dev_condition = (zero_magnitude > 6.0f * std_dev);
 
         // **杂波判断**：两个条件都满足
-        clutter[idx] = (conv_condition);
+        clutter[idx] = (conv_condition && std_dev_condition);
+    }
+}
+
+
+// CUDA Kernel：计算对数并更新杂波图
+__global__ void processClutterMapKernel(cufftComplex* d_data, float* d_clutter_map, bool* d_clutterMap_masked, size_t size, float alpha, float forgetting_factor) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        // 计算幅值的平方
+        float magnitude_squared = d_data[idx].x * d_data[idx].x + d_data[idx].y * d_data[idx].y;
+        // 计算对数幅值（与 Log10Functor 一致）
+        float log_magnitude = 10 * log10f(magnitude_squared);
+
+        // 计算阈值
+        float threshold = alpha + d_clutter_map[idx];
+        if (log_magnitude > threshold) {
+            d_clutterMap_masked[idx] = true;
+        } else {
+            d_clutterMap_masked[idx] = false;
+        }
+        d_clutter_map[idx] = forgetting_factor * d_clutter_map[idx] + (1 - forgetting_factor) * log_magnitude;
     }
 }

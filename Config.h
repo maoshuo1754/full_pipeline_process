@@ -12,7 +12,7 @@
 #define WAVE_NUM 32             // 波束数
 #define PULSE_NUM 2048          // 一个波束中的脉冲数
 #define NFFT 4096               // 一个脉冲中fft的点数，计算方法为 NFFT = 2 ** nextpow2(RANGE_NUM + numSamples - 1)
-#define RANGE_NUM  3748         // 一个脉冲的距离单元数
+#define RANGE_NUM  3749         // 一个脉冲的距离单元数
 #define CFAR_LENGTH 16          // 分段fft长度
 #define CUDA_BLOCK_SIZE 256     // cuda运算分块长度
 #define channel_0_enable 0      // 0通道是否开启
@@ -22,7 +22,6 @@
 
 // 配置参数声明
 extern std::string dataPath;
-extern std::string filterPath;
 
 extern int num_threads;         // 工作线程数
 extern int THREADS_MEM_SIZE;    // 每个线程独立显存大小
@@ -52,6 +51,9 @@ extern int initCarryFreq;       // 初始载频
 extern double Pfa;
 extern int numGuardCells;
 extern int numRefCells;
+extern bool do_clutter_map;
+extern double forgetting_factor;
+extern double clutter_map_range;
 
 extern int velocityCoalescenceMethod;  // 0代表质心法，1代表选大
 extern int dataSource_type;                 // 0表示文件，1表示Pcie
@@ -81,6 +83,7 @@ extern std::vector<clutterRegion> clutterRegions;
 extern int range_correct;
 
 void loadConfig(const std::string& filename); // 声明配置加载函数
+double parseFraction(const std::string& fraction);
 
 inline std::atomic<bool> monitorConfigRunning(true);
 void monitorConfig(const std::string& filename, void (*loadConfig)(const std::string&)); // 参数实时更新

@@ -30,6 +30,7 @@ public:
     void streamSynchronize();
     void processPulseCompression(int numSamples);
     void processCoherentIntegration(float scale);
+    void processClutterMap();
     void processCFAR();
     void cfar(int numSamples);
     void cfar_by_col();
@@ -58,6 +59,8 @@ private:
     float* d_max_results_;           // 选大结果   (wave_num_ x range_num_)
     int* d_speed_channels_;          // 速度通道   (wave_num_ x range_num_)
     int* d_detect_rows_;             // 需要检测的通道
+    bool* d_clutterMap_masked_;      // 杂波图
+
     int detect_rows_num_;            // 需要检测的通道数
 
 

@@ -16,6 +16,7 @@
 
 
 // 队列管理类（单例模式）  占用显存32MB
+// 用于处理多线程之间需要共享的资源，比如队列和杂波图
 class GpuQueueManager {
 public:
     // 获取单例实例
@@ -29,14 +30,7 @@ public:
     GpuQueueManager& operator=(const GpuQueueManager&) = delete;
 
     // 更新队列并在必要时进行杂波判断
-    void update_queues(const cufftComplex* d_frame) {
-        std::lock_guard<std::mutex> lock(mutex_); // 线程安全锁
-        launch_update_kernel(d_frame);            // 更新队列数据
-        update_count++;                           // 更新计数器加1
-        if (update_count >= CLUTTER_QUEUE_SIZE) {
-            launch_clutter_kernel();
-        }
-    }
+    void update_queues(const cufftComplex* d_frame);
 
     // 获取当前杂波判断数组的指针（线程安全）
     bool* get_clutter() {
@@ -53,6 +47,8 @@ public:
         cudaMemcpy(device_buffer, d_clutter, WAVE_NUM * NFFT * sizeof(bool), cudaMemcpyDeviceToDevice);
     }
 
+    void processClutterMap(cufftComplex* d_data, bool* d_clutterMap_masked_);
+
 private:
     cufftComplex* d_queues = nullptr;       // 显存中的0速通道队列数据
     cufftComplex* d_queues_speed = nullptr; // 显存中的20个速度通道队列数据
@@ -62,23 +58,32 @@ private:
     std::mutex mutex_;                      // 更新队列的互斥锁
     std::mutex clutter_mutex_;              // 保护 d_clutter 访问的互斥锁
 
+    // 下面是杂波图的参数
+    float* d_clutter_map = nullptr;         // 杂波图
+    double alpha;
+    std::mutex clutter_map_mutex_;          // 保护 d_clutter_map 的访问互斥锁
+
     // 构造函数：私有化以实现单例
     GpuQueueManager() {
-        cudaMalloc(&d_queues, WAVE_NUM * NFFT * CLUTTER_QUEUE_SIZE * sizeof(cufftComplex));
-        cudaMalloc(&d_queues_speed, WAVE_NUM * NFFT * SPEED_CHANNELS * CLUTTER_QUEUE_SIZE * sizeof(cufftComplex));
-        cudaMalloc(&d_indices, WAVE_NUM * NFFT * sizeof(int));
-        cudaMalloc(&d_clutter, WAVE_NUM * NFFT * sizeof(bool));
-        cudaMemset(d_indices, 0, WAVE_NUM * NFFT * sizeof(int));
-        cudaMemset(d_clutter, 0, WAVE_NUM * NFFT * sizeof(bool));
+        checkCudaErrors(cudaMalloc(&d_queues, WAVE_NUM * NFFT * CLUTTER_QUEUE_SIZE * sizeof(cufftComplex)));
+        checkCudaErrors(cudaMalloc(&d_queues_speed, WAVE_NUM * NFFT * SPEED_CHANNELS * CLUTTER_QUEUE_SIZE * sizeof(cufftComplex)));
+        checkCudaErrors(cudaMalloc(&d_indices, WAVE_NUM * NFFT * sizeof(int)));
+        checkCudaErrors(cudaMalloc(&d_clutter, WAVE_NUM * NFFT * sizeof(bool)));
+        checkCudaErrors(cudaMalloc(&d_clutter_map, WAVE_NUM * PULSE_NUM * NFFT * sizeof(float)));
+        checkCudaErrors(cudaMemset(d_indices, 0, WAVE_NUM * NFFT * sizeof(int)));
+        checkCudaErrors(cudaMemset(d_clutter, 0, WAVE_NUM * NFFT * sizeof(bool)));
+        checkCudaErrors(cudaMemset(d_clutter_map, 0, WAVE_NUM * PULSE_NUM * NFFT * sizeof(float)));
         update_count = 0;
+        alpha = getClutterMapAlpha(forgetting_factor, Pfa);
     }
 
     // 析构函数：释放显存资源
     ~GpuQueueManager() {
-        cudaFree(d_queues);
-        cudaFree(d_queues_speed);
-        cudaFree(d_indices);
-        cudaFree(d_clutter);
+        checkCudaErrors(cudaFree(d_queues));
+        checkCudaErrors(cudaFree(d_queues_speed));
+        checkCudaErrors(cudaFree(d_indices));
+        checkCudaErrors(cudaFree(d_clutter));
+        checkCudaErrors(cudaFree(d_clutter_map));
     }
 
     // 启动更新队列的 CUDA 内核

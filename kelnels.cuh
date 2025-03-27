@@ -13,7 +13,7 @@ __global__ void unpackKernel3D(unsigned char *threadsMemory, cufftComplex *pComp
 
 __global__ void rowWiseMulKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows, int ncols);
 
-__global__ void cmpKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows, int ncols, int offset);
+__global__ void cmpKernel(cufftComplex *d_a, cufftComplex *d_b,  bool *d_clutterMap_masked_,  int nrows, int ncols, int offset);
 
 __global__ void moveAndZeroKernel(cufftComplex* data, int m, int n, int start, int end);
 
@@ -41,6 +41,8 @@ __global__ void compute_clutter_kernel(
     int wave_num, int range_num, int queue_size, int speed_channels
 );
 
+__global__ void processClutterMapKernel(cufftComplex* d_data, float* d_clutter_map, bool* d_clutterMap_masked, size_t size, float alpha, float forgetting_factor);
+
 
 struct ScaleFunctor {
     float scale;
@@ -57,6 +59,14 @@ struct SquareFunctor {
 
     __device__ cufftComplex operator()(cufftComplex& c) const {
         return make_cuComplex(c.x * c.x + c.y * c.y, 0);
+    }
+};
+
+struct Log10Functor {
+    Log10Functor() = default;
+
+    __device__ cufftComplex operator()(cufftComplex& c) const {
+        return make_cuComplex(10*log10(c.x * c.x + c.y * c.y), 0);
     }
 };
 

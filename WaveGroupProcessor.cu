@@ -51,6 +51,8 @@ void WaveGroupProcessor::allocateDeviceMemory() {
     checkCudaErrors(cudaMalloc(&d_pc_coeffs_, range_num_ * sizeof(cufftComplex)));
     checkCudaErrors(cudaMalloc(&d_cfar_coeffs_, range_num_ * sizeof(cufftComplex)));
     checkCudaErrors(cudaMalloc(&d_is_masked_, wave_num_ * range_num_));
+    checkCudaErrors(cudaMalloc(&d_clutterMap_masked_, wave_num_ * pulse_num_ * range_num_));
+    checkCudaErrors(cudaMemset(d_clutterMap_masked_, 1, wave_num_ * pulse_num_ * range_num_));
     checkCudaErrors(cudaMalloc(&d_unpack_data_, THREADS_MEM_SIZE));
     checkCudaErrors(cudaMalloc(&d_headPositions_, sizeof(int) * pulse_num_ * 1.1));
     checkCudaErrors(cudaMalloc(&d_data_, sizeof(cufftComplex) * total_size));
@@ -67,6 +69,7 @@ void WaveGroupProcessor::freeDeviceMemory() {
     checkCudaErrors(cudaFree(d_pc_coeffs_));
     checkCudaErrors(cudaFree(d_cfar_coeffs_));
     checkCudaErrors(cudaFree(d_is_masked_));
+    checkCudaErrors(cudaFree(d_clutterMap_masked_));
     checkCufftErrors(cufftDestroy(pc_plan_));
     checkCudaErrors(cudaFree(d_unpack_data_));
     checkCudaErrors(cudaFree(d_headPositions_));
@@ -218,6 +221,11 @@ void WaveGroupProcessor::processCoherentIntegration(float scale) {
     // writeBoolToFile(d_is_masked_ + 16*range_num_, 1, range_num_, filename2);
 }
 
+void WaveGroupProcessor::processClutterMap()
+{
+    gpu_manager.processClutterMap(d_data_, d_clutterMap_masked_);
+}
+
 
 void WaveGroupProcessor::processCFAR() {
     // .^2
@@ -246,7 +254,7 @@ void WaveGroupProcessor::processCFAR() {
     thrust::transform(exec_policy_, thrust_cfar_, thrust_cfar_ + size, thrust_cfar_, ScaleFunctor(alpha/2.0/numRefCells));
 
     // 对比噪底选结果，(结果开根号)
-    cmpKernel<<<gridSize, blockSize, 0, stream_>>>(d_data_, d_cfar_res_, wave_num_ * pulse_num_, range_num_, offset);
+    cmpKernel<<<gridSize, blockSize, 0, stream_>>>(d_data_, d_cfar_res_, d_clutterMap_masked_, wave_num_ * pulse_num_, range_num_, offset);
 }
 
 void WaveGroupProcessor::cfar(int numSamples)  {

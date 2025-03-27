@@ -277,3 +277,63 @@ std::vector<cufftComplex> readFilterFromFile(const string& filename) {
     return filter;
 }
 
+
+double getClutterMapAlpha(double q, double P_fa) {
+    // 使用静态变量实现持久化存储
+    static std::map<double, std::vector<std::pair<double, double>>> clutter_alpha_table;
+
+    // 如果表为空，则初始化
+    if (clutter_alpha_table.empty()) {
+        // q = 3/4 的表
+        clutter_alpha_table[3.0 / 4.0] = {
+            {0.0001, 16.8945},
+            {1e-05,  19.5117},
+            {1e-06,  22.0703},
+            {1e-07,  24.5898},
+            {1e-08,  27.1094}
+        };
+
+        // q = 7/8 的表
+        clutter_alpha_table[7.0 / 8.0] = {
+            {0.0001, 14.2578},
+            {1e-05,  15.8984},
+            {1e-06,  17.4023},
+            {1e-07,  18.8281},
+            {1e-08,  20.1758}
+        };
+
+        // q = 15/16 的表
+        clutter_alpha_table[15.0 / 16.0] = {
+            {0.0001, 13.1445},
+            {1e-05,  14.4141},
+            {1e-06,  15.5273},
+            {1e-07,  16.5405},
+            {1e-08,  17.5195}
+        };
+    }
+
+    // 检查 q 是否支持
+    if (clutter_alpha_table.find(q) == clutter_alpha_table.end()) {
+        char errorMsg[100];
+        snprintf(errorMsg, sizeof(errorMsg),
+                 "Unsupported q value: %.4f. Supported values are 3/4, 7/8, 15/16", q);
+        throw std::invalid_argument(errorMsg);
+    }
+
+    // 获取当前 q 对应的表数据
+    const auto& table_data = clutter_alpha_table[q];
+
+    // 查找匹配的 P_fa
+    double tolerance = 1e-10;
+    for (const auto& entry : table_data) {
+        if (std::abs(entry.first - P_fa) < tolerance) {
+            return entry.second; // 返回对应的 alpha
+        }
+    }
+
+    // 如果没有找到匹配的 P_fa，抛出异常
+    char errorMsg[100];
+    snprintf(errorMsg, sizeof(errorMsg),
+             "No alpha value found for q=%.4f and P_fa=%.0e", q, P_fa);
+    throw std::invalid_argument(errorMsg);
+}

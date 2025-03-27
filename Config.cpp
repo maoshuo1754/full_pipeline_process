@@ -13,7 +13,6 @@ using json = nlohmann::json;
 
 // 变量定义
 std::string dataPath;
-std::string filterPath;
 
 int num_threads;
 int THREADS_MEM_SIZE;
@@ -40,6 +39,9 @@ int initCarryFreq;
 double Pfa;
 int numGuardCells;
 int numRefCells;
+bool do_clutter_map;
+double forgetting_factor;
+double clutter_map_range;
 
 int velocityCoalescenceMethod;
 int dataSource_type;
@@ -71,7 +73,6 @@ void loadConfig(const std::string& filename) {
     configFile >> config;
 
     dataPath = config["dataPath"];
-    filterPath = config["filterPath"];
     num_threads = config["num_threads"];
     THREADS_MEM_SIZE = config["THREADS_MEM_SIZE"];
     CAL_WAVE_NUM = config["CAL_WAVE_NUM"];
@@ -99,6 +100,10 @@ void loadConfig(const std::string& filename) {
     Pfa = config["Pfa"];
     numRefCells = config["numRefCells"];
     numGuardCells = config["numGuardCells"];
+    do_clutter_map = config["do_clutter_map"];
+    std::string forgetting_factor_str = config["forgetting_factor"];
+    forgetting_factor = parseFraction(forgetting_factor_str);
+    clutter_map_range = config["clutter_map_range"];
 
     velocityCoalescenceMethod = config["velocityCoalescenceMethod"];
     dataSource_type = config["dataSource_type"];
@@ -156,4 +161,13 @@ void monitorConfig(const std::string& filename, void (*loadConfig)(const std::st
             }
         }
     }
+}
+
+// 负责将遗忘因子分数字符串转double (15/16)
+double parseFraction(const std::string& fraction) {
+    std::stringstream ss(fraction);
+    int numerator, denominator;
+    char slash;
+    ss >> numerator >> slash >> denominator;
+    return static_cast<double>(numerator) / denominator;
 }

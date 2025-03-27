@@ -14,6 +14,7 @@
 #include <cuComplex.h>
 #include <chrono>
 #include <sys/time.h>
+#include <map>
 
 std::vector<cufftComplex> PCcoef(double BandWidth, double PulseWidth, double Fs, int _NFFT, int hamming_window_enable);
 
@@ -44,5 +45,7 @@ void writeFloatToFile(float* d_data_, int pulse_num_, int range_num_, const std:
 void writeBoolToFile(bool* d_data_, int wave_num_, int range_num_, const std::string& filename);
 
 std::vector<cufftComplex> readFilterFromFile(const std::string& filename);
+
+double getClutterMapAlpha(double q, double P_fa);
 
 #endif //CUDAPROJECT_UTILS_H

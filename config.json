@@ -1,6 +1,5 @@
 {
-  "dataPath": "/backup2/data/zhibiao/20250326092510_64GB.dat",
-  "filterPath": "/home/csic724/CLionProjects/PcieReader/filterCoef.txt",
+  "dataPath": "/backup2/data/zhibiao/20250325085956_256GB.dat",
 
   "0表示文件": "1表示Pcie",
   "dataSource_type": 0,
@@ -44,9 +43,12 @@
   "system_delay": 25,
   "initCarryFreq": 8080,
 
-  "Pfa": 1e-8,
+  "Pfa": 1e-6,
   "numGuardCells": 4,
-  "numRefCells": 16,
+  "numRefCells": 32,
+  "do_clutter_map": true,
+  "forgetting_factor": "15/16",
+  "clutter_map_range": 100,
 
   "debug_mode": 0,
   "start_frame": 1,
@@ -57,7 +59,7 @@
   "file_data_delay": 0,
 
   "速度绝对值在v1和v2之间": "的通道才会参与选大",
-  "v1": 10,
+  "v1": 6,
   "v2": 20,
 
   "0表示质心法": "1表示选大",
