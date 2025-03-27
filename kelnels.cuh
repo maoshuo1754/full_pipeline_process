@@ -41,7 +41,7 @@ __global__ void compute_clutter_kernel(
     int wave_num, int range_num, int queue_size, int speed_channels
 );
 
-__global__ void processClutterMapKernel(cufftComplex* d_data, float* d_clutter_map, bool* d_clutterMap_masked, size_t size, float alpha, float forgetting_factor);
+__global__ void processClutterMapKernel(cufftComplex* d_data, float* d_clutter_map, bool* d_clutterMap_masked, size_t size, int range_num, float alpha, float forgetting_factor);
 
 
 struct ScaleFunctor {

@@ -146,6 +146,7 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
 
 void ThreadPool::getRadarParams(std::unique_ptr<WaveGroupProcessor>& waveGroupProcessor, int frame) {
     static bool isInit = false;
+    static double delta_range = 0.0;
     waveGroupProcessor->getPackegeHeader(radar_params_->rawMessage, DATA_OFFSET);
 
     if (debug_mode && frame >= start_frame && frame < end_frame)
@@ -190,18 +191,22 @@ void ThreadPool::getRadarParams(std::unique_ptr<WaveGroupProcessor>& waveGroupPr
         }
 
         radar_params_->detect_rows.clear();
+        radar_params_->numSamples = round(radar_params_->pulseWidth * Fs);
         for (int row = 0; row < PULSE_NUM; ++row) {
             int speed = std::abs(radar_params_->chnSpeeds[row]);
             if (speed >= v1 && speed <= v2) {
                 radar_params_->detect_rows.push_back(row);
             }
         }
-
+        if (delta_range == 0)
+        {
+            delta_range = c_speed / Fs / 2.0;
+        }
         radar_params_->scale = 1.0f / sqrt(radar_params_->bandWidth * radar_params_->pulseWidth) / PULSE_NUM;
         radar_params_->getCoef();
     }
 
-    waveGroupProcessor->getCoef(radar_params_->pcCoef, radar_params_->cfarCoef, radar_params_->detect_rows);
+    waveGroupProcessor->getCoef(radar_params_->pcCoef, radar_params_->cfarCoef, radar_params_->detect_rows, radar_params_->numSamples);
 }
 
 

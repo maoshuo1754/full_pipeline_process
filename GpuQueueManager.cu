@@ -40,9 +40,9 @@ void GpuQueueManager::launch_clutter_kernel()
 }
 
 // 基于d_data(脉压后数据)计算距离多普勒每个点杂波图是否为杂波
-// 超过阈值的d_clutterMap_masked_为true，否则为false
+// 超过阈值的d_clutterMap_masked为true，否则为false
 // d_data保持不变
-void GpuQueueManager::processClutterMap(cufftComplex* d_data, bool* d_clutterMap_masked_)
+void GpuQueueManager::processClutterMap(cufftComplex* d_data, bool* d_clutterMap_masked, int clutterMap_range_num)
 {
     std::lock_guard<std::mutex> lock(clutter_map_mutex_); // 线程安全锁
     size_t size = WAVE_NUM * PULSE_NUM * NFFT;
@@ -50,5 +50,5 @@ void GpuQueueManager::processClutterMap(cufftComplex* d_data, bool* d_clutterMap
     // 启动 kernel
     int blockSize = CUDA_BLOCK_SIZE;
     int gridSize = (size + blockSize - 1) / blockSize;
-    processClutterMapKernel<<<gridSize, blockSize>>>(d_data, d_clutter_map, d_clutterMap_masked_, size, alpha, forgetting_factor);
+    processClutterMapKernel<<<gridSize, blockSize>>>(d_data, d_clutter_map, d_clutterMap_masked, size, clutterMap_range_num, alpha, forgetting_factor);
 }

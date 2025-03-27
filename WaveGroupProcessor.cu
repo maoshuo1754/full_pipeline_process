@@ -5,7 +5,6 @@
 #include "kelnels.cuh"
 #include "nlohmann/json.hpp"
 
-
 WaveGroupProcessor::WaveGroupProcessor(int waveNum, int pulseNum, int rangeNum)
     : wave_num_(waveNum),
       pulse_num_(pulseNum),
@@ -108,11 +107,14 @@ cufftComplex* WaveGroupProcessor::getData()
     return d_data_;
 }
 
-void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef, std::vector<int> &detect_rows) {
+void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef, std::vector<int> &detect_rows, int numSamples) {
     if (coef_is_initialized_) {
         return;
     }
+    double delta_range = c_speed / Fs / 2.0;
+
     coef_is_initialized_ = true;
+    clutterMap_range_num_ = ceil(clutter_map_range / delta_range) + numSamples;
     checkCudaErrors(cudaMemcpy(d_pc_coeffs_, pcCoef.data(), NFFT * sizeof(cufftComplex), cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy(d_cfar_coeffs_, cfarCoef.data(), NFFT * sizeof(cufftComplex), cudaMemcpyHostToDevice));
     detect_rows_num_ = detect_rows.size();
@@ -129,7 +131,7 @@ void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<
         for (int wave = region.waveStartIdx; wave < region.waveEndIdx; wave++) {
             float startRange = region.startRange;
             float endRange = region.endRange;
-            double delta_range = c_speed / Fs / 2.0;
+
             int startIdx = static_cast<int>(startRange / delta_range) + range_correct;
             int endIdx = static_cast<int>(endRange / delta_range) + range_correct;
             assert(startRange < endRange);
@@ -223,7 +225,7 @@ void WaveGroupProcessor::processCoherentIntegration(float scale) {
 
 void WaveGroupProcessor::processClutterMap()
 {
-    gpu_manager.processClutterMap(d_data_, d_clutterMap_masked_);
+    gpu_manager.processClutterMap(d_data_, d_clutterMap_masked_, clutterMap_range_num_);
 }
 
 

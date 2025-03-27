@@ -6,13 +6,13 @@
 
   "THREADS_MEM_SIZE": 1073741824,
 
-  "hamming_window_enable": 0,
+  "hamming_window_enable": 1,
   "MTI_enable": 1,
 
   "num_threads": 4,
   "CAL_WAVE_NUM": 32,
   "INTEGRATION_TIMES": 1,
-  "normFactor": 4,
+  "normFactor": 2,
 
   "local_video_ip": "127.0.0.1",
   "local_video_port": 0,
@@ -48,7 +48,7 @@
   "numRefCells": 32,
   "do_clutter_map": true,
   "forgetting_factor": "15/16",
-  "clutter_map_range": 100,
+  "clutter_map_range": 200,
 
   "debug_mode": 0,
   "start_frame": 1,

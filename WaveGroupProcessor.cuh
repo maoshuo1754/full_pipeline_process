@@ -35,7 +35,7 @@ public:
     void cfar(int numSamples);
     void cfar_by_col();
     void processMaxSelection();
-    void getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef, std::vector<int> &detect_rows);
+    void getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef, std::vector<int> &detect_rows, int numSamples);
     void resetAddr();
 
 private:
@@ -62,7 +62,7 @@ private:
     bool* d_clutterMap_masked_;      // 杂波图
 
     int detect_rows_num_;            // 需要检测的通道数
-
+    int clutterMap_range_num_;          // 做杂波图的距离单元数
 
     thrust::device_ptr<cufftComplex> thrust_data_;
     thrust::device_ptr<cufftComplex> thrust_cfar_;

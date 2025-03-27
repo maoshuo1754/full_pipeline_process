@@ -47,7 +47,7 @@ public:
         cudaMemcpy(device_buffer, d_clutter, WAVE_NUM * NFFT * sizeof(bool), cudaMemcpyDeviceToDevice);
     }
 
-    void processClutterMap(cufftComplex* d_data, bool* d_clutterMap_masked_);
+    void processClutterMap(cufftComplex* d_data, bool* d_clutterMap_masked_, int clutterMap_range_num);
 
 private:
     cufftComplex* d_queues = nullptr;       // 显存中的0速通道队列数据

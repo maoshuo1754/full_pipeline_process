@@ -445,9 +445,9 @@ __global__ void compute_clutter_kernel(
 
 
 // CUDA Kernel：计算对数并更新杂波图
-__global__ void processClutterMapKernel(cufftComplex* d_data, float* d_clutter_map, bool* d_clutterMap_masked, size_t size, float alpha, float forgetting_factor) {
+__global__ void processClutterMapKernel(cufftComplex* d_data, float* d_clutter_map, bool* d_clutterMap_masked, size_t size, int range_num, float alpha, float forgetting_factor) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < size) {
+    if (idx < size && idx % NFFT <= range_num) {
         // 计算幅值的平方
         float magnitude_squared = d_data[idx].x * d_data[idx].x + d_data[idx].y * d_data[idx].y;
         // 计算对数幅值（与 Log10Functor 一致）
