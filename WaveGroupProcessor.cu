@@ -114,7 +114,7 @@ void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<
     double delta_range = c_speed / Fs / 2.0;
 
     coef_is_initialized_ = true;
-    clutterMap_range_num_ = ceil(clutter_map_range / delta_range) + numSamples;
+    clutterMap_range_num_ = ceil(clutter_map_range / delta_range) + numSamples + range_correct;
     checkCudaErrors(cudaMemcpy(d_pc_coeffs_, pcCoef.data(), NFFT * sizeof(cufftComplex), cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy(d_cfar_coeffs_, cfarCoef.data(), NFFT * sizeof(cufftComplex), cudaMemcpyHostToDevice));
     detect_rows_num_ = detect_rows.size();
