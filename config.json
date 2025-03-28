@@ -1,13 +1,13 @@
 {
-  "dataPath": "/backup2/data/250319/20250319190509_128GB.dat",
+  "dataPath": "/backup2/data/zhibiao/20250325085956_256GB.dat",
 
   "0表示文件": "1表示Pcie",
   "dataSource_type": 1,
 
   "THREADS_MEM_SIZE": 1073741824,
 
-  "hamming_window_enable": 1,
-  "MTI_enable": 1,
+  "hamming_window_enable": 0,
+  "MTI_enable": 0,
   "MTI_pulse_num": 3,
 
   "num_threads": 4,
@@ -44,12 +44,12 @@
   "system_delay": 25,
   "initCarryFreq": 8080,
 
-  "Pfa": 1e-6,
+  "Pfa": 1e-7,
   "numGuardCells": 4,
   "numRefCells": 32,
-  "do_clutter_map": true,
+  "do_clutter_map": 0,
   "forgetting_factor": "15/16",
-  "clutter_map_range": 100,
+  "clutter_map_range": 200,
 
   "debug_mode": 0,
   "start_frame": 1,

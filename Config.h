@@ -51,7 +51,7 @@ extern int initCarryFreq;       // 初始载频
 extern double Pfa;
 extern int numGuardCells;
 extern int numRefCells;
-extern bool do_clutter_map;
+extern int do_clutter_map;
 extern double forgetting_factor;
 extern double clutter_map_range;
 

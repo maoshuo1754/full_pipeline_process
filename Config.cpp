@@ -39,7 +39,7 @@ int initCarryFreq;
 double Pfa;
 int numGuardCells;
 int numRefCells;
-bool do_clutter_map;
+int do_clutter_map;
 double forgetting_factor;
 double clutter_map_range;
 
