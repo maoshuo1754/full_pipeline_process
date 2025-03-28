@@ -1,13 +1,13 @@
 {
-  "dataPath": "/backup2/data/zhibiao/20250325085956_256GB.dat",
+  "dataPath": "/backup2/data/250319/20250319190509_128GB.dat",
 
   "0表示文件": "1表示Pcie",
-  "dataSource_type": 0,
+  "dataSource_type": 1,
 
   "THREADS_MEM_SIZE": 1073741824,
 
   "hamming_window_enable": 1,
-  "MTI_enable": 0,
+  "MTI_enable": 1,
   "MTI_pulse_num": 3,
 
   "num_threads": 4,

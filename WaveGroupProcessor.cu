@@ -172,6 +172,7 @@ void WaveGroupProcessor::unpackData(const int* headPositions) {
 
     dim3 gridDim1(wave_num_, (range_num_ + CUDA_BLOCK_SIZE - 1) / CUDA_BLOCK_SIZE, pulse_num_);
 
+    // checkCudaErrors(cudaMemsetAsync(d_data_, 0, wave_num_ * pulse_num_ * range_num_ * sizeof(cufftComplex), stream_));
     unpackKernel3D<<<gridDim1, CUDA_BLOCK_SIZE, 0, stream_>>>(
         d_unpack_data_, d_data_, d_headPositions_, PULSE_NUM, RANGE_NUM);
 

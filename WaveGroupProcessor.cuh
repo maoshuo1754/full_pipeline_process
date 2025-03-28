@@ -31,6 +31,7 @@ public:
     void processPulseCompression(int numSamples);
     void processMTI();
     void processCoherentIntegration(float scale);
+    void processFFTshift();
     void processClutterMap();
     void processCFAR();
     void cfar(int numSamples);

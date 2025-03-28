@@ -131,6 +131,8 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
         waveGroupProcessor->processMTI();
     }
 
+    // waveGroupProcessor->processFFTshift();
+
     waveGroupProcessor->processCoherentIntegration(radar_params_->scale);
     if (do_clutter_map)
     {
