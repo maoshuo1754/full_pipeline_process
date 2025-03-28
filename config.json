@@ -2,7 +2,7 @@
   "dataPath": "/backup2/data/zhibiao/20250325085956_256GB.dat",
 
   "0表示文件": "1表示Pcie",
-  "dataSource_type": 1,
+  "dataSource_type": 0,
 
   "THREADS_MEM_SIZE": 1073741824,
 

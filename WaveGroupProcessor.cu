@@ -4,6 +4,7 @@
 #include <vector>
 #include "kelnels.cuh"
 #include "nlohmann/json.hpp"
+#include "fdacoefs.h"
 
 WaveGroupProcessor::WaveGroupProcessor(int waveNum, int pulseNum, int rangeNum)
     : wave_num_(waveNum),
@@ -49,6 +50,7 @@ void WaveGroupProcessor::allocateDeviceMemory() {
     currentAddrOffset = 0;
     checkCudaErrors(cudaMalloc(&d_pc_coeffs_, range_num_ * sizeof(cufftComplex)));
     checkCudaErrors(cudaMalloc(&d_cfar_coeffs_, range_num_ * sizeof(cufftComplex)));
+    checkCudaErrors(cudaMalloc(&d_filtered_coeffs_, range_num_ * sizeof(cufftComplex)));
     checkCudaErrors(cudaMalloc(&d_is_masked_, wave_num_ * range_num_));
     checkCudaErrors(cudaMalloc(&d_clutterMap_masked_, wave_num_ * pulse_num_ * range_num_));
     checkCudaErrors(cudaMemset(d_clutterMap_masked_, 1, wave_num_ * pulse_num_ * range_num_));
@@ -67,6 +69,7 @@ void WaveGroupProcessor::allocateDeviceMemory() {
 void WaveGroupProcessor::freeDeviceMemory() {
     checkCudaErrors(cudaFree(d_pc_coeffs_));
     checkCudaErrors(cudaFree(d_cfar_coeffs_));
+    checkCudaErrors(cudaFree(d_filtered_coeffs_));
     checkCudaErrors(cudaFree(d_is_masked_));
     checkCudaErrors(cudaFree(d_clutterMap_masked_));
     checkCufftErrors(cufftDestroy(pc_plan_));
@@ -145,6 +148,18 @@ void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<
         }
     }
     checkCudaErrors(cudaMemcpy(d_is_masked_, h_isMasked, mask_size, cudaMemcpyHostToDevice));
+
+    cufftComplex* h_filtered_coeffs_ = new cufftComplex[range_num_];
+    memset(h_filtered_coeffs_, 0, range_num_ * sizeof(cufftComplex));
+    for (int i = 0; i < BL; i++)
+    {
+        h_filtered_coeffs_[i].x = B[i];
+    }
+    checkCudaErrors(cudaMemcpy(d_filtered_coeffs_, h_filtered_coeffs_, range_num_ * sizeof(cufftComplex), cudaMemcpyHostToDevice));
+    checkCufftErrors(cufftExecC2C(pc_plan_, d_filtered_coeffs_, d_filtered_coeffs_, CUFFT_FORWARD));
+
+    delete[] h_filtered_coeffs_;
+
     delete[] h_isMasked;
 }
 
@@ -193,6 +208,7 @@ void WaveGroupProcessor::processPulseCompression(int numSamples) {
     checkCufftErrors(cufftExecC2C(row_plan_, d_data_, d_data_, CUFFT_FORWARD));
     // .*
     rowWiseMulKernel<<<gridSize, blockSize, 0, stream_>>>(d_data_, d_pc_coeffs_, wave_num_ * pulse_num_, range_num_);
+    rowWiseMulKernel<<<gridSize, blockSize, 0, stream_>>>(d_data_, d_filtered_coeffs_, wave_num_ * pulse_num_, range_num_);
     // ifft
     checkCufftErrors(cufftExecC2C(row_plan_, d_data_, d_data_, CUFFT_INVERSE));
 }

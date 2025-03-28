@@ -74,6 +74,8 @@ private:
     cufftHandle pc_plan_;            // 脉压FFT，用于对下面两个系数做脉压
     cufftComplex* d_pc_coeffs_;      // 脉压系数    (1 x range_num_)
     cufftComplex* d_cfar_coeffs_;    // cfar系数   (1 x range_num_)
+
+    cufftComplex* d_filtered_coeffs_;// 滤波器系数
     bool* d_is_masked_;              // 需要杂波处理的区域
 
     // 杂波区域判断类

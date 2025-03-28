@@ -6,6 +6,7 @@
 #include "ThreadPool.h"
 #include <complex>
 #include "Config.h"
+#include "fdacoefs.h"
 #include "utils.h"
 
 SendVideo::SendVideo() { // , outfile("detectVideo.txt")
@@ -113,7 +114,7 @@ void SendVideo::send(RadarParams* radar_params_) {
         auto* rowData = radar_params_->h_max_results_ + ii * NFFT;
         auto* rowSpeed = radar_params_->h_speed_channels_ + ii * NFFT;
 
-        auto offset = range_correct + radar_params_->numSamples - 1;
+        int offset = range_correct + radar_params_->numSamples - 1 + floor((BL-1)/2);
         for (int k = 0; k < unMinPRTLen - offset; ++k) {
             // + system_delay
             auto data_amp = rowData[k + offset];
