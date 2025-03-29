@@ -76,7 +76,7 @@ void loadConfig(const std::string& filename) {
     dataPath = config["dataPath"];
     num_threads = config["num_threads"];
     THREADS_MEM_SIZE = config["THREADS_MEM_SIZE"];
-    CAL_WAVE_NUM = config["CAL_WAVE_NUM"];
+
     INTEGRATION_TIMES = config["INTEGRATION_TIMES"];
     normFactor = config["normFactor"];
 
@@ -120,6 +120,8 @@ void loadConfig(const std::string& filename) {
     end_frame = config["end_frame"];
     start_wave = config["start_wave"];
     end_wave = config["end_wave"];
+
+    CAL_WAVE_NUM = end_wave - start_wave;
 
     file_data_delay = config["file_data_delay"];
 

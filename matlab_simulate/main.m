@@ -35,7 +35,7 @@ PCcoef = fft(PCcoef, NFFT);
 PCcoef = repmat(PCcoef, pulseNum, 1);
 
 %% 数据读取
-folderPath = '/home/csic724/CLionProjects/PcieReader/cmake-build-release/20250326095501_64GB_frame_1_12_pulse_8_12_2048x4096';
+folderPath = '20250329094403_512GB_frame_1_12_pulse_11_14_2048x4096';
 
 fid = fopen(folderPath, 'rb');
 if fid == -1
@@ -72,7 +72,7 @@ for ii = 1:fileInfos('numFrames')
     A = fft(A, [], 2); % FFT along time dimension (2nd dim)
     A = A .* PCcoef; % Apply coefficients
     A = ifft(A, [], 2); % IFFT along time dimension
-    A = A(:, N_pc+53:500, :); % Range cut
+    A = A(:, N_pc+53:800, :); % Range cut
     A = A ./ 2048;
     A = fft(A, Num_V_chnnels, 1); % FFT along channel dimension
 

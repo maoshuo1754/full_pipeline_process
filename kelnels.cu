@@ -19,7 +19,7 @@ __global__ void unpackKernel3D(unsigned char *threadsMemory, cufftComplex *pComp
     int waveIdx = blockIdx.x;  // 每个block.x处理一个波束
 
     // 检查索引是否越界
-    if (pulseIdx < pulseNum && rangeIdx < rangeNum && waveIdx < WAVE_NUM) {
+    if (pulseIdx < pulseNum && rangeIdx < rangeNum - 1000 && waveIdx < WAVE_NUM) {
         // 计算头位置的起始地址
         int headOffset = headPositions[pulseIdx];
         unsigned char *blockIQstartAddr = threadsMemory + headOffset + DATA_OFFSET;
@@ -181,7 +181,7 @@ __global__ void fftshift_columns_inplace_kernel(cufftComplex* d_data, int nrows,
     // 仅交换前mid次，避免重复交换
     for (int i = 0; i < mid; ++i) {
         int src = i * ncols + col;
-        int dst = (i + mid + (nrows % 2)) * ncols + col; // 处理奇数情况
+        int dst = (i + mid) * ncols + col;
         // 交换元素
         cufftComplex temp = d_data[src];
         d_data[src] = d_data[dst];

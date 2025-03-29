@@ -8,9 +8,10 @@
 
   "hamming_window_enable": 0,
   "MTI_enable": 0,
-  "MTI_pulse_num": 3,
+  "MTI_pulse_num": 2,
+  "do_clutter_map": 0,
 
-  "num_threads": 4,
+  "num_threads": 3,
   "CAL_WAVE_NUM": 32,
   "INTEGRATION_TIMES": 1,
   "normFactor": 2,
@@ -44,12 +45,12 @@
   "system_delay": 25,
   "initCarryFreq": 8080,
 
-  "Pfa": 1e-7,
+
+  "Pfa": 1e-6,
   "numGuardCells": 4,
   "numRefCells": 32,
-  "do_clutter_map": 0,
   "forgetting_factor": "15/16",
-  "clutter_map_range": 200,
+  "clutter_map_range": 4500,
 
   "debug_mode": 0,
   "start_frame": 1,
@@ -61,7 +62,7 @@
 
   "速度绝对值在v1和v2之间": "的通道才会参与选大",
   "v1": 6,
-  "v2": 20,
+  "v2": 18,
 
   "0表示质心法": "1表示选大",
   "velocityCoalescenceMethod": 1
