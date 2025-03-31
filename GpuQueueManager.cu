@@ -50,5 +50,5 @@ void GpuQueueManager::processClutterMap(cufftComplex* d_data, bool* d_clutterMap
     // 启动 kernel
     int blockSize = CUDA_BLOCK_SIZE;
     int gridSize = (size + blockSize - 1) / blockSize;
-    processClutterMapKernel<<<gridSize, blockSize>>>(d_data, d_clutter_map, d_clutterMap_masked, size, clutterMap_range_num, alpha, forgetting_factor);
+    processClutterMapKernel<<<gridSize, blockSize>>>(d_data, d_clutter_map, d_clutterMap_masked, size, clutterMap_range_num, alpha, forgetting_factor, clutter_db_offset);
 }

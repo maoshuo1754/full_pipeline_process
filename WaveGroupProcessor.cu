@@ -299,7 +299,16 @@ void WaveGroupProcessor::processCFAR() {
     thrust::transform(exec_policy_, thrust_cfar_, thrust_cfar_ + size, thrust_cfar_, ScaleFunctor(alpha/2.0/numRefCells));
 
     // 对比噪底选结果，(结果开根号)
-    cmpKernel<<<gridSize, blockSize, 0, stream_>>>(data, cfar, d_clutterMap_masked_ + offset, CAL_WAVE_NUM * pulse_num_, range_num_, shift_offset, cfar_enable);
+    cmpKernel<<<gridSize, blockSize, 0, stream_>>>(
+        data,                           // 原始数据
+        cfar,                           // cfar门限
+        d_clutterMap_masked_ + offset,  // 杂波图结果
+        CAL_WAVE_NUM * pulse_num_,      // 需要计算的脉冲数
+        range_num_,                     // 需要计算的距离单元数
+        shift_offset,                   // 平移，抵消频域滤波偏移量
+        cfar_enable,                    // cfar控制参数，0代表不做cfar
+        cfar_db_offset
+    );
 }
 
 void WaveGroupProcessor::cfar(int numSamples)  {

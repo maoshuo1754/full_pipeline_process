@@ -10,9 +10,9 @@
 #include <atomic>
 
 #define WAVE_NUM 32             // 波束数
-#define PULSE_NUM 2048          // 一个波束中的脉冲数
-#define NFFT 4096               // 一个脉冲中fft的点数，计算方法为 NFFT = 2 ** nextpow2(RANGE_NUM + numSamples - 1)
-#define RANGE_NUM  3749         // 一个脉冲的距离单元数
+#define PULSE_NUM 128          // 一个波束中的脉冲数
+#define NFFT 8192               // 一个脉冲中fft的点数，计算方法为 NFFT = 2 ** nextpow2(RANGE_NUM + numSamples - 1)
+#define RANGE_NUM  7498         // 一个脉冲的距离单元数
 #define CFAR_LENGTH 16          // 分段fft长度
 #define CUDA_BLOCK_SIZE 256     // cuda运算分块长度
 #define CLUTTER_QUEUE_SIZE 10
@@ -45,14 +45,17 @@ extern double Fs_system;        // 雷达系统内部时钟频率
 extern int system_delay;        // 系统处理延时, 低通滤波等系统延时
 extern int initCarryFreq;       // 初始载频
 
+extern int cfar_enable;
 extern double Pfa_cfar;
-extern double Pfa_clutter_map;
 extern int numGuardCells;
 extern int numRefCells;
+extern float cfar_db_offset;
+
 extern int clutter_map_enable;
-extern int cfar_enable;
+extern double Pfa_clutter_map;
 extern double forgetting_factor;
 extern double clutter_map_range;
+extern float clutter_db_offset;
 
 extern int velocityCoalescenceMethod;  // 0代表质心法，1代表选大
 extern int dataSource_type;                 // 0表示文件，1表示Pcie

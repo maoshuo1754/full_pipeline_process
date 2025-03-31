@@ -13,7 +13,7 @@ __global__ void unpackKernel3D(unsigned char *threadsMemory, cufftComplex *pComp
 
 __global__ void rowWiseMulKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows, int ncols);
 
-__global__ void cmpKernel(cufftComplex *d_a, cufftComplex *d_b,  bool *d_clutterMap_masked_,  int nrows, int ncols, int offset, int cfar_enable);
+__global__ void cmpKernel(cufftComplex *d_a, cufftComplex *d_b,  bool *d_clutterMap_masked_,  int nrows, int ncols, int offset, int cfar_enable, double cfar_db_offset);
 
 __global__ void moveAndZeroKernel(cufftComplex* data, int m, int n, int start, int end);
 
@@ -41,7 +41,7 @@ __global__ void compute_clutter_kernel(
     int wave_num, int range_num, int queue_size, int speed_channels
 );
 
-__global__ void processClutterMapKernel(cufftComplex* d_data, float* d_clutter_map, bool* d_clutterMap_masked, size_t size, int range_num, float alpha, float forgetting_factor);
+__global__ void processClutterMapKernel(cufftComplex* d_data, float* d_clutter_map, bool* d_clutterMap_masked, size_t size, int range_num, float alpha, float forgetting_factor, float clutter_db_offset);
 
 
 __global__ void MTIkernel2(cufftComplex *data, int nrows, int ncols);

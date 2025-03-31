@@ -45,12 +45,15 @@ __global__ void rowWiseMulKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows
 }
 
 
-__global__ void cmpKernel(cufftComplex *d_data, cufftComplex *thresholds, bool *d_clutterMap_masked_, int nrows, int ncols, int offset, int cfar_enable) {
+__global__ void cmpKernel(  cufftComplex *d_data, cufftComplex *thresholds,
+                            bool *d_clutterMap_masked_, int nrows, int ncols,
+                            int offset, int cfar_enable, double cfar_db_offset
+                            ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < nrows * ncols) {
         if (d_clutterMap_masked_[idx] && idx % ncols < ncols - offset)
         {
-            if (10*log10f(d_data[idx].x) < 10*log10f(thresholds[idx + offset].x) + 6 && cfar_enable) { // 后面不在这改
+            if (d_data[idx].x < thresholds[idx + offset].x * powf(10, cfar_db_offset/10) && cfar_enable) { // 后面不在这改
                 d_data[idx].x = 0;
                 d_data[idx].y = 0;
             } else {
@@ -445,7 +448,7 @@ __global__ void compute_clutter_kernel(
 
 
 // CUDA Kernel：计算对数并更新杂波图
-__global__ void processClutterMapKernel(cufftComplex* d_data, float* d_clutter_map, bool* d_clutterMap_masked, size_t size, int range_num, float alpha, float forgetting_factor) {
+__global__ void processClutterMapKernel(cufftComplex* d_data, float* d_clutter_map, bool* d_clutterMap_masked, size_t size, int range_num, float alpha, float forgetting_factor, float clutter_db_offset) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < size && idx % NFFT <= range_num) {
         // 计算幅值的平方
@@ -454,7 +457,7 @@ __global__ void processClutterMapKernel(cufftComplex* d_data, float* d_clutter_m
         float log_magnitude = 10 * log10f(magnitude_squared);
 
         // 计算阈值
-        float threshold = alpha + d_clutter_map[idx];
+        float threshold = alpha + d_clutter_map[idx] + clutter_db_offset;
         if (log_magnitude > threshold) {
             d_clutterMap_masked[idx] = true;
         } else {

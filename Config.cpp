@@ -43,6 +43,8 @@ int clutter_map_enable;
 int cfar_enable;
 double forgetting_factor;
 double clutter_map_range;
+float cfar_db_offset;
+float clutter_db_offset;
 
 int velocityCoalescenceMethod;
 int dataSource_type;
@@ -107,6 +109,8 @@ void loadConfig(const std::string& filename) {
     std::string forgetting_factor_str = config["forgetting_factor"];
     forgetting_factor = parseFraction(forgetting_factor_str);
     clutter_map_range = config["clutter_map_range"];
+    cfar_db_offset = config["cfar_db_offset"];
+    clutter_db_offset = config["clutter_db_offset"];
 
     velocityCoalescenceMethod = config["velocityCoalescenceMethod"];
     dataSource_type = config["dataSource_type"];
