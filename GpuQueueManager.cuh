@@ -74,7 +74,7 @@ private:
         checkCudaErrors(cudaMemset(d_clutter, 0, WAVE_NUM * NFFT * sizeof(bool)));
         checkCudaErrors(cudaMemset(d_clutter_map, 0, WAVE_NUM * PULSE_NUM * NFFT * sizeof(float)));
         update_count = 0;
-        alpha = getClutterMapAlpha(forgetting_factor, Pfa);
+        alpha = getClutterMapAlpha(forgetting_factor, Pfa_clutter_map);
     }
 
     // 析构函数：释放显存资源

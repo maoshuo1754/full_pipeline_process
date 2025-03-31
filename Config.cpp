@@ -17,7 +17,6 @@ std::string dataPath;
 int num_threads;
 int THREADS_MEM_SIZE;
 int CAL_WAVE_NUM;
-int INTEGRATION_TIMES;
 float normFactor;
 
 std::vector<int> azi_table;
@@ -36,10 +35,12 @@ double Fs_system;
 int system_delay;
 int initCarryFreq;
 
-double Pfa;
+double Pfa_cfar;
+double Pfa_clutter_map;
 int numGuardCells;
 int numRefCells;
-int do_clutter_map;
+int clutter_map_enable;
+int cfar_enable;
 double forgetting_factor;
 double clutter_map_range;
 
@@ -77,7 +78,6 @@ void loadConfig(const std::string& filename) {
     num_threads = config["num_threads"];
     THREADS_MEM_SIZE = config["THREADS_MEM_SIZE"];
 
-    INTEGRATION_TIMES = config["INTEGRATION_TIMES"];
     normFactor = config["normFactor"];
 
     azi_table = config["azi_table"].get<std::vector<int>>();
@@ -98,10 +98,12 @@ void loadConfig(const std::string& filename) {
     system_delay = config["system_delay"];
     initCarryFreq = config["initCarryFreq"];
 
-    Pfa = config["Pfa"];
+    Pfa_cfar = config["Pfa_cfar"];
+    Pfa_clutter_map = config["Pfa_clutter_map"];
     numRefCells = config["numRefCells"];
     numGuardCells = config["numGuardCells"];
-    do_clutter_map = config["do_clutter_map"];
+    clutter_map_enable = config["clutter_map_enable"];
+    cfar_enable = config["cfar_enable"];
     std::string forgetting_factor_str = config["forgetting_factor"];
     forgetting_factor = parseFraction(forgetting_factor_str);
     clutter_map_range = config["clutter_map_range"];

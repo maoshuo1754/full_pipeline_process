@@ -1,20 +1,30 @@
 {
-  "dataPath": "/backup2/data/zhibiao/20250325085956_256GB.dat",
+  "dataPath": "/backup2/data/zhibiao/20250330161213_512GB.dat",
 
   "0表示文件": "1表示Pcie",
   "dataSource_type": 0,
 
   "THREADS_MEM_SIZE": 1073741824,
 
-  "hamming_window_enable": 0,
+  "hamming_window_enable": 1,
+
   "MTI_enable": 0,
   "MTI_pulse_num": 2,
-  "do_clutter_map": 0,
+
+  "x1": "杂波图参数",
+  "clutter_map_enable": 0,
+  "Pfa_clutter_map": 1e-7,
+  "forgetting_factor": "15/16",
+  "clutter_map_range": 4500,
+
+  "x2": "cfar参数",
+  "cfar_enable": 1,
+  "Pfa_cfar": 1e-7,
+  "numGuardCells": 4,
+  "numRefCells": 64,
 
   "num_threads": 3,
-  "CAL_WAVE_NUM": 32,
-  "INTEGRATION_TIMES": 1,
-  "normFactor": 2,
+  "normFactor": 4,
 
   "local_video_ip": "127.0.0.1",
   "local_video_port": 0,
@@ -45,23 +55,16 @@
   "system_delay": 25,
   "initCarryFreq": 8080,
 
-
-  "Pfa": 1e-6,
-  "numGuardCells": 4,
-  "numRefCells": 32,
-  "forgetting_factor": "15/16",
-  "clutter_map_range": 4500,
-
   "debug_mode": 0,
   "start_frame": 1,
   "end_frame": 12,
-  "start_wave": 4,
-  "end_wave": 28,
+  "start_wave": 8,
+  "end_wave": 32,
 
   "file_data_delay": 0,
 
   "速度绝对值在v1和v2之间": "的通道才会参与选大",
-  "v1": 6,
+  "v1": 5,
   "v2": 18,
 
   "0表示质心法": "1表示选大",

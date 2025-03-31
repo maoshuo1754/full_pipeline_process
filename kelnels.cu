@@ -45,12 +45,12 @@ __global__ void rowWiseMulKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows
 }
 
 
-__global__ void cmpKernel(cufftComplex *d_data, cufftComplex *thresholds, bool *d_clutterMap_masked_, int nrows, int ncols, int offset) {
+__global__ void cmpKernel(cufftComplex *d_data, cufftComplex *thresholds, bool *d_clutterMap_masked_, int nrows, int ncols, int offset, int cfar_enable) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < nrows * ncols) {
         if (d_clutterMap_masked_[idx] && idx % ncols < ncols - offset)
         {
-            if (d_data[idx].x < thresholds[idx + offset].x) {
+            if (10*log10f(d_data[idx].x) < 10*log10f(thresholds[idx + offset].x) + 6 && cfar_enable) { // 后面不在这改
                 d_data[idx].x = 0;
                 d_data[idx].y = 0;
             } else {
@@ -87,29 +87,29 @@ __global__ void moveAndZeroKernel(cufftComplex* data, int m, int n, int start, i
     }
 }
 
-__global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChannels, bool* maskPtr, int nrows, int ncols) {
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    int ind;
-
-    if (col < ncols) {
-        float maxVal;
-
-        maxVal = channel_0_enable ? data[col].x : 0;
-        int maxChannel = 0;
-        for (int row = 1; row < nrows; ++row) {
-            ind = row * ncols + col;
-            if (data[ind].x > maxVal) {
-                maxVal = data[ind].x;
-                maxChannel = row;
-            }
-        }
-        maxValues[col] = maxVal;
-        // if (maskPtr[col]) {
-        //     maxValues[col] = 1000;
-        // }
-        speedChannels[col] = maxChannel;
-    }
-}
+// __global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChannels, bool* maskPtr, int nrows, int ncols) {
+//     int col = blockIdx.x * blockDim.x + threadIdx.x;
+//     int ind;
+//
+//     if (col < ncols) {
+//         float maxVal;
+//
+//         maxVal = channel_0_enable ? data[col].x : 0;
+//         int maxChannel = 0;
+//         for (int row = 1; row < nrows; ++row) {
+//             ind = row * ncols + col;
+//             if (data[ind].x > maxVal) {
+//                 maxVal = data[ind].x;
+//                 maxChannel = row;
+//             }
+//         }
+//         maxValues[col] = maxVal;
+//         // if (maskPtr[col]) {
+//         //     maxValues[col] = 1000;
+//         // }
+//         speedChannels[col] = maxChannel;
+//     }
+// }
 
 // __global__ void maxKernel2D(cufftComplex *data, float *maxValues, int *speedChannels,
 //                            bool* maskPtr, int nrows, int ncols, int nwaves) {

@@ -212,7 +212,7 @@ void WaveGroupProcessor::processPulseCompression(int numSamples) {
     checkCufftErrors(cufftExecC2C(row_plan_, data, data, CUFFT_FORWARD));
     // .*
     rowWiseMulKernel<<<gridSize, blockSize, 0, stream_>>>(data, d_pc_coeffs_, CAL_WAVE_NUM * pulse_num_, range_num_);
-    rowWiseMulKernel<<<gridSize, blockSize, 0, stream_>>>(data, d_filtered_coeffs_, CAL_WAVE_NUM * pulse_num_, range_num_);
+    // rowWiseMulKernel<<<gridSize, blockSize, 0, stream_>>>(data, d_filtered_coeffs_, CAL_WAVE_NUM * pulse_num_, range_num_);
     // ifft
     checkCufftErrors(cufftExecC2C(row_plan_, data, data, CUFFT_INVERSE));
 }
@@ -285,7 +285,7 @@ void WaveGroupProcessor::processCFAR() {
     rowWiseMulKernel<<<gridSize, blockSize, 0, stream_>>>(cfar, d_cfar_coeffs_, CAL_WAVE_NUM * pulse_num_, range_num_);
 
     // ifft
-    checkCufftErrors(cufftExecC2C(row_plan_, d_cfar_res_, d_cfar_res_, CUFFT_INVERSE));
+    checkCufftErrors(cufftExecC2C(row_plan_, cfar, cfar, CUFFT_INVERSE));
 
     thrust::transform(exec_policy_, thrust_cfar_, thrust_cfar_ + size, thrust_cfar_, ScaleFunctor(1.0 / range_num_ ));
 
@@ -295,18 +295,18 @@ void WaveGroupProcessor::processCFAR() {
     int shift_offset = floor((cfarKernelSize - 1) / 2);
 
     // 根据alpha计算噪底
-    double alpha = numRefCells * 2 * (pow(Pfa, -1.0 / (numRefCells * 2)) - 1);
+    double alpha = numRefCells * 2 * (pow(Pfa_cfar, -1.0 / (numRefCells * 2)) - 1);
     thrust::transform(exec_policy_, thrust_cfar_, thrust_cfar_ + size, thrust_cfar_, ScaleFunctor(alpha/2.0/numRefCells));
 
     // 对比噪底选结果，(结果开根号)
-    cmpKernel<<<gridSize, blockSize, 0, stream_>>>(data, cfar, d_clutterMap_masked_, CAL_WAVE_NUM * pulse_num_, range_num_, shift_offset);
+    cmpKernel<<<gridSize, blockSize, 0, stream_>>>(data, cfar, d_clutterMap_masked_ + offset, CAL_WAVE_NUM * pulse_num_, range_num_, shift_offset, cfar_enable);
 }
 
 void WaveGroupProcessor::cfar(int numSamples)  {
-    double alpha = (numRefCells * 2 * (pow(Pfa, -1.0 / (numRefCells * 2)) - 1));
-
+    double alpha = (numRefCells * 2 * (pow(Pfa_cfar, -1.0 / (numRefCells * 2)) - 1));
+    size_t offset = start_wave * pulse_num_ * range_num_;
     // .^2
-    int size = wave_num_ * pulse_num_ * range_num_;
+    int size = CAL_WAVE_NUM * pulse_num_ * range_num_;
     thrust::transform(exec_policy_, thrust_data_, thrust_data_ + size, thrust_data_, SquareFunctor());
 
     // Configure the CUDA kernel launch parameters
@@ -314,23 +314,23 @@ void WaveGroupProcessor::cfar(int numSamples)  {
     int threadsPerBlock = range_num_ / colsPerThread; // 每个线程块中的线程数
     int blocksPerRow = (range_num_ + colsPerThread - 1) / colsPerThread / threadsPerBlock; // 每行的线程块数
     dim3 blockDim(threadsPerBlock, 1); // 线程块大小：1 行 x 32 列
-    int nrows = wave_num_ * pulse_num_;
+    int nrows = CAL_WAVE_NUM * pulse_num_;
     dim3 gridDim(blocksPerRow, nrows); // 网格大小：每行 block 数 x 总行数
 
-    cfarKernel<<<gridDim, blockDim, 0, stream_>>>(d_data_, d_cfar_res_, nrows, range_num_, alpha, numGuardCells,
-                                                  numRefCells, numSamples-1, numSamples+RANGE_NUM-200);
+    cfarKernel<<<gridDim, blockDim, 0, stream_>>>(d_data_+offset, d_cfar_res_+offset, nrows, range_num_, alpha, numGuardCells,
+                                                  numRefCells, numSamples-1, numSamples+RANGE_NUM-range_correct);
 }
 
 void WaveGroupProcessor::cfar_by_col()
 {
-    double alpha = (numRefCells * 2 * (pow(Pfa, -1.0 / (numRefCells * 2)) - 1));
+    double alpha = (numRefCells * 2 * (pow(Pfa_cfar, -1.0 / (numRefCells * 2)) - 1));
     dim3 blockDim_(CUDA_BLOCK_SIZE);
     dim3 gridDim_((range_num_ + blockDim_.x - 1) / blockDim_.x);
 
     int size = wave_num_ * pulse_num_ * range_num_;
     thrust::transform(exec_policy_, thrust_data_, thrust_data_ + size, thrust_data_, SquareFunctor());
 
-    for (int w = 0; w < WAVE_NUM; ++w)
+    for (int w = start_wave; w < end_wave; ++w)
     {
         auto* waveDataPtr = d_data_ + w * pulse_num_ * range_num_;
         auto* cfarPtr = d_cfar_res_ + w * pulse_num_ * range_num_;
@@ -341,6 +341,8 @@ void WaveGroupProcessor::cfar_by_col()
 
 
 void WaveGroupProcessor::processMaxSelection() {
+    size_t offset = start_wave * pulse_num_ * range_num_;
+    size_t offset2 = start_wave * range_num_;
     // 使用2D block和grid
     dim3 blockDim_(16, 16);  // 可以根据需要调整block大小
     dim3 gridDim_(
@@ -350,14 +352,14 @@ void WaveGroupProcessor::processMaxSelection() {
 
     // 直接一次调用处理所有wave
     maxKernel2D<<<gridDim_, blockDim_, 0, stream_>>>(
-        d_data_,           // 输入数据
-        d_max_results_,    // 最大值输出
-        d_speed_channels_, // 通道索引输出
+        d_data_ + offset,           // 输入数据
+        d_max_results_ + offset2,    // 最大值输出
+        d_speed_channels_ + offset2, // 通道索引输出
         d_detect_rows_,    // 通道范围（row 索引数组）
         detect_rows_num_,  // 通道数量
         pulse_num_,        // 总行数
         range_num_,        // 总列数
-        wave_num_          // 总波数
+        CAL_WAVE_NUM          // 总波数
     );
 }
 

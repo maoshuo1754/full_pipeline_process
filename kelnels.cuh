@@ -13,7 +13,7 @@ __global__ void unpackKernel3D(unsigned char *threadsMemory, cufftComplex *pComp
 
 __global__ void rowWiseMulKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows, int ncols);
 
-__global__ void cmpKernel(cufftComplex *d_a, cufftComplex *d_b,  bool *d_clutterMap_masked_,  int nrows, int ncols, int offset);
+__global__ void cmpKernel(cufftComplex *d_a, cufftComplex *d_b,  bool *d_clutterMap_masked_,  int nrows, int ncols, int offset, int cfar_enable);
 
 __global__ void moveAndZeroKernel(cufftComplex* data, int m, int n, int start, int end);
 

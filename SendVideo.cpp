@@ -103,7 +103,7 @@ void SendVideo::send(RadarParams* radar_params_) {
 
         //rAzm = 153.4 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0f;
         // rAzm = 183.4 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0f;//-83
-        rAzm = 253.4 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0f;//-13
+        rAzm = 249.0633 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0f;//-13
         if (rAzm < 0)
             rAzm += 360.f;
 
@@ -114,8 +114,8 @@ void SendVideo::send(RadarParams* radar_params_) {
         auto* rowData = radar_params_->h_max_results_ + ii * NFFT;
         auto* rowSpeed = radar_params_->h_speed_channels_ + ii * NFFT;
 
-        int offset = range_correct + radar_params_->numSamples - 1 + floor((BL-1)/2);
-        // int offset = range_correct + radar_params_->numSamples - 1;
+        // int offset = range_correct + radar_params_->numSamples - 1 + floor((BL-1)/2);
+        int offset = range_correct + radar_params_->numSamples - 1;
         for (int k = 0; k < unMinPRTLen - offset; ++k) {
             // + system_delay
             auto data_amp = rowData[k + offset];
