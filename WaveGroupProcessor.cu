@@ -60,6 +60,7 @@ void WaveGroupProcessor::allocateDeviceMemory() {
     checkCudaErrors(cudaMalloc(&d_cfar_res_, sizeof(cufftComplex) * total_size));
     checkCudaErrors(cudaMemset(d_cfar_res_, 0, sizeof(cufftComplex) * total_size));
     checkCudaErrors(cudaMalloc(&d_max_results_, sizeof(float) * wave_num_ * range_num_));
+    checkCudaErrors(cudaMemset(d_max_results_, 0, sizeof(float) * wave_num_ * range_num_));
     checkCudaErrors(cudaMalloc(&d_speed_channels_, sizeof(int) * wave_num_ * range_num_));
     checkCudaErrors(cudaMalloc(&d_detect_rows_, sizeof(int) * pulse_num_));
     size_t offset = start_wave * pulse_num_ * range_num_;
@@ -356,7 +357,7 @@ void WaveGroupProcessor::processMaxSelection() {
     dim3 blockDim_(16, 16);  // 可以根据需要调整block大小
     dim3 gridDim_(
         (range_num_ + blockDim_.x - 1) / blockDim_.x,
-        (wave_num_ + blockDim_.y - 1) / blockDim_.y
+        (CAL_WAVE_NUM + blockDim_.y - 1) / blockDim_.y
     );
 
     // 直接一次调用处理所有wave
