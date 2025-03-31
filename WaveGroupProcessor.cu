@@ -62,6 +62,7 @@ void WaveGroupProcessor::allocateDeviceMemory() {
     checkCudaErrors(cudaMalloc(&d_max_results_, sizeof(float) * wave_num_ * range_num_));
     checkCudaErrors(cudaMemset(d_max_results_, 0, sizeof(float) * wave_num_ * range_num_));
     checkCudaErrors(cudaMalloc(&d_speed_channels_, sizeof(int) * wave_num_ * range_num_));
+    checkCudaErrors(cudaMemset(d_speed_channels_, 0, sizeof(int) * wave_num_ * range_num_));
     checkCudaErrors(cudaMalloc(&d_detect_rows_, sizeof(int) * pulse_num_));
     size_t offset = start_wave * pulse_num_ * range_num_;
     thrust_data_ = thrust::device_ptr<cufftComplex>(d_data_ + offset);
@@ -245,7 +246,6 @@ void WaveGroupProcessor::processCoherentIntegration(float scale) {
     for (int w = start_wave; w < end_wave; ++w) {
         cufftComplex* wavePtr = d_data_ + w * pulse_num_ * range_num_;
         checkCufftErrors(cufftExecC2C(col_plan_, wavePtr, wavePtr, CUFFT_FORWARD));
-        fftshift_columns_inplace_kernel<<<gridDim_, blockDim_, 0, stream_>>>(wavePtr, pulse_num_, range_num_);
     }
 
     // 抵消脉压增益，同时除以range_num_是ifft之后必须除以ifft才能和matlab结果一样
@@ -262,6 +262,17 @@ void WaveGroupProcessor::processCoherentIntegration(float scale) {
     // gpu_manager.get_clutter_copy(d_is_masked_, wave_num_ * range_num_);
     // this->streamSynchronize();
     // writeBoolToFile(d_is_masked_ + 16*range_num_, 1, range_num_, filename2);
+}
+
+void WaveGroupProcessor::processFFTshift()
+{
+    dim3 blockDim_(CUDA_BLOCK_SIZE);
+    dim3 gridDim_((range_num_ + blockDim_.x - 1) / blockDim_.x);
+
+    for (int w = start_wave; w < end_wave; ++w) {
+        cufftComplex* wavePtr = d_data_ + w * pulse_num_ * range_num_;
+        fftshift_columns_inplace_kernel<<<gridDim_, blockDim_, 0, stream_>>>(wavePtr, pulse_num_, range_num_);
+    }
 }
 
 void WaveGroupProcessor::processClutterMap()

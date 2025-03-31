@@ -74,7 +74,6 @@ void SendVideo::send(RadarParams* radar_params_) {
     uint32 dwTemp;
     int nAzmCode;
     float rAzm;
-    auto numSamples = radar_params_->numSamples;
     auto rawMsg = reinterpret_cast<uint32*>(radar_params_->rawMessage);
 
     videoMsg.CommonHeader.wCOUNTER = rawMsg[4];  // 触发计数器
@@ -90,8 +89,9 @@ void SendVideo::send(RadarParams* radar_params_) {
     videoMsg.RadarVideoHeader.dwTxRelMilliSecondTime_L = dwTemp % 1000 * 1000;
 
 //    for (int ii = 0; ii < WAVE_NUM; ii++) {
-    // for (int ii = WAVE_NUM - 1; ii >= 0; ii--) {
-    for (int ii = end_wave; ii >= start_wave; ii--) {
+    for (int ii = WAVE_NUM - 1; ii >= 0; ii--) {
+
+    // for (int ii = end_wave-1; ii >= start_wave; ii--) {
 
         int sec = dwTemp / 1000 % 60 + timeArray[ii];
 //        cout << "time:" << h << ":" << min << ":" << sec << endl;
@@ -116,7 +116,9 @@ void SendVideo::send(RadarParams* radar_params_) {
 
         // int offset = range_correct + radar_params_->numSamples - 1 + floor((BL-1)/2);
         int offset = range_correct + radar_params_->numSamples - 1;
-        for (int k = 0; k < unMinPRTLen - offset; ++k) {
+
+        int speed_error_count = 0;
+        for (int k = 0; k < unMinPRTLen - offset - 1; ++k) {
             // + system_delay
             auto data_amp = rowData[k + offset];
             data_amp = data_amp * 1.0;
@@ -125,7 +127,7 @@ void SendVideo::send(RadarParams* radar_params_) {
 
             videoMsg.bytVideoData[k] = (unsigned char)data_amp;
             if (rowSpeed[k + offset] >= PULSE_NUM) {
-                cerr << "rowSpeed array index error!" << endl;
+                speed_error_count++;
                 // cout << k << " chennel:" << rowSpeed[k + offset] << endl;
                 rowSpeed[k] = 0;
             }
@@ -134,6 +136,11 @@ void SendVideo::send(RadarParams* radar_params_) {
                 rowSpeed[k] = radar_params_->chnSpeeds[rowSpeed[k + offset]];
             }
 
+        }
+
+        if (speed_error_count > 0)
+        {
+            cerr << speed_error_count << endl;
         }
 
 //        cout << "ii:" << ii << " [rAzm]:" << rAzm << endl;

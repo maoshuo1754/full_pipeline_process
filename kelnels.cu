@@ -380,7 +380,7 @@ __global__ void compute_clutter_kernel(
             float real_sum = 0.0f;
             float imag_sum = 0.0f;
             for (int k = 0; k < queue_size; ++k) {
-                int idx_xt = n - k; // 确保与MATLAB的full卷积一致
+                int idx_xt = n - k;
                 if (idx_xt >= 0 && idx_xt < queue_size) {
                     // x[k] * xt[idx_xt]
                     float real_xk = x[k].x;
@@ -442,7 +442,7 @@ __global__ void compute_clutter_kernel(
         bool std_dev_condition = (zero_magnitude > 6.0f * std_dev);
 
         // **杂波判断**：两个条件都满足
-        clutter[idx] = (conv_condition && std_dev_condition);
+        clutter[idx] =  std_dev_condition && conv_condition;
     }
 }
 
