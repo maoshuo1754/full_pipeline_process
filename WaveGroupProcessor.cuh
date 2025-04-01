@@ -37,7 +37,7 @@ public:
     void cfar(int numSamples);
     void cfar_by_col();
     void processMaxSelection();
-    void getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef, std::vector<int> &detect_rows, int numSamples);
+    void getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef, std::vector<int> &detect_rows, std::vector<int>& chnSpeeds,  int numSamples);
     void resetAddr();
 
 private:
@@ -59,7 +59,8 @@ private:
     cufftComplex* d_data_;           // 原始数据   (wave_num_ x pulse_num_ x range_num_)
     cufftComplex* d_cfar_res_;       // cfar结果  (wave_num_ x pulse_num_ x range_num_)
     float* d_max_results_;           // 选大结果   (wave_num_ x range_num_)
-    int* d_speed_channels_;          // 速度通道   (wave_num_ x range_num_)
+    int* d_speed_channels_;          // 每个距离单元选出来的速度   (wave_num_ x range_num_)
+    int* d_chnSpeeds;                // 多普勒维度对应的速度
     int* d_detect_rows_;             // 需要检测的通道
     bool* d_clutterMap_masked_;      // 杂波图
 

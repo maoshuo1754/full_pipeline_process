@@ -1,5 +1,5 @@
 {
-  "dataPath": "/backup2/data/zhibiao/20250330151414_85GB.dat",
+  "dataPath": "/backup2/data/浙大/20250331200139_128GB.dat",
 
   "0表示文件": "1表示Pcie",
   "dataSource_type": 0,
@@ -19,14 +19,14 @@
   "clutter_db_offset": 0,
 
   "x2": "cfar参数",
-  "cfar_enable": 0,
-  "Pfa_cfar": 1e-6,
+  "cfar_enable": 1,
+  "Pfa_cfar": 1e-7,
   "numGuardCells": 4,
   "numRefCells": 64,
   "cfar_db_offset": 0,
 
-  "num_threads": 3,
-  "normFactor": 4,
+  "num_threads": 4,
+  "normFactor": 2,
 
   "local_video_ip": "127.0.0.1",
   "local_video_port": 0,
@@ -59,9 +59,9 @@
 
   "debug_mode": 0,
   "start_frame": 1,
-  "end_frame": 12,
-  "start_wave": 4,
-  "end_wave": 28,
+  "end_frame": 138,
+  "start_wave": 15,
+  "end_wave": 17,
 
   "file_data_delay": 0,
 

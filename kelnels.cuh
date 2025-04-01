@@ -19,7 +19,7 @@ __global__ void moveAndZeroKernel(cufftComplex* data, int m, int n, int start, i
 
 __global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChannels, bool* maskPtr, int nrows, int ncols);
 
-__global__ void maxKernel2D(cufftComplex *data, float *maxValues, int *speedChannels,
+__global__ void maxKernel2D(cufftComplex *data, float *maxValues, int *speedChannels, int *d_chnSpeeds,
                            int *d_rows, int num_rows, int nrows, int ncols, int nwaves);
 
 

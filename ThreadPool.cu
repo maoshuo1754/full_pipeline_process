@@ -215,7 +215,8 @@ void ThreadPool::getRadarParams(std::unique_ptr<WaveGroupProcessor>& waveGroupPr
         radar_params_->getCoef();
     }
 
-    waveGroupProcessor->getCoef(radar_params_->pcCoef, radar_params_->cfarCoef, radar_params_->detect_rows, radar_params_->numSamples);
+    // ,
+    waveGroupProcessor->getCoef(radar_params_->pcCoef, radar_params_->cfarCoef, radar_params_->detect_rows,  radar_params_->chnSpeeds, radar_params_->numSamples);
 }
 
 

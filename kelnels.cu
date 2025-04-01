@@ -145,7 +145,7 @@ __global__ void moveAndZeroKernel(cufftComplex* data, int m, int n, int start, i
 // }
 
 // 核函数：只遍历指定的 row 索引来找最大值
-__global__ void maxKernel2D(cufftComplex *data, float *maxValues, int *speedChannels,
+__global__ void maxKernel2D(cufftComplex *data, float *maxValues, int *speedChannels, int *d_chnSpeeds,
                            int *d_rows, int num_rows, int nrows, int ncols, int nwaves) {
     int col = blockIdx.x * blockDim.x + threadIdx.x;  // 列索引（range 维度）
     int wave = blockIdx.y * blockDim.y + threadIdx.y; // 波索引（wave 维度）
@@ -167,7 +167,7 @@ __global__ void maxKernel2D(cufftComplex *data, float *maxValues, int *speedChan
         // 输出结果
         int out_idx = wave * ncols + col;
         maxValues[out_idx] = (maxChannel == -1) ? 0 : maxVal; // 如果没有有效值，返回 0
-        speedChannels[out_idx] = maxChannel;                  // 记录对应的通道索引
+        speedChannels[out_idx] = d_chnSpeeds[maxChannel];                  // 记录对应的通道索引
     }
 }
 

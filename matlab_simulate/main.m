@@ -1,3 +1,5 @@
+%% 此代码用于将c++debug输出的文件显示CFAR后结果
+
 clear;clc;
 close all;
 
@@ -35,7 +37,7 @@ PCcoef = fft(PCcoef, NFFT);
 PCcoef = repmat(PCcoef, pulseNum, 1);
 
 %% 数据读取
-folderPath = '20250329094403_512GB_frame_1_12_pulse_11_14_2048x4096';
+folderPath = '/home/csic724/CLionProjects/PcieReader/cmake-build-release/20250331200139_128GB_frame_1_138_pulse_15_17_2048x4096';
 
 fid = fopen(folderPath, 'rb');
 if fid == -1
@@ -90,8 +92,10 @@ for ii = 1:fileInfos('numFrames')
     A = A ./ 1024 .* 255;
     % Get maximum along wave dimension (3rd dim)
     % A = max(A, [], 1);
+    
     % A = permute(A, [3, 2, 1]);
     imagesc((1:length(A))*4.8, azi, A);
+    
     title([num2str(ii), '帧']);
     xlabel('距离(m)');ylabel('方位角');
     saveas(gcf, ['res/', num2str(ii), '.png']);

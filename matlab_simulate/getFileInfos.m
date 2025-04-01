@@ -20,7 +20,7 @@ function fileInfos = getFileInfos(filePath)
     totalElements = waveNum * numPulse * numRange * 2; 
 
     % time - IQ - time - IQ
-    numFrames = fileSize / (totalElements *4 + 4);
+    numFrames = fileSize / (totalElements * 4 + 4);
     
     fileInfos = containers.Map();
     fileInfos('dataname') = suffix{1};

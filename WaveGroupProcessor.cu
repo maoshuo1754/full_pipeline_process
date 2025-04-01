@@ -54,6 +54,7 @@ void WaveGroupProcessor::allocateDeviceMemory() {
     checkCudaErrors(cudaMalloc(&d_is_masked_, wave_num_ * range_num_));
     checkCudaErrors(cudaMalloc(&d_clutterMap_masked_, wave_num_ * pulse_num_ * range_num_));
     checkCudaErrors(cudaMemset(d_clutterMap_masked_, 1, wave_num_ * pulse_num_ * range_num_));
+    checkCudaErrors(cudaMalloc(&d_chnSpeeds, pulse_num_ * sizeof(int)));
     checkCudaErrors(cudaMalloc(&d_unpack_data_, THREADS_MEM_SIZE));
     checkCudaErrors(cudaMalloc(&d_headPositions_, sizeof(int) * pulse_num_ * 1.1));
     checkCudaErrors(cudaMalloc(&d_data_, sizeof(cufftComplex) * total_size));
@@ -75,6 +76,7 @@ void WaveGroupProcessor::freeDeviceMemory() {
     checkCudaErrors(cudaFree(d_filtered_coeffs_));
     checkCudaErrors(cudaFree(d_is_masked_));
     checkCudaErrors(cudaFree(d_clutterMap_masked_));
+    checkCudaErrors(cudaFree(d_chnSpeeds));
     checkCufftErrors(cufftDestroy(pc_plan_));
     checkCudaErrors(cudaFree(d_unpack_data_));
     checkCudaErrors(cudaFree(d_headPositions_));
@@ -113,7 +115,7 @@ cufftComplex* WaveGroupProcessor::getData()
     return d_data_;
 }
 
-void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef, std::vector<int> &detect_rows, int numSamples) {
+void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef, std::vector<int> &detect_rows, std::vector<int>& chnSpeeds, int numSamples) {
     if (coef_is_initialized_) {
         return;
     }
@@ -123,6 +125,7 @@ void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<
     clutterMap_range_num_ = ceil(clutter_map_range / delta_range) + numSamples + range_correct;
     checkCudaErrors(cudaMemcpy(d_pc_coeffs_, pcCoef.data(), NFFT * sizeof(cufftComplex), cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy(d_cfar_coeffs_, cfarCoef.data(), NFFT * sizeof(cufftComplex), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(d_chnSpeeds, chnSpeeds.data(), pulse_num_ * sizeof(int), cudaMemcpyHostToDevice));
     detect_rows_num_ = detect_rows.size();
     checkCudaErrors(cudaMemcpy(d_detect_rows_, detect_rows.data(), detect_rows_num_ * sizeof(int), cudaMemcpyHostToDevice));
 
@@ -376,6 +379,7 @@ void WaveGroupProcessor::processMaxSelection() {
         d_data_ + offset,           // 输入数据
         d_max_results_ + offset2,    // 最大值输出
         d_speed_channels_ + offset2, // 通道索引输出
+        d_chnSpeeds,
         d_detect_rows_,    // 通道范围（row 索引数组）
         detect_rows_num_,  // 通道数量
         pulse_num_,        // 总行数
