@@ -28,7 +28,8 @@ public:
     void getResult(float* h_max_results_, int* h_speed_channels_);
     void unpackData(const int* headPositions);
     void streamSynchronize();
-    void processPulseCompression(int numSamples);
+    void fullPipelineProcess(float scale);
+    void processPulseCompression();
     void processMTI();
     void processCoherentIntegration(float scale);
     void processFFTshift();
@@ -63,6 +64,7 @@ private:
     int* d_chnSpeeds;                // 多普勒维度对应的速度
     int* d_detect_rows_;             // 需要检测的通道
     bool* d_clutterMap_masked_;      // 杂波图
+    int cur_wave_;                   // 正在处理的波束号
 
     int detect_rows_num_;            // 需要检测的通道数
     int clutterMap_range_num_;          // 做杂波图的距离单元数

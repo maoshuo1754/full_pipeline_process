@@ -125,26 +125,7 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
 
     getRadarParams(waveGroupProcessor, thisCount);
 
-    waveGroupProcessor->processPulseCompression(radar_params_->numSamples);
-    if (MTI_enable)
-    {
-        waveGroupProcessor->processMTI();
-    }
-
-    // waveGroupProcessor->processFFTshift();
-
-    waveGroupProcessor->processCoherentIntegration(radar_params_->scale);
-
-    waveGroupProcessor->processFFTshift();
-    if (clutter_map_enable)
-    {
-        waveGroupProcessor->processClutterMap();
-    }
-
-    waveGroupProcessor->processCFAR();
-    // waveGroupProcessor->cfar(radar_params_->numSamples);
-    // waveGroupProcessor->cfar_by_col();
-    waveGroupProcessor->processMaxSelection();
+    waveGroupProcessor->fullPipelineProcess(radar_params_->scale);
 
     waveGroupProcessor->getResult(radar_params_->h_max_results_, radar_params_->h_speed_channels_);
     sender.send(radar_params_);
