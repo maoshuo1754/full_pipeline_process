@@ -9,7 +9,7 @@
 #include "fdacoefs.h"
 #include "utils.h"
 
-SendVideo::SendVideo() { // , outfile("detectVideo.txt")
+SendVideo::SendVideo() { // ,:outfile("azi.txt")
 
     m_sendBufOri = new char[1024 * 1024];
     unMinPRTLen = RANGE_NUM;
@@ -77,7 +77,7 @@ void SendVideo::send(RadarParams* radar_params_) {
     auto rawMsg = reinterpret_cast<uint32*>(radar_params_->rawMessage);
 
     videoMsg.CommonHeader.wCOUNTER = rawMsg[4];  // 触发计数器
-    dwTemp = rawMsg[6] / 10 + 8*60*60*1000; // FPGA时间 //0.1ms->1ms + 8h
+    dwTemp = rawMsg[6] / 10 ; // FPGA时间 //0.1ms->1ms + 8h
     // cout << "dwTemp = " << dwTemp << endl;
     videoMsg.CommonHeader.dwTxSecondTime = dwTemp / 1000;
     videoMsg.CommonHeader.dwTxMicroSecondTime = dwTemp % 1000 * 1000;
@@ -88,11 +88,7 @@ void SendVideo::send(RadarParams* radar_params_) {
     videoMsg.RadarVideoHeader.dwTxRelMilliSecondTime_H = dwTemp / 1000;
     videoMsg.RadarVideoHeader.dwTxRelMilliSecondTime_L = dwTemp % 1000 * 1000;
 
-//    for (int ii = 0; ii < WAVE_NUM; ii++) {
     for (int ii = WAVE_NUM - 1; ii >= 0; ii--) {
-
-    // for (int ii = end_wave-1; ii >= start_wave; ii--) {
-
         int sec = dwTemp / 1000 % 60 + timeArray[ii];
 //        cout << "time:" << h << ":" << min << ":" << sec << endl;
 

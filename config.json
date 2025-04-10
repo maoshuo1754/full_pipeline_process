@@ -1,5 +1,5 @@
 {
-  "dataPath": "/backup2/data/浙大/20250331200139_128GB.dat",
+  "dataPath": "/backup2/data/20250402/20250402102441_256GB.dat",
 
   "0表示文件": "1表示Pcie",
   "dataSource_type": 0,
@@ -19,14 +19,14 @@
   "clutter_db_offset": 0,
 
   "x2": "cfar参数",
-  "cfar_enable": 1,
+  "cfar_enable": 0,
   "Pfa_cfar": 1e-7,
   "numGuardCells": 4,
   "numRefCells": 64,
   "cfar_db_offset": 0,
 
   "num_threads": 4,
-  "normFactor": 2,
+  "normFactor": 4,
 
   "local_video_ip": "127.0.0.1",
   "local_video_port": 0,
@@ -59,14 +59,14 @@
 
   "debug_mode": 0,
   "start_frame": 1,
-  "end_frame": 138,
-  "start_wave": 15,
-  "end_wave": 17,
+  "end_frame": 220,
+  "start_wave": 10,
+  "end_wave": 18,
 
   "file_data_delay": 0,
 
   "速度绝对值在v1和v2之间": "的通道才会参与选大",
-  "v1": 5,
+  "v1": 0.3,
   "v2": 18,
 
   "0表示质心法": "1表示选大",
