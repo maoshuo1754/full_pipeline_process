@@ -32,6 +32,7 @@ public:
     void processPulseCompression();
     void processMTI();
     void processCoherentIntegration(float scale);
+    void clutterNoiseClassify();
     void processFFTshift();
     void processClutterMap();
     void processCFAR();

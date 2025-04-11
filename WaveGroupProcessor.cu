@@ -211,6 +211,7 @@ void WaveGroupProcessor::fullPipelineProcess(float scale)
             this->processMTI();
         }
         this->processCoherentIntegration(scale);
+        this->clutterNoiseClassify();
         this->processFFTshift();
         if (clutter_map_enable)
         {
@@ -262,22 +263,21 @@ void WaveGroupProcessor::processCoherentIntegration(float scale) {
     // 抵消脉压增益，同时除以range_num_是ifft之后必须除以ifft才能和matlab结果一样
     int size = pulse_num_ * range_num_;
     thrust::transform(exec_policy_, thrust_data_, thrust_data_ + size, thrust_data_, ScaleFunctor(scale / range_num_ / normFactor));
+}
 
-
-    if (cur_wave_ == 16)
-    {
-        static int count = 0;
-        count++;
-        std::string filename1 = "WaveGroupProcessor_" + std::to_string(count) + ".txt";
-        std::string filename2 = "bool" + std::to_string(count) + ".txt";
-        this->streamSynchronize();
-        writeComplexToFile(d_data_ + 16*pulse_num_*range_num_, pulse_num_, range_num_, filename1);
-        gpu_manager.update_queues(d_data_, cur_wave_);
-        gpu_manager.get_clutter_copy(d_is_masked_, wave_num_ * range_num_);
-        this->streamSynchronize();
-        writeBoolToFile(d_is_masked_ + 16*range_num_, 1, range_num_, filename2);
-    }
-
+void WaveGroupProcessor::clutterNoiseClassify()
+{
+    static int count = 0;
+    count++;
+    // std::string filename1 = "WaveGroupProcessor_" + std::to_string(count) + ".txt";
+    // std::string filename2 = "bool" + std::to_string(count) + ".txt";
+    this->streamSynchronize();
+    // writeComplexToFile(d_data_ + 16*pulse_num_*range_num_, pulse_num_, range_num_, filename1);
+    gpu_manager.update_queues(d_data_, cur_wave_);
+    // 获取杂噪分类的结果到d_is_masked_
+    gpu_manager.get_clutter_copy(d_is_masked_, wave_num_ * range_num_);
+    // this->streamSynchronize();
+    // writeBoolToFile(d_is_masked_ + 16*range_num_, 1, range_num_, filename2);
 }
 
 void WaveGroupProcessor::processFFTshift()

@@ -63,7 +63,7 @@
   "start_wave": 4,
   "end_wave": 28,
 
-  "file_data_delay": 200,
+  "file_data_delay": 0,
 
   "速度绝对值在v1和v2之间": "的通道才会参与选大",
   "v1": 0.3,
