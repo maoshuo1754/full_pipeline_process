@@ -321,44 +321,42 @@ __global__ void cfar_col_kernel(const cufftComplex* data, cufftComplex* cfar_sig
 // CUDA 内核：更新队列（0速通道和20个速度通道）
 __global__ void update_queues_kernel(
     const cufftComplex* frame, cufftComplex* queues, cufftComplex* queues_speed, int* indices,
-    int wave_num, int pulse_num, int range_num, int queue_size, int speed_channels
+    int pulse_num, int range_num, int queue_size, int speed_channels
 ) {
-    int w = blockIdx.x * blockDim.x + threadIdx.x;  // 波数索引
-    int r = blockIdx.y * blockDim.y + threadIdx.y;  // 距离索引
-    if (w < wave_num && r < range_num) {
-        int idx = w * range_num + r;                // 全局索引
-        int current_idx = indices[idx];             // 当前写入位置
-
-        // 更新0速通道队列
-        int zero_offset = w * pulse_num * range_num + 0 * range_num + r; // 0速通道位置
-        int queue_base = w * range_num * queue_size + r * queue_size;
+    int r = blockIdx.y * blockDim.y + threadIdx.y;
+    if (r < range_num) {
+        int idx = r;
+        int current_idx = indices[idx];
+        int queue_base = r * queue_size;
         int write_idx = queue_base + current_idx;
-        queues[write_idx] = frame[zero_offset];     // 写入0速通道队列
 
-        // 更新20个速度通道队列，从 (PULSE_NUM/2 - 10) 开始
-        int speed_start = (pulse_num / 2 - 10);     // 速度通道起始索引
+        // Update zero-speed channel
+        int zero_offset = r;
+        queues[write_idx] = frame[zero_offset];
+
+        // Update speed channels
+        int speed_start = (pulse_num / 2 - speed_channels / 2);
         for (int s = 0; s < speed_channels; ++s) {
             int speed_idx = speed_start + s;
-            int speed_offset = w * pulse_num * range_num + speed_idx * range_num + r;
-            int queue_speed_base = w * range_num * speed_channels * queue_size + r * speed_channels * queue_size + s * queue_size;
+            int speed_offset = speed_idx * range_num + r;
+            int queue_speed_base = r * speed_channels * queue_size + s * queue_size;
             int write_speed_idx = queue_speed_base + current_idx;
-            queues_speed[write_speed_idx] = frame[speed_offset]; // 写入速度通道队列
+            queues_speed[write_speed_idx] = frame[speed_offset];
         }
 
-        indices[idx] = (current_idx + 1) % queue_size; // 更新索引（循环队列）
+        indices[idx] = (current_idx + 1) % queue_size;
     }
 }
 
 // CUDA 内核：计算自卷积、标准差并判断杂波
 __global__ void compute_clutter_kernel(
     const cufftComplex* queues, const cufftComplex* queues_speed, const int* indices, bool* clutter,
-    int wave_num, int range_num, int queue_size, int speed_channels
+    int range_num, int queue_size, int speed_channels
 ) {
-    int w = blockIdx.x * blockDim.x + threadIdx.x; // 波数索引
     int r = blockIdx.y * blockDim.y + threadIdx.y; // 距离索引
-    if (w < wave_num && r < range_num) {
-        int idx = w * range_num + r; // 全局索引
-        int queue_base = w * range_num * queue_size + r * queue_size;
+    if (r < range_num) {
+        int idx = r;
+        int queue_base = r * queue_size;
 
         // **自卷积计算**
         // 提取0速通道队列数据
@@ -377,21 +375,17 @@ __global__ void compute_clutter_kernel(
         // 计算自卷积 conv(x, xt)，并取模
         float conv_result[2 * CLUTTER_QUEUE_SIZE - 1] = {0};
         for (int n = 0; n < 2 * queue_size - 1; ++n) {
-            float real_sum = 0.0f;
-            float imag_sum = 0.0f;
+            float real_sum = 0.0f, imag_sum = 0.0f;
             for (int k = 0; k < queue_size; ++k) {
                 int idx_xt = n - k;
                 if (idx_xt >= 0 && idx_xt < queue_size) {
-                    // x[k] * xt[idx_xt]
-                    float real_xk = x[k].x;
-                    float imag_xk = x[k].y;
-                    float real_xt = xt[idx_xt].x;
-                    float imag_xt = xt[idx_xt].y;
-                    real_sum += real_xk * real_xt - imag_xk * imag_xt; // 实部
-                    imag_sum += real_xk * imag_xt + imag_xk * real_xt; // 虚部
+                    float real_xk = x[k].x, imag_xk = x[k].y;
+                    float real_xt = xt[idx_xt].x, imag_xt = xt[idx_xt].y;
+                    real_sum += real_xk * real_xt - imag_xk * imag_xt;
+                    imag_sum += real_xk * imag_xt + imag_xk * real_xt;
                 }
             }
-            conv_result[n] = sqrtf(real_sum * real_sum + imag_sum * imag_sum); // 模
+            conv_result[n] = sqrtf(real_sum * real_sum + imag_sum * imag_sum);
         }
 
         // 计算归一化因子 sum(abs(x(i) .* xt(i)))
@@ -405,26 +399,20 @@ __global__ void compute_clutter_kernel(
 
         // 归一化并统计大于3dB的点数
         int count_above_3db = 0;
-        const float threshold = pow(10, -3.0/20); // 10^(-3/10) ≈ 0.5012，与MATLAB一致
+        const float threshold = powf(10, -3.0f / 20);
         for (int n = 0; n < 2 * queue_size - 1; ++n) {
             float normalized = (norm_sum != 0) ? (conv_result[n] / norm_sum) : 0.0f;
-            if (normalized > threshold) {
-                count_above_3db++;
-            }
+            if (normalized > threshold) count_above_3db++;
         }
-
-        // 自卷积条件：count_above_3db > 1
         bool conv_condition = (count_above_3db > 1);
 
-        // **标准差计算**
-        // 计算所有 speed_channels * queue_size 个点的总标准差
-        float sum = 0.0f;
-        float sum_sq = 0.0f;
+        // Standard deviation
+        float sum = 0.0f, sum_sq = 0.0f;
         for (int s = 0; s < speed_channels; ++s) {
-            int queue_speed_base = w * range_num * speed_channels * queue_size + r * speed_channels * queue_size + s * queue_size;
+            int queue_speed_base = r * speed_channels * queue_size + s * queue_size;
             for (int i = 0; i < queue_size; ++i) {
                 cufftComplex val = queues_speed[queue_speed_base + i];
-                float magnitude = sqrtf(val.x * val.x + val.y * val.y); // 幅度
+                float magnitude = sqrtf(val.x * val.x + val.y * val.y);
                 sum += magnitude;
                 sum_sq += magnitude * magnitude;
             }
@@ -441,8 +429,7 @@ __global__ void compute_clutter_kernel(
         // 标准差条件：zero_magnitude > 6 * std_dev
         bool std_dev_condition = (zero_magnitude > 6.0f * std_dev);
 
-        // **杂波判断**：两个条件都满足
-        clutter[idx] =  std_dev_condition && conv_condition;
+        clutter[idx] = std_dev_condition && conv_condition;
     }
 }
 

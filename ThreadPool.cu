@@ -105,10 +105,10 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
     int thisCount = count;
     cout << "count:" << thisCount << endl;
 
-    // if (thisCount < 3 || thisCount > 20)
-    // {
-    //     return;
-    // }
+    if (thisCount < 3 || thisCount > 20)
+    {
+        return;
+    }
     int numHeads = headPositions[threadID].size();       // 2048
     int headLength = headPositions[threadID][1] - headPositions[threadID][0];
     int rangeNum = floor((headLength - DATA_OFFSET) / WAVE_NUM / 4.0);

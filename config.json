@@ -12,14 +12,14 @@
   "MTI_pulse_num": 2,
 
   "x1": "杂波图参数",
-  "clutter_map_enable": 0,
+  "clutter_map_enable": 1,
   "Pfa_clutter_map": 1e-7,
   "forgetting_factor": "15/16",
   "clutter_map_range": 4500,
   "clutter_db_offset": 0,
 
   "x2": "cfar参数",
-  "cfar_enable": 1,
+  "cfar_enable": 0,
   "Pfa_cfar": 1e-7,
   "numGuardCells": 4,
   "numRefCells": 64,
@@ -63,7 +63,7 @@
   "start_wave": 4,
   "end_wave": 28,
 
-  "file_data_delay": 0,
+  "file_data_delay": 200,
 
   "速度绝对值在v1和v2之间": "的通道才会参与选大",
   "v1": 0.3,

@@ -165,7 +165,6 @@ void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<
     checkCufftErrors(cufftExecC2C(pc_plan_, d_filtered_coeffs_, d_filtered_coeffs_, CUFFT_FORWARD));
 
     delete[] h_filtered_coeffs_;
-
     delete[] h_isMasked;
 }
 
@@ -264,16 +263,21 @@ void WaveGroupProcessor::processCoherentIntegration(float scale) {
     int size = pulse_num_ * range_num_;
     thrust::transform(exec_policy_, thrust_data_, thrust_data_ + size, thrust_data_, ScaleFunctor(scale / range_num_ / normFactor));
 
-    // static int count = 0;
-    // count++;
-    // std::string filename1 = "WaveGroupProcessor_" + std::to_string(count) + ".txt";
-    // std::string filename2 = "bool" + std::to_string(count) + ".txt";
-    // this->streamSynchronize();
-    // writeComplexToFile(d_data_ + 16*pulse_num_*range_num_, pulse_num_, range_num_, filename1);
-    // gpu_manager.update_queues(d_data_);
-    // gpu_manager.get_clutter_copy(d_is_masked_, wave_num_ * range_num_);
-    // this->streamSynchronize();
-    // writeBoolToFile(d_is_masked_ + 16*range_num_, 1, range_num_, filename2);
+
+    if (cur_wave_ == 16)
+    {
+        static int count = 0;
+        count++;
+        std::string filename1 = "WaveGroupProcessor_" + std::to_string(count) + ".txt";
+        std::string filename2 = "bool" + std::to_string(count) + ".txt";
+        this->streamSynchronize();
+        writeComplexToFile(d_data_ + 16*pulse_num_*range_num_, pulse_num_, range_num_, filename1);
+        gpu_manager.update_queues(d_data_, cur_wave_);
+        gpu_manager.get_clutter_copy(d_is_masked_, wave_num_ * range_num_);
+        this->streamSynchronize();
+        writeBoolToFile(d_is_masked_ + 16*range_num_, 1, range_num_, filename2);
+    }
+
 }
 
 void WaveGroupProcessor::processFFTshift()
@@ -287,7 +291,7 @@ void WaveGroupProcessor::processFFTshift()
 
 void WaveGroupProcessor::processClutterMap()
 {
-    gpu_manager.processClutterMap(d_data_, d_clutterMap_masked_, clutterMap_range_num_);
+    gpu_manager.processClutterMap(d_data_, d_clutterMap_masked_, cur_wave_, clutterMap_range_num_);
 }
 
 
@@ -338,9 +342,12 @@ void WaveGroupProcessor::processCFAR() {
 
 void WaveGroupProcessor::cfar(int numSamples)  {
     double alpha = (numRefCells * 2 * (pow(Pfa_cfar, -1.0 / (numRefCells * 2)) - 1));
-    size_t offset = start_wave * pulse_num_ * range_num_;
+    size_t offset = cur_wave_ * pulse_num_ * range_num_;
     // .^2
-    int size = CAL_WAVE_NUM * pulse_num_ * range_num_;
+    int size = pulse_num_ * range_num_;
+
+    auto* wavePtr = d_data_ + offset;
+    thrust_data_ = thrust::device_ptr<cufftComplex>(wavePtr);
     thrust::transform(exec_policy_, thrust_data_, thrust_data_ + size, thrust_data_, SquareFunctor());
 
     // Configure the CUDA kernel launch parameters
@@ -348,10 +355,10 @@ void WaveGroupProcessor::cfar(int numSamples)  {
     int threadsPerBlock = range_num_ / colsPerThread; // 每个线程块中的线程数
     int blocksPerRow = (range_num_ + colsPerThread - 1) / colsPerThread / threadsPerBlock; // 每行的线程块数
     dim3 blockDim(threadsPerBlock, 1); // 线程块大小：1 行 x 32 列
-    int nrows = CAL_WAVE_NUM * pulse_num_;
+    int nrows = pulse_num_;
     dim3 gridDim(blocksPerRow, nrows); // 网格大小：每行 block 数 x 总行数
 
-    cfarKernel<<<gridDim, blockDim, 0, stream_>>>(d_data_+offset, d_cfar_res_+offset, nrows, range_num_, alpha, numGuardCells,
+    cfarKernel<<<gridDim, blockDim, 0, stream_>>>(d_data_+offset, d_cfar_res_, nrows, range_num_, alpha, numGuardCells,
                                                   numRefCells, numSamples-1, numSamples+RANGE_NUM-range_correct);
 }
 

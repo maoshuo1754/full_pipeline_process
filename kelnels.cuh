@@ -33,12 +33,12 @@ __global__ void cfar_col_kernel(const cufftComplex* data, cufftComplex* cfar_sig
 
 __global__ void update_queues_kernel(
     const cufftComplex* frame, cufftComplex* queues, cufftComplex* queues_speed, int* indices,
-    int wave_num, int pulse_num, int range_num, int queue_size, int speed_channels
+    int pulse_num, int range_num, int queue_size, int speed_channels
 );
 
 __global__ void compute_clutter_kernel(
     const cufftComplex* queues, const cufftComplex* queues_speed, const int* indices, bool* clutter,
-    int wave_num, int range_num, int queue_size, int speed_channels
+    int range_num, int queue_size, int speed_channels
 );
 
 __global__ void processClutterMapKernel(cufftComplex* d_data, float* d_clutter_map, bool* d_clutterMap_masked, size_t size, int range_num, float alpha, float forgetting_factor, float clutter_db_offset);

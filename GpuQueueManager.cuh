@@ -30,7 +30,7 @@ public:
     GpuQueueManager& operator=(const GpuQueueManager&) = delete;
 
     // 更新队列并在必要时进行杂波判断
-    void update_queues(const cufftComplex* d_frame);
+    void update_queues(const cufftComplex* d_frame, int wave_idx);
 
     // 获取当前杂波判断数组的指针（线程安全）
     bool* get_clutter() {
@@ -47,7 +47,7 @@ public:
         cudaMemcpy(device_buffer, d_clutter, WAVE_NUM * NFFT * sizeof(bool), cudaMemcpyDeviceToDevice);
     }
 
-    void processClutterMap(cufftComplex* d_data, bool* d_clutterMap_masked_, int clutterMap_range_num);
+    void processClutterMap(cufftComplex* d_data, bool* d_clutterMap_masked_, int wave_idx, int clutterMap_range_num);
 
 private:
     cufftComplex* d_queues = nullptr;       // 显存中的0速通道队列数据
@@ -59,7 +59,7 @@ private:
     std::mutex clutter_mutex_;              // 保护 d_clutter 访问的互斥锁
 
     // 下面是杂波图的参数
-    float* d_clutter_map = nullptr;         // 杂波图
+    float* d_clutter_map = nullptr;         // 杂波图历史记录
     double alpha;
     std::mutex clutter_map_mutex_;          // 保护 d_clutter_map 的访问互斥锁
 
@@ -87,10 +87,10 @@ private:
     }
 
     // 启动更新队列的 CUDA 内核
-    void launch_update_kernel(const cufftComplex* d_frame);
+    void launch_update_kernel(const cufftComplex* d_frame, int wave_idx);
 
     // 启动杂波判断的 CUDA 内核
-    void launch_clutter_kernel();
+    void launch_clutter_kernel(int wave_idx);
 };
 
 
