@@ -10,9 +10,9 @@
 #include <atomic>
 
 #define WAVE_NUM 32             // 波束数
-#define PULSE_NUM 2000          // 一个波束中的脉冲数
+#define PULSE_NUM 2048          // 一个波束中的脉冲数
 #define NFFT 4096               // 一个脉冲中fft的点数，计算方法为 NFFT = 2 ** nextpow2(RANGE_NUM + numSamples - 1)
-#define RANGE_NUM  3749         // 一个脉冲的距离单元数
+#define RANGE_NUM  3748         // 一个脉冲的距离单元数
 #define CFAR_LENGTH 16          // 分段fft长度
 #define CUDA_BLOCK_SIZE 256     // cuda运算分块长度
 #define CLUTTER_QUEUE_SIZE 10
