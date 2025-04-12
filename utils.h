@@ -38,14 +38,56 @@ unsigned int FourChars2Uint(char *startAddr);
 
 void saveToBinaryFile(const cufftComplex* d_data, size_t size, const char* filename);
 
-void writeComplexToFile(cufftComplex* d_data_, int pulse_num_, int range_num_, const std::string& filename);
-
-void writeFloatToFile(float* d_data_, int pulse_num_, int range_num_, const std::string& filename);
-
-void writeBoolToFile(bool* d_data_, int wave_num_, int range_num_, const std::string& filename);
-
 std::vector<cufftComplex> readFilterFromFile(const std::string& filename);
 
 double getClutterMapAlpha(double q, double P_fa);
+
+// 枚举用于标识数据类型
+enum class DataType : int {
+    COMPLEX = 0,
+    INT = 1,
+    FLOAT = 2,
+    BOOL = 3
+};
+
+// 模板函数：将设备端数组写入二进制文件
+template <typename T>
+void writeArrayToFile(T* d_data_, int rows_, int cols_, const std::string& filename) {
+    T* h_data_ = new T[rows_ * cols_];
+    cudaMemcpy(h_data_, d_data_, rows_ * cols_ * sizeof(T), cudaMemcpyDeviceToHost);
+
+    std::ofstream outfile(filename, std::ios::out | std::ios::binary);
+    if (!outfile.is_open()) {
+        std::cerr << "Failed to open file: " << filename << std::endl;
+        delete[] h_data_;
+        return;
+    }
+
+    outfile.write(reinterpret_cast<const char*>(&rows_), sizeof(int));
+    outfile.write(reinterpret_cast<const char*>(&cols_), sizeof(int));
+
+    DataType dtype;
+    if (std::is_same<T, cufftComplex>::value || std::is_same<T, float2>::value) {
+        dtype = DataType::COMPLEX;
+    } else if (std::is_same<T, int>::value) {
+        dtype = DataType::INT;
+    } else if (std::is_same<T, float>::value) {
+        dtype = DataType::FLOAT;
+    } else if (std::is_same<T, bool>::value) {
+        dtype = DataType::BOOL;
+    } else {
+        std::cerr << "Unsupported data type!" << std::endl;
+        outfile.close();
+        delete[] h_data_;
+        return;
+    }
+    outfile.write(reinterpret_cast<const char*>(&dtype), sizeof(int));
+
+    outfile.write(reinterpret_cast<const char*>(h_data_), rows_ * cols_ * sizeof(T));
+
+    outfile.close();
+    delete[] h_data_;
+    std::cout << "================================ file write finished! (" << filename << ")" << std::endl;
+}
 
 #endif //CUDAPROJECT_UTILS_H

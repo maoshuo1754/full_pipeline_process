@@ -1,8 +1,8 @@
 {
-  "dataPath": "/backup2/data/20250402/20250402102441_256GB.dat",
+  "dataPath": "/backup2/data/zhibiao/20250325085956_256GB.dat",
 
   "0表示文件": "1表示Pcie",
-  "dataSource_type": 1,
+  "dataSource_type": 0,
 
   "THREADS_MEM_SIZE": 1073741824,
 
@@ -12,14 +12,14 @@
   "MTI_pulse_num": 2,
 
   "x1": "杂波图参数",
-  "clutter_map_enable": 0,
+  "clutter_map_enable": 1,
   "Pfa_clutter_map": 1e-7,
   "forgetting_factor": "15/16",
   "clutter_map_range": 4500,
   "clutter_db_offset": 0,
 
   "x2": "cfar参数",
-  "cfar_enable": 1,
+  "cfar_enable": 0,
   "Pfa_cfar": 1e-7,
   "numGuardCells": 4,
   "numRefCells": 64,
