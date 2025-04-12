@@ -211,7 +211,7 @@ void WaveGroupProcessor::fullPipelineProcess(float scale)
             this->processMTI();
         }
         this->processCoherentIntegration(scale);
-        this->clutterNoiseClassify();
+        // this->clutterNoiseClassify();
         this->processFFTshift();
         if (clutter_map_enable)
         {

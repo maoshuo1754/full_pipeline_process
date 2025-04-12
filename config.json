@@ -1,5 +1,5 @@
 {
-  "dataPath": "/backup2/data/zhibiao/20250325085956_256GB.dat",
+  "dataPath": "/backup2/data/北航/20250411165556_128GB_100m.dat",
 
   "0表示文件": "1表示Pcie",
   "dataSource_type": 0,
@@ -19,7 +19,7 @@
   "clutter_db_offset": 0,
 
   "x2": "cfar参数",
-  "cfar_enable": 0,
+  "cfar_enable": 1,
   "Pfa_cfar": 1e-7,
   "numGuardCells": 4,
   "numRefCells": 64,

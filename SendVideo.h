@@ -31,6 +31,7 @@ private:
     Plot plot;
     static double asind(double x);
     ofstream outfile;
+    std::mutex sendMutex;  // 用于保护 send 函数的互斥锁
 };
 
 

@@ -71,6 +71,7 @@ double SendVideo::asind(double x) {
 // - speedChannels: 检查视频每个点从哪个通道选出来的最大值，和detectedVideo大小一样
 
 void SendVideo::send(RadarParams* radar_params_) {
+    std::lock_guard<std::mutex> lock(sendMutex);  // 锁定互斥锁，函数退出时自动解锁
     uint32 dwTemp;
     int nAzmCode;
     float rAzm;
