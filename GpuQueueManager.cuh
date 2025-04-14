@@ -8,7 +8,6 @@
 #include <cuda_runtime.h>
 #include <cufft.h>
 #include <vector>
-#include "CudaMatrix.h"
 #include "Config.h"
 #include "utils.h"
 #include <thrust/execution_policy.h>

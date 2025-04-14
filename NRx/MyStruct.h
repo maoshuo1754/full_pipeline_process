@@ -416,7 +416,7 @@ typedef struct tagNRX_RadarVideo_Head
     INT32 nChannelSpeed;							//通道速度	速度用补码表示，LSB = 0.1m/s  0xFFFF时无效
     UINT16 wChannelCount;							//通道序号	0xFF时无效
     UINT16 wReserved5;								//RES5	预留
-    UINT8 wReserved6[16];								//RES6[16]
+    UINT8 wReserved6[16];							//RES6[16]
     UINT32 dwReserved7;								//RES7	报文尾预留
     UINT32 dwMsgTailFlag;							//报文尾	0xB5B65678
 }RX_RadarVideo_Head;
@@ -458,8 +458,8 @@ struct VideoToNRXGUI
         RadarVideoHeader.bytSubPulseNumber = 1;
         RadarVideoHeader.bytSubPulseCount = 0;
 
-        RadarVideoHeader.dwSigBWHz = htonl(6e6);
-        RadarVideoHeader.dwSampleFreqHz = htonl(31.25e6);
+        RadarVideoHeader.dwSigBWHz = htonl(bandwidth);
+        RadarVideoHeader.dwSampleFreqHz = htonl(Fs);
         RadarVideoHeader.wPulseWidth0p1us = htons(0xffff);
         RadarVideoHeader.wPRT0p1us = htons(0xffff);
         RadarVideoHeader.nZeroPointPos = htons(0);

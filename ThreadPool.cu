@@ -19,7 +19,6 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue) :
     // 创建并初始化线程
 
     uint64Pattern = *(uint64_t *) pattern;
-    radar_params_ = new RadarParams();
 
     for (int i = 0; i < numThreads; i++) {
         waveGroupProcessors.push_back(std::make_unique<WaveGroupProcessor>(WAVE_NUM, PULSE_NUM, NFFT));
@@ -28,6 +27,7 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue) :
     for (size_t i = 0; i < numThreads; ++i) {
         threads.emplace_back(&ThreadPool::threadLoop, this, i);
     }
+    threads.emplace_back(&ThreadPool::senderThread, this);
 
     if (debug_mode) {
         string input_file_name = dataPath.substr(dataPath.rfind('/') + 1, dataPath.rfind('.') - dataPath.rfind('/') - 1);
@@ -100,10 +100,10 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
 
     waveGroupProcessor->resetAddr();
     cout << "thread " << threadID << " start" << endl;
-    static int count = 0;
-    count++;
-    int thisCount = count;
-    cout << "count:" << thisCount << endl;
+    static int taskCounter = 0;
+    taskCounter++;
+    int taskId = taskCounter;
+    cout << "count:" << taskId << endl;
 
     // if (thisCount < 3 || thisCount > 20)
     // {
@@ -113,93 +113,40 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
     int headLength = headPositions[threadID][1] - headPositions[threadID][0];
     int rangeNum = floor((headLength - DATA_OFFSET) / WAVE_NUM / 4.0);
 
-    // cout << "numHeads: " << numHeads << endl;
-    // cout << "headLength: " << headLength << endl;
     if (numHeads != PULSE_NUM  || rangeNum != RANGE_NUM) {
         cout << "numHeads:" << numHeads << " PULSE_NUM:" << PULSE_NUM << endl;
         cout << "rangeNum:" << rangeNum << " RANGE_NUM:" << RANGE_NUM << endl;
         throw std::runtime_error("The calculated range num is different from that is set");
     }
 
+    waveGroupProcessor->getRadarParams();
     waveGroupProcessor->unpackData(headPositions[threadID].data());
+    waveGroupProcessor->saveToDebugFile(taskId, debugFile);
+    waveGroupProcessor->fullPipelineProcess();
+    waveGroupProcessor->getResult();
 
-    getRadarParams(waveGroupProcessor, thisCount);
-
-    waveGroupProcessor->fullPipelineProcess(radar_params_->scale);
-
-    waveGroupProcessor->getResult(radar_params_->h_max_results_, radar_params_->h_speed_channels_);
-    sender.send(radar_params_);
-
-
+    // 存储结果到共享 map，而不是直接发送
+    {
+        std::lock_guard<std::mutex> lock(mapMutex);
+        resultMap[taskId] = waveGroupProcessor->getParams();
+        sender_cv_.notify_all();  // 通知发送线程
+    }
     cout << "thread " << threadID << " process finished" << endl;
 }
 
-void ThreadPool::getRadarParams(std::unique_ptr<WaveGroupProcessor>& waveGroupProcessor, int frame) {
-    static bool isInit = false;
-    static double delta_range = 0.0;
-    waveGroupProcessor->getPackegeHeader(radar_params_->rawMessage, DATA_OFFSET);
+void ThreadPool::senderThread() {
+    int nextToSend = 1;
+    while (!stop) {
+        std::unique_lock<std::mutex> lock(mapMutex);
+        // 等待直到下一个预期结果可用
+        sender_cv_.wait(lock, [&]{ return resultMap.find(nextToSend) != resultMap.end(); });
 
-    if (debug_mode && frame >= start_frame && frame < end_frame)
-    {
-        writeToDebugFile(radar_params_->rawMessage, waveGroupProcessor->getData());
+        // 发送结果
+        sender.send(resultMap[nextToSend]);
+        resultMap.erase(nextToSend);  // 删除已发送的结果
+        nextToSend++;  // 更新下一个待发送的序号
     }
-
-    if (!isInit) {
-        isInit = true;
-        auto* packageArr = (uint32_t *)(radar_params_->rawMessage);
-
-        auto freqPoint = packageArr[11] & 0x000000ff;
-        radar_params_->lambda = c_speed / ((freqPoint * 10 + initCarryFreq) * 1e6);
-        radar_params_->pulseWidth = (packageArr[13] & 0xfffff) / Fs_system; //5e-6
-        radar_params_->PRT = packageArr[14] / Fs_system;  //120e-6
-        auto fLFMStartWord = packageArr[16];
-        radar_params_->bandWidth = (Fs_system - fLFMStartWord / pow(2.0f, 32) * Fs_system) * 2.0;
-
-        // double delta_v = radar_params_->lambda / radar_params_->PRT / PULSE_NUM / 2.0f; //两个滤波器之间的速度间隔
-        // double blind_v = radar_params_->lambda / radar_params_->PRT / 2.0f;
-        //
-        // for(int i = 0; i < PULSE_NUM; ++i){
-        //     int v;
-        //     if (i < PULSE_NUM / 2){
-        //         v = static_cast<int>(std::round(delta_v * i * 100)) ;
-        //     }
-        //     else{
-        //         v = static_cast<int>(std::round((delta_v * i - blind_v) * 100)) ;
-        //     }
-        //     radar_params_->chnSpeeds.push_back(v);
-        // }
-
-        double fs = 1.0 / radar_params_->PRT;
-        double f_step = fs / PULSE_NUM;
-        radar_params_->chnSpeeds.clear();
-
-        for(int i = 0; i < PULSE_NUM; ++i) {
-            double f = -fs/2.0 + (f_step * i);
-            double v = f * radar_params_->lambda / 2.0;
-            int v_int = static_cast<int>(std::round(v * 100));
-            radar_params_->chnSpeeds.push_back(v_int);
-        }
-
-        radar_params_->detect_rows.clear();
-        radar_params_->numSamples = round(radar_params_->pulseWidth * Fs);
-        for (int row = 0; row < PULSE_NUM; ++row) {
-            int speed = std::abs(radar_params_->chnSpeeds[row]);
-            if (speed >= v1 && speed <= v2) {
-                radar_params_->detect_rows.push_back(row);
-            }
-        }
-        if (delta_range == 0)
-        {
-            delta_range = c_speed / Fs / 2.0;
-        }
-        radar_params_->scale = 1.0f / sqrt(radar_params_->bandWidth * radar_params_->pulseWidth) / PULSE_NUM;
-        radar_params_->getCoef();
-    }
-
-    // ,
-    waveGroupProcessor->getCoef(radar_params_->pcCoef, radar_params_->cfarCoef, radar_params_->detect_rows,  radar_params_->chnSpeeds, radar_params_->numSamples);
 }
-
 
 
 // 通知线程池里的线程开始干活

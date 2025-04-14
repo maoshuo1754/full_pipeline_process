@@ -4,13 +4,60 @@
 #include <cuda_runtime.h>
 #include <cufft.h>
 #include <vector>
-#include "CudaMatrix.h"
 #include "Config.h"
 #include "utils.h"
 #include <thrust/execution_policy.h>
 #include <mutex>
 #include "GpuQueueManager.cuh"
+#include <thrust/device_ptr.h>
+#include "SharedQueue.h"
+using namespace std;
 
+struct RadarParams
+{
+    bool isInit;
+    uint8_t* rawMessage;        // 未解包的报文头
+    double bandWidth;           // 带宽
+    double pulseWidth;          // 脉宽
+    double PRT;                 // 脉冲重复时间
+    double lambda;              // 波长
+    int numSamples;             // 脉压采样点数
+    float scale;                // 归一化系数(脉压和ifft之后)
+    float* h_max_results_;      // 选大结果 (wave_num_ x range_num_)
+    int* h_speed_channels_;     // 速度通道 (wave_num_ x range_num_)
+    vector<int> chnSpeeds;      // 速度通道对应的速度
+    vector<int> detect_rows;           // 速度范围内的行
+    vector<cufftComplex> pcCoef;    // 脉压系数
+    vector<cufftComplex> cfarCoef;  // CFAR系数
+
+
+    RadarParams(): cfarCoef(NFFT, {0, 0}) {
+        isInit = false;
+        rawMessage = new uint8_t[2 * DATA_OFFSET];
+        h_max_results_ = new float[WAVE_NUM * NFFT];
+        h_speed_channels_ = new int[WAVE_NUM * NFFT];
+    }
+
+    ~RadarParams() {
+        delete[] rawMessage;
+        delete[] h_max_results_;
+        delete[] h_speed_channels_;
+    }
+
+    void getCoef() {
+        pcCoef = PCcoef(bandWidth, pulseWidth, Fs, NFFT, hamming_window_enable);
+        numSamples = round(pulseWidth * Fs);
+
+        for(int i = 0; i < numRefCells; i++) {
+            cfarCoef[i].x = 1.0f;
+        }
+
+        int startIdx = numRefCells + numGuardCells * 2 + 1;
+        for(int i = startIdx; i < startIdx + numRefCells; i++) {
+            cfarCoef[i].x = 1.0f;
+        }
+    }
+};
 
 class WaveGroupProcessor {
 public:
@@ -25,10 +72,11 @@ public:
     int copyRawData(const uint8_t* h_raw_data, size_t data_size);
     void getPackegeHeader(uint8_t* h_rawData, size_t data_size);
     cufftComplex* getData();
-    void getResult(float* h_max_results_, int* h_speed_channels_);
+    RadarParams* getParams();
+    void getResult();
     void unpackData(const int* headPositions);
     void streamSynchronize();
-    void fullPipelineProcess(float scale);
+    void fullPipelineProcess();
     void processPulseCompression();
     void processMTI();
     void processCoherentIntegration(float scale);
@@ -39,7 +87,9 @@ public:
     void cfar(int numSamples);
     void cfar_by_col();
     void processMaxSelection();
-    void getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef, std::vector<int> &detect_rows, std::vector<int>& chnSpeeds,  int numSamples);
+    void getRadarParams();
+    void saveToDebugFile(int frame, std::ofstream& debugFile);
+    void getCoef();
     void resetAddr();
 
 private:
@@ -82,6 +132,7 @@ private:
     cufftComplex* d_filtered_coeffs_;// 滤波器系数
     bool* d_is_masked_;              // 需要杂波处理的区域
 
+    RadarParams* radar_params_;
     // 杂波区域判断类
     GpuQueueManager& gpu_manager;    // 共享的单例引用
 

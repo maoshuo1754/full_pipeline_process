@@ -1,5 +1,5 @@
 {
-  "dataPath": "/backup2/data/北航/20250411165556_128GB_100m.dat",
+  "dataPath": "/backup2/data/北航/20250411175735_128GB_20m.dat",
 
   "0表示文件": "1表示Pcie",
   "dataSource_type": 0,
@@ -54,12 +54,13 @@
 
   "Fs_system": 125e6,
   "Fs": 31.25e6,
+  "bandwidth": 6e6,
   "system_delay": 25,
   "initCarryFreq": 8080,
 
   "debug_mode": 0,
-  "start_frame": 1,
-  "end_frame": 220,
+  "start_frame": 15,
+  "end_frame": 130,
   "start_wave": 4,
   "end_wave": 28,
 

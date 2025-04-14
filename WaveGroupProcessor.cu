@@ -14,6 +14,7 @@ WaveGroupProcessor::WaveGroupProcessor(int waveNum, int pulseNum, int rangeNum)
       coef_is_initialized_(false),
       gpu_manager(GpuQueueManager::getInstance())
 {
+    radar_params_ = new RadarParams();
     allocateDeviceMemory();
     setupFFTPlans();
 }
@@ -115,19 +116,24 @@ cufftComplex* WaveGroupProcessor::getData()
     return d_data_;
 }
 
-void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<cufftComplex>& cfarCoef, std::vector<int> &detect_rows, std::vector<int>& chnSpeeds, int numSamples) {
+RadarParams* WaveGroupProcessor::getParams()
+{
+    return radar_params_;
+}
+
+void WaveGroupProcessor::getCoef() {
     if (coef_is_initialized_) {
         return;
     }
     double delta_range = c_speed / Fs / 2.0;
 
     coef_is_initialized_ = true;
-    clutterMap_range_num_ = ceil(clutter_map_range / delta_range) + numSamples + range_correct;
-    checkCudaErrors(cudaMemcpy(d_pc_coeffs_, pcCoef.data(), NFFT * sizeof(cufftComplex), cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemcpy(d_cfar_coeffs_, cfarCoef.data(), NFFT * sizeof(cufftComplex), cudaMemcpyHostToDevice));
-    checkCudaErrors(cudaMemcpy(d_chnSpeeds, chnSpeeds.data(), pulse_num_ * sizeof(int), cudaMemcpyHostToDevice));
-    detect_rows_num_ = detect_rows.size();
-    checkCudaErrors(cudaMemcpy(d_detect_rows_, detect_rows.data(), detect_rows_num_ * sizeof(int), cudaMemcpyHostToDevice));
+    clutterMap_range_num_ = ceil(clutter_map_range / delta_range) + radar_params_->numSamples + range_correct;
+    checkCudaErrors(cudaMemcpy(d_pc_coeffs_, radar_params_->pcCoef.data(), NFFT * sizeof(cufftComplex), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(d_cfar_coeffs_, radar_params_->cfarCoef.data(), NFFT * sizeof(cufftComplex), cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMemcpy(d_chnSpeeds, radar_params_->chnSpeeds.data(), pulse_num_ * sizeof(int), cudaMemcpyHostToDevice));
+    detect_rows_num_ = radar_params_->detect_rows.size();
+    checkCudaErrors(cudaMemcpy(d_detect_rows_, radar_params_->detect_rows.data(), detect_rows_num_ * sizeof(int), cudaMemcpyHostToDevice));
 
     checkCufftErrors(cufftExecC2C(pc_plan_, d_pc_coeffs_, d_pc_coeffs_, CUFFT_FORWARD));
     checkCufftErrors(cufftExecC2C(pc_plan_, d_cfar_coeffs_, d_cfar_coeffs_, CUFFT_FORWARD));
@@ -168,14 +174,14 @@ void WaveGroupProcessor::getCoef(std::vector<cufftComplex>& pcCoef, std::vector<
     delete[] h_isMasked;
 }
 
-void WaveGroupProcessor::getResult(float* h_max_results_, int* h_speed_channels_) {
+void WaveGroupProcessor::getResult() {
     // 选大结果拷贝回内存
-    checkCudaErrors(cudaMemcpyAsync(h_max_results_, d_max_results_, sizeof(float) * WAVE_NUM * NFFT,
+    checkCudaErrors(cudaMemcpyAsync(radar_params_->h_max_results_, d_max_results_, sizeof(float) * WAVE_NUM * NFFT,
                             cudaMemcpyDeviceToHost,
                             stream_));
 
     // 速度通道拷贝回内存
-    checkCudaErrors(cudaMemcpyAsync(h_speed_channels_, d_speed_channels_, sizeof(int) * WAVE_NUM * NFFT,
+    checkCudaErrors(cudaMemcpyAsync(radar_params_->h_speed_channels_, d_speed_channels_, sizeof(int) * WAVE_NUM * NFFT,
                                     cudaMemcpyDeviceToHost,
                                     stream_));
 }
@@ -201,16 +207,19 @@ void WaveGroupProcessor::streamSynchronize() {
     cudaStreamSynchronize(stream_);
 }
 
-void WaveGroupProcessor::fullPipelineProcess(float scale)
+void WaveGroupProcessor::fullPipelineProcess()
 {
+
     for (cur_wave_ = start_wave; cur_wave_ < end_wave; cur_wave_++)
     {
+
         this->processPulseCompression();
+
         if (MTI_enable)
         {
             this->processMTI();
         }
-        this->processCoherentIntegration(scale);
+        this->processCoherentIntegration(radar_params_->scale);
         // this->clutterNoiseClassify();
         this->processFFTshift();
         if (clutter_map_enable)
@@ -402,5 +411,76 @@ void WaveGroupProcessor::processMaxSelection() {
         range_num_,        // 总列数
         1                  // 总波束数
     );
+}
+
+void WaveGroupProcessor::getRadarParams() {
+    static double delta_range = 0.0;
+
+    checkCudaErrors(cudaMemcpyAsync(radar_params_->rawMessage, d_unpack_data_, DATA_OFFSET, cudaMemcpyDeviceToHost, stream_));
+
+    if (!radar_params_->isInit) {
+        radar_params_->isInit = true;
+        auto* packageArr = (uint32_t *)(radar_params_->rawMessage);
+
+        auto freqPoint = packageArr[11] & 0x000000ff;
+        radar_params_->lambda = c_speed / ((freqPoint * 10 + initCarryFreq) * 1e6);
+        radar_params_->pulseWidth = (packageArr[13] & 0xfffff) / Fs_system; //5e-6
+        radar_params_->PRT = packageArr[14] / Fs_system;  //120e-6
+        auto fLFMStartWord = packageArr[16];
+        radar_params_->bandWidth = (Fs_system - fLFMStartWord / pow(2.0f, 32) * Fs_system) * 2.0;
+
+        double fs = 1.0 / radar_params_->PRT;
+        double f_step = fs / PULSE_NUM;
+        radar_params_->chnSpeeds.clear();
+
+        for(int i = 0; i < PULSE_NUM; ++i) {
+            double f = -fs/2.0 + (f_step * i);
+            double v = f * radar_params_->lambda / 2.0;
+            int v_int = static_cast<int>(std::round(v * 100));
+            radar_params_->chnSpeeds.push_back(v_int);
+        }
+
+        radar_params_->detect_rows.clear();
+        radar_params_->numSamples = round(radar_params_->pulseWidth * Fs);
+        for (int row = 0; row < PULSE_NUM; ++row) {
+            int speed = std::abs(radar_params_->chnSpeeds[row]);
+            if (speed >= v1 && speed <= v2) {
+                radar_params_->detect_rows.push_back(row);
+            }
+        }
+        if (delta_range == 0)
+        {
+            delta_range = c_speed / Fs / 2.0;
+        }
+        radar_params_->scale = 1.0f / sqrt(radar_params_->bandWidth * radar_params_->pulseWidth) / PULSE_NUM;
+        radar_params_->getCoef();
+        this->getCoef();
+    }
+}
+
+void WaveGroupProcessor::saveToDebugFile(int frame, ofstream& debugFile)
+{
+    if (debug_mode && frame >= start_frame && frame < end_frame)
+    {
+        int oneWaveSize = PULSE_NUM * NFFT;
+        int waveNum = end_wave - start_wave;
+
+        auto* startAddr = d_data_ + start_wave * oneWaveSize;
+        size_t size = waveNum * oneWaveSize;
+
+        auto* h_data = new cufftComplex[size]; // 在主机上分配内存
+
+        // 将数据从显存复制到主机内存
+        cudaMemcpy(h_data, startAddr, size * sizeof(cufftComplex), cudaMemcpyDeviceToHost);
+
+        // 打开文件并以二进制方式写入
+        auto rawMsg = reinterpret_cast<uint32_t*>(radar_params_->rawMessage);
+        auto time = rawMsg[6] / 10 + 8*60*60*1000; // FPGA时间 //0.1ms->1ms + 8h
+
+        debugFile.write(reinterpret_cast<char*>(&time), 4);
+        debugFile.write(reinterpret_cast<char*>(h_data), size * sizeof(cufftComplex));
+
+        delete[] h_data; // 释放主机内存
+    }
 }
 
