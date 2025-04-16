@@ -215,7 +215,7 @@ void ThreadPool::copyToThreadMemory() {
             if (seqNum != prevSeqNum + 1 && prevSeqNum != 0) {
                 inPacket = false;
                 std::cerr << "Error! Sequence number not continuous!" << prevIndexValue << " " << seqNum << std::endl;
-        }
+            }
             prevSeqNum = seqNum;
 
             startFlag = *(uint8_t *) (sharedQueue->buffer + indexValue + 20) & 0x02;

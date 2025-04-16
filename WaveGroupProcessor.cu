@@ -466,69 +466,96 @@ std::mutex fileMutex;  // 全局互斥锁，用于保护文件写入
 
 void WaveGroupProcessor::saveToDebugFile(int frame, ofstream& debugFile)
 {
-    static bool firstCall = true;  // 静态变量，标记是否为第一次调用
-
-    if (debug_mode && frame >= start_frame && frame < end_frame)
+    if (!debug_mode || frame < start_frame || frame >= end_frame)
     {
-        std::lock_guard<std::mutex> lock(fileMutex);  // 加锁，确保线程安全
-
-        if (firstCall)
-        {
-            // 定义需要保存的参数
-            int pulseNum = PULSE_NUM;  // 假设PULSE_NUM已定义
-            int nfft = NFFT;           // 假设NFFT已定义
-
-            // 写入double类型的参数
-            debugFile.write(reinterpret_cast<char*>(&radar_params_->bandWidth), sizeof(double));
-            debugFile.write(reinterpret_cast<char*>(&radar_params_->pulseWidth), sizeof(double));
-            debugFile.write(reinterpret_cast<char*>(&Fs), sizeof(double));
-            debugFile.write(reinterpret_cast<char*>(&radar_params_->lambda), sizeof(double));
-            debugFile.write(reinterpret_cast<char*>(&radar_params_->PRT), sizeof(double));
-
-            // 写入start_wave和end_wave
-            debugFile.write(reinterpret_cast<char*>(&start_wave), sizeof(int));
-            debugFile.write(reinterpret_cast<char*>(&end_wave), sizeof(int));
-
-            // 写入矩阵大小
-            debugFile.write(reinterpret_cast<char*>(&pulseNum), sizeof(int));
-            debugFile.write(reinterpret_cast<char*>(&nfft), sizeof(int));
-
-            // 计算并保存32个波束的方位
-            std::vector<double> azi(32);
-            for (int ii = 0; ii < 32; ++ii)
-            {
-                int nAzmCode = (azi_table[ii] & 0xffff);
-                if (nAzmCode > 32768)
-                    nAzmCode -= 65536;
-                double rAzm = 249.0633 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0;
-                if (rAzm < 0)
-                    rAzm += 360.0;
-                azi[ii] = rAzm;
-            }
-            debugFile.write(reinterpret_cast<char*>(azi.data()), 32 * sizeof(double));
-
-            firstCall = false;  // 标记首次写入已完成
-        }
-
-        // 以下是原有逻辑，保存当前帧的时间和数据
-        int oneWaveSize = PULSE_NUM * NFFT;
-        int waveNum = end_wave - start_wave;
-
-        auto* startAddr = d_data_ + start_wave * oneWaveSize;
-        size_t size = waveNum * oneWaveSize;
-
-        auto* h_data = new cufftComplex[size];  // 在主机上分配内存
-
-        // 从显存复制数据到主机内存
-        cudaMemcpy(h_data, startAddr, size * sizeof(cufftComplex), cudaMemcpyDeviceToHost);
-
-        // 写入时间和数据
-        auto rawMsg = reinterpret_cast<uint32_t*>(radar_params_->rawMessage);
-        auto time = rawMsg[6] / 10 + 8 * 60 * 60 * 1000;  // FPGA时间，0.1ms转为1ms并加8小时
-
-        debugFile.write(reinterpret_cast<char*>(&time), 4);  // 写入时间（4字节）
-        debugFile.write(reinterpret_cast<char*>(h_data), size * sizeof(cufftComplex));  // 写入数据
-
-        delete[] h_data;  // 释放主机内存
+        return;
     }
+
+    static bool firstCall = true;  // 静态变量，标记是否为第一次调用
+    // 静态成员，用于排序控制
+    static std::mutex saveMutex;
+    static std::condition_variable save_cv;
+    static std::set<int> readyFrames;  // 已准备好保存的 frame
+    static int nextToSave = start_frame;         // 下一个待保存的 frame
+
+    // 排序控制逻辑
+    {
+        std::unique_lock<std::mutex> lock(saveMutex);
+        readyFrames.insert(frame);  // 标记当前 frame 已准备好
+        // 等待直到当前 frame 是下一个要保存的
+        save_cv.wait(lock, [&]{ return frame == nextToSave; });
+
+        // 当前 frame 是 nextToSave，移除并更新 nextToSave
+        readyFrames.erase(frame);
+        lock.unlock();  // 在文件操作前释放锁
+    }
+
+    std::lock_guard<std::mutex> lock(fileMutex);  // 加锁，确保线程安全
+
+    if (firstCall)
+    {
+        // 定义需要保存的参数
+        int pulseNum = PULSE_NUM;  // 假设PULSE_NUM已定义
+        int nfft = NFFT;           // 假设NFFT已定义
+
+        // 写入double类型的参数
+        debugFile.write(reinterpret_cast<char*>(&radar_params_->bandWidth), sizeof(double));
+        debugFile.write(reinterpret_cast<char*>(&radar_params_->pulseWidth), sizeof(double));
+        debugFile.write(reinterpret_cast<char*>(&Fs), sizeof(double));
+        debugFile.write(reinterpret_cast<char*>(&radar_params_->lambda), sizeof(double));
+        debugFile.write(reinterpret_cast<char*>(&radar_params_->PRT), sizeof(double));
+
+        // 写入start_wave和end_wave
+        debugFile.write(reinterpret_cast<char*>(&start_wave), sizeof(int));
+        debugFile.write(reinterpret_cast<char*>(&end_wave), sizeof(int));
+
+        // 写入矩阵大小
+        debugFile.write(reinterpret_cast<char*>(&pulseNum), sizeof(int));
+        debugFile.write(reinterpret_cast<char*>(&nfft), sizeof(int));
+
+        // 计算并保存32个波束的方位
+        std::vector<double> azi(32);
+        for (int ii = 0; ii < 32; ++ii)
+        {
+            int nAzmCode = (azi_table[ii] & 0xffff);
+            if (nAzmCode > 32768)
+                nAzmCode -= 65536;
+            double rAzm = 249.0633 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0;
+            if (rAzm < 0)
+                rAzm += 360.0;
+            azi[ii] = rAzm;
+        }
+        debugFile.write(reinterpret_cast<char*>(azi.data()), 32 * sizeof(double));
+
+        firstCall = false;  // 标记首次写入已完成
+    }
+
+    // 以下是原有逻辑，保存当前帧的时间和数据
+    int oneWaveSize = PULSE_NUM * NFFT;
+    int waveNum = end_wave - start_wave;
+
+    auto* startAddr = d_data_ + start_wave * oneWaveSize;
+    size_t size = waveNum * oneWaveSize;
+
+    auto* h_data = new cufftComplex[size];  // 在主机上分配内存
+
+    // 从显存复制数据到主机内存
+    cudaMemcpy(h_data, startAddr, size * sizeof(cufftComplex), cudaMemcpyDeviceToHost);
+
+    // 写入时间和数据
+    auto rawMsg = reinterpret_cast<uint32_t*>(radar_params_->rawMessage);
+    auto time = rawMsg[6] / 10 + 8 * 60 * 60 * 1000;  // FPGA时间，0.1ms转为1ms并加8小时
+
+    debugFile.write(reinterpret_cast<char*>(&time), 4);  // 写入时间（4字节）
+    debugFile.write(reinterpret_cast<char*>(h_data), size * sizeof(cufftComplex));  // 写入数据
+
+    delete[] h_data;  // 释放主机内存
+
+    // 更新 nextToSave 并通知其他线程
+    {
+        std::lock_guard<std::mutex> lock(saveMutex);
+        nextToSave++;  // 移到下一个 frame
+        save_cv.notify_all();  // 通知等待的线程
+    }
+
 }
