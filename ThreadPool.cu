@@ -34,7 +34,7 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue) :
 
         string debug_file_path =  input_file_name +
         "_frame_" + to_string(start_frame) + "_" + to_string(end_frame) +
-        "_pulse_" + to_string(start_wave) + "_" + to_string(end_wave) +
+        "_wave_" + to_string(start_wave) + "_" + to_string(end_wave) +
         "_" + to_string(PULSE_NUM) + "x" + to_string(NFFT);
 
         debugFile.open(debug_file_path, std::ios::binary);
@@ -105,7 +105,7 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
     int taskId = taskCounter;
     cout << "count:" << taskId << endl;
 
-    // if (thisCount < 3 || thisCount > 20)
+    // if (taskId != 1)
     // {
     //     return;
     // }

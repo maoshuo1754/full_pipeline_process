@@ -201,6 +201,7 @@ void WaveGroupProcessor::unpackData(const int* headPositions) {
     checkCudaErrors(cudaMemsetAsync(d_data_, 0, wave_num_ * pulse_num_ * range_num_ * sizeof(cufftComplex), stream_));
     unpackKernel3D<<<gridDim1, CUDA_BLOCK_SIZE, 0, stream_>>>(
         d_unpack_data_, d_data_, d_headPositions_, PULSE_NUM, RANGE_NUM);
+
 }
 
 void WaveGroupProcessor::streamSynchronize() {
@@ -245,6 +246,9 @@ void WaveGroupProcessor::processPulseCompression() {
     rowWiseMulKernel<<<gridSize, blockSize, 0, stream_>>>(data, d_pc_coeffs_, pulse_num_, range_num_);
     // ifft
     checkCufftErrors(cufftExecC2C(row_plan_, data, data, CUFFT_INVERSE));
+    //
+    // this->streamSynchronize();
+    // writeArrayToFile(data, pulse_num_, range_num_, "unpackdata.dat");
 }
 
 void WaveGroupProcessor::processMTI()
