@@ -65,13 +65,9 @@ private:
 
     void processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProcessor_, int threadID);
 
-    void getRadarParams();
-
     void memcpyDataToThread(unsigned int startAddr, unsigned int endAddr);
 
     void freeThreadMemory();
-
-    void writeToDebugFile(unsigned char *rawMessage, const cufftComplex* d_data);
 
     void senderThread();
 };

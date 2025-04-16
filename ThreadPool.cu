@@ -182,7 +182,7 @@ void ThreadPool::copyToThreadMemory() {
     unsigned int indexValue; // 当前packet相对于1GB的起始地址
     unsigned long copyStartAddr = block_index * BLOCK_SIZE; // 当前Block相对于1GB的复制起始地址
     bool startFlag;
-    for (int i = 0; i < 580; i++) {
+    for (int i = 0; i < INDEX_SIZE / 4; i++) {
         size_t indexOffset = block_index * INDEX_SIZE + i * 4;
         if(dataSource_type == 0) {
             indexValue = *(unsigned int *) (sharedQueue->index_buffer + indexOffset);
@@ -191,14 +191,26 @@ void ThreadPool::copyToThreadMemory() {
             indexValue = FourChars2Uint(reinterpret_cast<char*>(sharedQueue->index_buffer + indexOffset));
         }
 
-        if (indexValue >= (block_index + 1) * BLOCK_SIZE) {
+        if (indexValue == 0)
+        {
+            if (inPacket) {
+                unsigned int copyEndAddr = (block_index + 1) * BLOCK_SIZE;
+                memcpyDataToThread(copyStartAddr, copyEndAddr);
+            }
+            break;
+        }
+
+        // // 检查索引值是否在当前块范围内
+        if (indexValue < block_index * BLOCK_SIZE || indexValue >= (block_index + 1) * BLOCK_SIZE) {
+            cout << "indexValue:" << indexValue << endl;
+            inPacket = false;
             break;
         }
 
         // cout << "index:" << indexValue << endl;
         // Check pattern match
-        if (indexValue >= block_index * BLOCK_SIZE  &&
-            *(uint64_t *) (sharedQueue->buffer + indexValue) == uint64Pattern) {
+        uint64_t header = *(uint64_t *)(sharedQueue->buffer + indexValue);
+        if (indexValue >= block_index * BLOCK_SIZE && header == uint64Pattern) {
             seqNum = *(uint32_t *) (sharedQueue->buffer + indexValue + SEQ_OFFSET);
             if (seqNum != prevSeqNum + 1 && prevSeqNum != 0) {
                 inPacket = false;
@@ -242,12 +254,6 @@ void ThreadPool::copyToThreadMemory() {
                 headPositions[cur_thread_id].push_back(currentPos[cur_thread_id]);
             }
             prevIndexValue = indexValue;
-        } else {
-            if (inPacket) {
-                unsigned int copyEndAddr = (block_index + 1) * BLOCK_SIZE;
-                memcpyDataToThread(copyStartAddr, copyEndAddr);
-            }
-            break;
         }
     }
     sharedQueue->read_index = (sharedQueue->read_index + 1) % QUEUE_SIZE;
@@ -259,32 +265,15 @@ void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr
 //    std::cout << "Copying " << copyLength / 1024 / 1024 << " MB to thread " << cur_thread_id << " :totally "
 //              << (currentAddrOffset + copyLength) / 1024 / 1024 << " MB" << endl;
 
+    if (data_size > BLOCK_SIZE) {
+        std::cerr << "Error: Invalid copy range, startAddr: " << startAddr << ", data_size: " << data_size << std::endl;
+        inPacket = false;
+        return;
+    }
+
     if (waveGroupProcessors[cur_thread_id]->copyRawData(sharedQueue->buffer + startAddr, data_size) != 0) {  // Ensure within buffer bounds
         std::cerr << "Copying " << data_size / 1024 / 1024 << " MB to thread " << cur_thread_id << endl;
         std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
         inPacket = false;
     }
 }
-
-void ThreadPool::writeToDebugFile(unsigned char *rawMessage, const cufftComplex* d_data) {
-    int oneWaveSize = PULSE_NUM * NFFT;
-    int waveNum = end_wave - start_wave;
-
-    auto* startAddr = d_data + start_wave * oneWaveSize;
-    size_t size = waveNum * oneWaveSize;
-
-    auto* h_data = new cufftComplex[size]; // 在主机上分配内存
-
-    // 将数据从显存复制到主机内存
-    cudaMemcpy(h_data, startAddr, size * sizeof(cufftComplex), cudaMemcpyDeviceToHost);
-
-    // 打开文件并以二进制方式写入
-    auto rawMsg = reinterpret_cast<uint32*>(rawMessage);
-    auto time = rawMsg[6] / 10 + 8*60*60*1000; // FPGA时间 //0.1ms->1ms + 8h
-
-    debugFile.write(reinterpret_cast<char*>(&time), 4);
-    debugFile.write(reinterpret_cast<char*>(h_data), size * sizeof(cufftComplex));
-
-    delete[] h_data; // 释放主机内存
-}
-
