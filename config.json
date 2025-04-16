@@ -1,8 +1,8 @@
 {
-  "dataPath": "/backup2/data/北航/20250411175735_128GB_20m.dat",
+  "dataPath": "/backup1/高邮湖数据备份/房善婷数据/20250402102153_256GB.dat",
 
   "0表示文件": "1表示Pcie",
-  "dataSource_type": 0,
+  "dataSource_type": 1,
 
   "THREADS_MEM_SIZE": 1073741824,
 
@@ -12,7 +12,7 @@
   "MTI_pulse_num": 2,
 
   "x1": "杂波图参数",
-  "clutter_map_enable": 1,
+  "clutter_map_enable": 0,
   "Pfa_clutter_map": 1e-7,
   "forgetting_factor": "15/16",
   "clutter_map_range": 4500,
@@ -59,8 +59,8 @@
   "initCarryFreq": 8080,
 
   "debug_mode": 0,
-  "start_frame": 15,
-  "end_frame": 130,
+  "start_frame": 1,
+  "end_frame": 10,
   "start_wave": 4,
   "end_wave": 28,
 

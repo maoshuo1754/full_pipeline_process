@@ -1,9 +1,4 @@
-function [time, data] = readBinaryIQFile(fid, fileInfos)
-
-    numRange = fileInfos('numRange');
-    numPulse = fileInfos('numPulse');
-
-    waveNum = fileInfos('endWaveIdx') - fileInfos('startWaveIdx');
+function [time, data] = readBinaryIQFile(fid, waveNum, numPulse, numRange)
     totalElements = waveNum * numPulse * numRange * 2; 
 
     time = fread(fid, 1, "uint32");
@@ -16,5 +11,4 @@ function [time, data] = readBinaryIQFile(fid, fileInfos)
     data = complex(realPart, imagPart);
     data = reshape(data, [numRange, numPulse, waveNum]);
     data = permute(data, [2, 1, 3]);
-
 end

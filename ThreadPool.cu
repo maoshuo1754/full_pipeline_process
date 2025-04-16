@@ -191,10 +191,13 @@ void ThreadPool::copyToThreadMemory() {
             indexValue = FourChars2Uint(reinterpret_cast<char*>(sharedQueue->index_buffer + indexOffset));
         }
 
+        if (indexValue >= (block_index + 1) * BLOCK_SIZE) {
+            break;
+        }
+
         // cout << "index:" << indexValue << endl;
         // Check pattern match
-        if (indexValue >= block_index * BLOCK_SIZE &&
-            indexValue < (block_index + 1) * BLOCK_SIZE &&
+        if (indexValue >= block_index * BLOCK_SIZE  &&
             *(uint64_t *) (sharedQueue->buffer + indexValue) == uint64Pattern) {
             seqNum = *(uint32_t *) (sharedQueue->buffer + indexValue + SEQ_OFFSET);
             if (seqNum != prevSeqNum + 1 && prevSeqNum != 0) {

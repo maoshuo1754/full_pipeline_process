@@ -25,7 +25,8 @@ private:
     char* m_sendBufOri;
     int sendSocket;
     VideoToNRXGUI videoMsg;
-    int timeArray[32];
+    int timeArray[WAVE_NUM];
+    double aziArray[WAVE_NUM];
     sockaddr_in remoteAddr;
     sockaddr_in localAddr;
     Plot plot;
