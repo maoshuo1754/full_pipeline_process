@@ -462,7 +462,7 @@ void WaveGroupProcessor::getRadarParams() {
     }
 }
 
-std::mutex fileMutex;  // 全局互斥锁，用于保护文件写入
+
 
 void WaveGroupProcessor::saveToDebugFile(int frame, ofstream& debugFile)
 {
@@ -473,9 +473,10 @@ void WaveGroupProcessor::saveToDebugFile(int frame, ofstream& debugFile)
 
     static bool firstCall = true;  // 静态变量，标记是否为第一次调用
     // 静态成员，用于排序控制
-    static std::mutex saveMutex;
+    static std::mutex saveMutex;        // 用于保护 save_cv
+    static std::mutex fileMutex;        // 全局互斥锁，用于保护文件写入
     static std::condition_variable save_cv;
-    static std::set<int> readyFrames;  // 已准备好保存的 frame
+    static std::set<int> readyFrames;   // 已准备好保存的 frame
     static int nextToSave = start_frame;         // 下一个待保存的 frame
 
     // 排序控制逻辑

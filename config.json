@@ -2,7 +2,7 @@
   "dataPath": "/backup2/data/20250402/20250402102153_256GB.dat",
 
   "0表示文件": "1表示Pcie",
-  "dataSource_type": 0,
+  "dataSource_type": 1,
 
   "THREADS_MEM_SIZE": 1073741824,
 
