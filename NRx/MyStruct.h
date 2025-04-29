@@ -432,7 +432,7 @@ struct VideoToNRXGUI
 {
     NRX_COMMON_HEADER CommonHeader;
     RX_RadarVideo_Head RadarVideoHeader;
-    UINT8 bytVideoData[MAX_DISTANCE_ELEMENT_NUMBER];
+    UINT8 bytVideoData[MAX_DISTANCE_ELEMENT_NUMBER] = {0};
 //    UINT8 bytSpeedData[MAX_DISTANCE_ELEMENT_NUMBER];
     NRX_COMMON_TAIL CommonTail;
 

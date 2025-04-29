@@ -289,9 +289,9 @@ void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr
         return;
     }
 
-    // if (waveGroupProcessors[cur_thread_id]->copyRawData(sharedQueue->buffer + startAddr, data_size) != 0) {  // Ensure within buffer bounds
-    //     std::cerr << "Copying " << data_size / 1024 / 1024 << " MB to thread " << cur_thread_id << endl;
-    //     std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
-    //     inPacket = false;
-    // }
+    if (waveGroupProcessors[cur_thread_id]->copyRawData(sharedQueue->buffer + startAddr, data_size) != 0) {  // Ensure within buffer bounds
+        std::cerr << "Copying " << data_size / 1024 / 1024 << " MB to thread " << cur_thread_id << endl;
+        std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
+        inPacket = false;
+    }
 }
