@@ -179,10 +179,11 @@ void ThreadPool::copyToThreadMemory() {
 
     unsigned int seqNum;
 
+    static unsigned int prevIndexValue1;
     unsigned int indexValue; // 当前packet相对于1GB的起始地址
     unsigned long copyStartAddr = block_index * BLOCK_SIZE; // 当前Block相对于1GB的复制起始地址
     bool startFlag;
-    for (int i = 0; i < INDEX_SIZE / 4; i++) {
+    for (int i = 0; i < 570; i++) {
         size_t indexOffset = block_index * INDEX_SIZE + i * 4;
         if(dataSource_type == 0) {
             indexValue = *(unsigned int *) (sharedQueue->index_buffer + indexOffset);
@@ -214,9 +215,10 @@ void ThreadPool::copyToThreadMemory() {
             seqNum = *(uint32_t *) (sharedQueue->buffer + indexValue + SEQ_OFFSET);
             if (seqNum != prevSeqNum + 1 && prevSeqNum != 0) {
                 inPacket = false;
-                std::cerr << "Error! Sequence number not continuous!" << prevIndexValue << " " << seqNum << std::endl;
+                std::cerr << "Error! Sequence number not continuous!" << prevIndexValue1 << ":" << prevSeqNum << " " << indexValue << ":" << seqNum << std::endl;
             }
             prevSeqNum = seqNum;
+            prevIndexValue1 = indexValue;
 
             startFlag = *(uint8_t *) (sharedQueue->buffer + indexValue + 20) & 0x02;
 
@@ -271,9 +273,9 @@ void ThreadPool::memcpyDataToThread(unsigned int startAddr, unsigned int endAddr
         return;
     }
 
-    if (waveGroupProcessors[cur_thread_id]->copyRawData(sharedQueue->buffer + startAddr, data_size) != 0) {  // Ensure within buffer bounds
-        std::cerr << "Copying " << data_size / 1024 / 1024 << " MB to thread " << cur_thread_id << endl;
-        std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
-        inPacket = false;
-    }
+    // if (waveGroupProcessors[cur_thread_id]->copyRawData(sharedQueue->buffer + startAddr, data_size) != 0) {  // Ensure within buffer bounds
+    //     std::cerr << "Copying " << data_size / 1024 / 1024 << " MB to thread " << cur_thread_id << endl;
+    //     std::cerr << "Error: Copy exceeds buffer bounds!" << std::endl;
+    //     inPacket = false;
+    // }
 }

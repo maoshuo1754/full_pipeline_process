@@ -12,7 +12,7 @@
   "MTI_pulse_num": 2,
 
   "x1": "杂波图参数",
-  "clutter_map_enable": 1,
+  "clutter_map_enable": 0,
   "Pfa_clutter_map": 1e-7,
   "forgetting_factor": "15/16",
   "clutter_map_range": 4500,
@@ -30,9 +30,9 @@
 
   "local_video_ip": "127.0.0.1",
   "local_video_port": 0,
-  "remote_video_ip": "127.0.0.1",
+  "remote_video_ip": "224.168.6.189",
   "remote_video_port": 8192,
-  "remote_plot_ip": "127.0.0.1",
+  "remote_plot_ip": "224.168.6.189",
   "remote_plot_port": 8196,
 
   "azi_table": [
