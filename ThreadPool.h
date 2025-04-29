@@ -47,6 +47,8 @@ private:
     uint64_t uint64Pattern;
 
     ofstream debugFile;
+    char timebuf[100];
+    ofstream logFile;
     DataRateTracker dataRateTracker;
 
     // 发送对象以及控制发送顺序的数据结构

@@ -39,7 +39,7 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue) :
 
         debugFile.open(debug_file_path, std::ios::binary);
     }
-
+    logFile = ofstream("error_log.txt", ios_base::app);
     cout << "Initial Finished" << endl;
 }
 
@@ -51,6 +51,7 @@ ThreadPool::~ThreadPool() {
     }
     freeThreadMemory();
     debugFile.close();
+    logFile.close();
 }
 
 
@@ -203,9 +204,21 @@ void ThreadPool::copyToThreadMemory() {
 
         // // 检查索引值是否在当前块范围内
         if (indexValue < block_index * BLOCK_SIZE || indexValue >= (block_index + 1) * BLOCK_SIZE) {
-            cout << "indexValue:" << indexValue << endl;
+            cerr << "Error: Index value " << indexValue << " is out of bounds for block " << block_index
+                 << " (valid range: [" << (block_index * BLOCK_SIZE) << ", " << ((block_index + 1) * BLOCK_SIZE - 1)
+                 << "])" << endl;
+            logFile  << "Error: Index value " << indexValue << " is out of bounds for block " << block_index
+                     << " (valid range: [" << (block_index * BLOCK_SIZE) << ", " << ((block_index + 1) * BLOCK_SIZE - 1)
+                     << "])" << endl;
             inPacket = false;
             break;
+        }
+
+        if (indexValue + 20 >= (block_index + 1) * BLOCK_SIZE) {
+            cerr << "Error: startFlag Index value " << indexValue << " exceed block " << block_index << " (valid range: <" <<
+                  (block_index + 1) * BLOCK_SIZE - 1 << endl;
+            logFile << "Error: startFlag Index value " << indexValue << " exceed block " << block_index << " (valid range: <" <<
+                  (block_index + 1) * BLOCK_SIZE - 1 << endl;
         }
 
         // cout << "index:" << indexValue << endl;
@@ -216,6 +229,9 @@ void ThreadPool::copyToThreadMemory() {
             if (seqNum != prevSeqNum + 1 && prevSeqNum != 0) {
                 inPacket = false;
                 std::cerr << "Error! Sequence number not continuous!" << prevIndexValue1 << ":" << prevSeqNum << " " << indexValue << ":" << seqNum << std::endl;
+                std::time_t now = std::time(nullptr);
+                std::strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
+                logFile << "[" << timebuf << "] " << "Error! Sequence number not continuous!" << prevIndexValue1 << ":" << prevSeqNum << " " << indexValue << ":" << seqNum << std::endl;
             }
             prevSeqNum = seqNum;
             prevIndexValue1 = indexValue;
