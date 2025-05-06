@@ -71,6 +71,7 @@ private:
     void readXDMAUser(int index_addr, int readSize);
     void writeXDMAUserByte(int index_addr, char data);
     void readXDMAData(int blockIdx);
+    void writeXDMAUserReset(int blockIdx);
 };
 
 

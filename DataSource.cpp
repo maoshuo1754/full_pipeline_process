@@ -1,4 +1,4 @@
-//
+ //
 // Created by csic724 on 2025/2/19.
 //
 
@@ -82,6 +82,7 @@ void XDMADataSource::run() {
             if (eventVal == 1) {
                 acquireSlot();
                 readXDMAData(blockIdx);
+                writeXDMAUserReset(blockIdx);
                 releaseSlot();
             }
         }
@@ -174,6 +175,30 @@ void XDMADataSource::writeXDMAUserByte(int index_addr, char data) {
                target, strerror(errno));
     }
 }
+
+void XDMADataSource::writeXDMAUserReset(int blockIdx) {
+    int index_addr = blockIdx * INDEX_SIZE;
+
+    off_t target;
+    off_t pgsz, target_aligned, offset;
+    char* map_user_write;
+    target = index_addr;
+    pgsz = sysconf(_SC_PAGESIZE);
+    offset = target & (pgsz - 1);
+    target_aligned = target & (~(pgsz - 1));
+
+    map_user_write = static_cast<char*>(mmap(nullptr, offset + 4, PROT_READ | PROT_WRITE, MAP_SHARED, dev_fd_user, target_aligned));
+    auto* map_user_write2 = map_user_write + offset;
+
+    memset(map_user_write2, 0, INDEX_SIZE);
+
+    if (munmap(map_user_write, offset + 4) == -1) {
+        printf("Memory 0x%lx mapped failed: %s.\n",
+               target, strerror(errno));
+    }
+}
+
+
 
 void XDMADataSource::readXDMAData(int blockIdx) {
     int read_addr = blockIdx * BLOCK_SIZE;
