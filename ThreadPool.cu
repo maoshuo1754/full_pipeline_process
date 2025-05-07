@@ -184,7 +184,7 @@ void ThreadPool::copyToThreadMemory() {
     unsigned int indexValue; // 当前packet相对于1GB的起始地址
     unsigned long copyStartAddr = block_index * BLOCK_SIZE; // 当前Block相对于1GB的复制起始地址
     bool startFlag;
-    for (int i = 0; i < 570; i++) {
+    for (int i = 0; i < 1024; i++) {
         size_t indexOffset = block_index * INDEX_SIZE + i * 4;
         if(dataSource_type == 0) {
             indexValue = *(unsigned int *) (sharedQueue->index_buffer + indexOffset);

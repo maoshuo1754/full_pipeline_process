@@ -82,7 +82,6 @@ void XDMADataSource::run() {
             if (eventVal == 1) {
                 acquireSlot();
                 readXDMAData(blockIdx);
-                writeXDMAUserReset(blockIdx);
                 releaseSlot();
             }
         }
@@ -142,10 +141,10 @@ void XDMADataSource::readXDMAUser(int index_addr, int readSize) {
     pgsz = sysconf(_SC_PAGESIZE);
     offset = target & (pgsz - 1);
     target_aligned = target & (~(pgsz - 1));
-    map_user = mmap(NULL, offset + 4, PROT_READ | PROT_WRITE, MAP_SHARED, dev_fd_user, target_aligned);
-
+    map_user = mmap(nullptr, offset+4, PROT_READ | PROT_WRITE, MAP_SHARED, dev_fd_user, target_aligned);
     memcpy(&pBufferAddr[index_addr], map_user, readSize);
-    if (munmap(map_user, offset + 4) == -1) {
+    memset(map_user,0x00,readSize);
+    if (munmap(map_user, offset+4) == -1) {
         printf("Memory 0x%lx mapped failed: %s.\n",
                target, strerror(errno));
     }
@@ -176,23 +175,22 @@ void XDMADataSource::writeXDMAUserByte(int index_addr, char data) {
     }
 }
 
-void XDMADataSource::writeXDMAUserReset(int blockIdx) {
-    int index_addr = blockIdx * INDEX_SIZE;
-
+void XDMADataSource::writeXDMAUserReset(int blockIdx) {// 没有使用这个函数 而是在读取后立刻复位了
     off_t target;
-    off_t pgsz, target_aligned, offset;
-    char* map_user_write;
+    void * map_user_write;
+    int index_addr = blockIdx * INDEX_SIZE;
     target = index_addr;
+
+    off_t pgsz, target_aligned;
     pgsz = sysconf(_SC_PAGESIZE);
-    offset = target & (pgsz - 1);
+    //offset = target & (pgsz - 1);
     target_aligned = target & (~(pgsz - 1));
 
-    map_user_write = static_cast<char*>(mmap(nullptr, offset + 4, PROT_READ | PROT_WRITE, MAP_SHARED, dev_fd_user, target_aligned));
-    auto* map_user_write2 = map_user_write + offset;
+    map_user_write = mmap(nullptr, INDEX_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, dev_fd_user, target_aligned);
 
-    memset(map_user_write2, 0, INDEX_SIZE);
+    memset(map_user_write, 0, INDEX_SIZE);
 
-    if (munmap(map_user_write, offset + 4) == -1) {
+    if (munmap(map_user_write, INDEX_SIZE) == -1) {
         printf("Memory 0x%lx mapped failed: %s.\n",
                target, strerror(errno));
     }
