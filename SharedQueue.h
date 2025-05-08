@@ -2,7 +2,8 @@
 #define QUEUE_H
 
 #include <semaphore.h>
-
+#include <cuda_runtime.h>
+#include <iostream>
 #define SHM_KEY 0x1234
 #define QUEUE_SIZE 4                // 队列大小
 #define BLOCK_SIZE (256*1024*1024)  // 256MB
@@ -20,8 +21,17 @@ struct SharedQueue {
     unsigned char* buffer;
 
     SharedQueue() {
+        cudaError_t err;
+
         index_buffer = new unsigned char[QUEUE_SIZE * INDEX_SIZE];
-        buffer = new unsigned char[QUEUE_SIZE * BLOCK_SIZE];
+        // buffer = new unsigned char[QUEUE_SIZE * BLOCK_SIZE];
+        err = cudaHostAlloc(&buffer, QUEUE_SIZE * BLOCK_SIZE, cudaHostAllocDefault);
+        if (err != cudaSuccess) {
+            std::cerr << "Failed to allocate pinned memory for buffer: "
+                      << cudaGetErrorString(err) << std::endl;
+            cudaFreeHost(index_buffer); // 清理已分配的内存
+            throw std::runtime_error("cudaHostAlloc failed");
+        }
         sem_init(&this->mutex, 1, 1);
         sem_init(&this->slots_available, 1, QUEUE_SIZE);
         sem_init(&this->items_available, 1, 0);
@@ -31,7 +41,11 @@ struct SharedQueue {
 
     ~SharedQueue() {
         delete[] index_buffer;
-        delete[] buffer;
+        cudaFreeHost(buffer);
+        // 销毁信号量
+        sem_destroy(&this->mutex);
+        sem_destroy(&this->slots_available);
+        sem_destroy(&this->items_available);
     }
 };
 
