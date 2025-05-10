@@ -210,8 +210,9 @@ void ThreadPool::copyToThreadMemory() {
             logFile  << "Error: Index value " << indexValue << " is out of bounds for block " << block_index
                      << " (valid range: [" << (block_index * BLOCK_SIZE) << ", " << ((block_index + 1) * BLOCK_SIZE - 1)
                      << "])" << endl;
-            inPacket = false;
-            break;
+            indexValue %= (BLOCK_SIZE * QUEUE_SIZE);
+            // inPacket = false;
+            // break;
         }
 
         if (indexValue + 20 >= (block_index + 1) * BLOCK_SIZE) {
