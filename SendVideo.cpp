@@ -89,6 +89,9 @@ void SendVideo::send(RadarParams* radar_params_) {
     videoMsg.RadarVideoHeader.dwTxRelMilliSecondTime_H = dwTemp / 1000;
     videoMsg.RadarVideoHeader.dwTxRelMilliSecondTime_L = dwTemp % 1000 * 1000;
 
+    auto fLFMStartWord = rawMsg[16];
+    videoMsg.RadarVideoHeader.dwSigBWHz = (Fs_system - fLFMStartWord / pow(2.0f, 32) * Fs_system) * 2.0;
+
     for (int ii = WAVE_NUM - 1; ii >= 0; ii--) {
         int sec = dwTemp / 1000 % 60 + timeArray[ii];
 //        cout << "time:" << h << ":" << min << ":" << sec << endl;

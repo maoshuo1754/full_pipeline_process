@@ -30,7 +30,6 @@ extern std::vector<int> azi_table; // 方位表
 
 extern double c_speed;          // 光速
 extern double d;                // 距离单元距离
-extern double bandwidth;        // 带宽
 
 extern std::string local_video_ip;
 extern int local_video_port;

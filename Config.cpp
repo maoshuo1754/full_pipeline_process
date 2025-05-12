@@ -22,7 +22,6 @@ float normFactor;
 std::vector<int> azi_table;
 double c_speed;
 double d;
-double bandwidth;        // 带宽
 
 std::string local_video_ip;
 int local_video_port;
@@ -86,7 +85,6 @@ void loadConfig(const std::string& filename) {
     azi_table = config["azi_table"].get<std::vector<int>>();
     c_speed = config["c_speed"];
     d = config["d"];
-    bandwidth = config["bandwidth"];
 
     local_video_ip = config["local_video_ip"].get<std::string>();
     local_video_port = config["local_video_port"];
