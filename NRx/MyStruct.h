@@ -458,7 +458,7 @@ struct VideoToNRXGUI
         RadarVideoHeader.bytSubPulseNumber = 1;
         RadarVideoHeader.bytSubPulseCount = 0;
 
-        RadarVideoHeader.dwSigBWHz = htonl(bandwidth);
+        // RadarVideoHeader.dwSigBWHz = htonl(bandwidth);
         RadarVideoHeader.dwSampleFreqHz = htonl(Fs);
         RadarVideoHeader.wPulseWidth0p1us = htons(0xffff);
         RadarVideoHeader.wPRT0p1us = htons(0xffff);
