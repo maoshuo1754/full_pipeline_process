@@ -76,13 +76,42 @@ XDMADataSource::~XDMADataSource() {
 
 void XDMADataSource::run() {
     int eventVal;
+    auto prev_time = std::chrono::high_resolution_clock::now();
     while (monitorWriterRunning.load()) {
         for (int blockIdx = 0; blockIdx < 4; blockIdx++) {
+            auto start = std::chrono::high_resolution_clock::now();
+
             auto res = read(dev_fd_events[blockIdx], &eventVal, 4);
             if (eventVal == 1) {
+                // Time each function
+                auto read_fd_events_end = std::chrono::high_resolution_clock::now();
                 acquireSlot();
+                auto acquire_end = std::chrono::high_resolution_clock::now();
                 readXDMAData(blockIdx);
+                auto read_end = std::chrono::high_resolution_clock::now();
+                writeXDMAUserReset(blockIdx);
+                auto write_end = std::chrono::high_resolution_clock::now();
                 releaseSlot();
+                auto curr_time = std::chrono::high_resolution_clock::now();
+                auto durant = curr_time - prev_time;
+                auto durant_ms = std::chrono::duration_cast<std::chrono::milliseconds>(durant).count();
+                if (durant_ms > 100 ) {
+                    // Calculate durations in microseconds for better precision
+                    auto read_fd_events_dur = std::chrono::duration_cast<std::chrono::milliseconds>(read_fd_events_end - start).count();
+                    auto acquire_dur = std::chrono::duration_cast<std::chrono::milliseconds>(acquire_end - read_fd_events_end).count();
+                    auto read_dur = std::chrono::duration_cast<std::chrono::milliseconds>(read_end - acquire_end).count();
+                    auto write_dur = std::chrono::duration_cast<std::chrono::milliseconds>(write_end - read_end).count();
+                    auto release_dur = std::chrono::duration_cast<std::chrono::milliseconds>(curr_time - write_end).count();
+
+                    std::cerr << "durant: " << durant_ms << "ms" << std::endl;
+                    std::cerr << "read_fd_events_dur: " << read_fd_events_dur << "ms" << std::endl;
+                    std::cerr << "acquireSlot: " << acquire_dur << "ms" << std::endl;
+                    std::cerr << "readXDMAData: " << read_dur << "ms" << std::endl;
+                    std::cerr << "writeXDMAUserReset: " << write_dur << "ms" << std::endl;
+                    std::cerr << "releaseSlot: " << release_dur << "ms" << std::endl;
+                }
+
+                prev_time = curr_time;
             }
         }
     }
