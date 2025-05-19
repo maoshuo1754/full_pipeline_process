@@ -6,7 +6,7 @@
 
 #include <cfloat>
 #include <thrust/detail/type_traits/is_call_possible.h>
-
+#include "utils.h"
 #include "Config.h"
 #include "SharedQueue.h"
 
@@ -90,29 +90,30 @@ __global__ void moveAndZeroKernel(cufftComplex* data, int m, int n, int start, i
     }
 }
 
-// __global__ void maxKernel(cufftComplex *data, float *maxValues, int *speedChannels, bool* maskPtr, int nrows, int ncols) {
-//     int col = blockIdx.x * blockDim.x + threadIdx.x;
-//     int ind;
-//
-//     if (col < ncols) {
-//         float maxVal;
-//
-//         maxVal = channel_0_enable ? data[col].x : 0;
-//         int maxChannel = 0;
-//         for (int row = 1; row < nrows; ++row) {
-//             ind = row * ncols + col;
-//             if (data[ind].x > maxVal) {
-//                 maxVal = data[ind].x;
-//                 maxChannel = row;
-//             }
-//         }
-//         maxValues[col] = maxVal;
-//         // if (maskPtr[col]) {
-//         //     maxValues[col] = 1000;
-//         // }
-//         speedChannels[col] = maxChannel;
-//     }
-// }
+// 对指定速度范围的实部选大，d_rows是要选的行号，num_rows是d_rows的大小
+__global__ void maxRealByColumn(cufftComplex *data, float *maxValues, int* d_maxindex, int *d_rows, int num_rows, int nrows, int ncols) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int ind;
+
+    if (col < ncols) {
+        float maxVal = -FLT_MAX;
+        for (int i = 0; i < num_rows; ++i) {
+            int row = d_rows[i];
+            ind = row * ncols + col;
+            if (data[ind].x > maxVal) {
+                maxVal = data[ind].x;
+                d_maxindex[col] = row;
+            }
+        }
+        maxValues[col] = maxVal;
+    }
+}
+
+void launchMaxRealByColumn(cufftComplex* d_input, float* d_output, int* d_maxindex,  int *d_rows, int num_rows, int nrows, int ncols, cudaStream_t stream) {
+    int threadsPerBlock = CUDA_BLOCK_SIZE;
+    int blocks = (ncols + threadsPerBlock - 1) / threadsPerBlock;
+    maxRealByColumn<<<blocks, threadsPerBlock, 0, stream>>>(d_input, d_output, d_maxindex, d_rows, num_rows, nrows, ncols);
+}
 
 // __global__ void maxKernel2D(cufftComplex *data, float *maxValues, int *speedChannels,
 //                            bool* maskPtr, int nrows, int ncols, int nwaves) {
@@ -191,6 +192,88 @@ __global__ void fftshift_columns_inplace_kernel(cufftComplex* d_data, int nrows,
         d_data[dst] = temp;
     }
 }
+
+
+
+// 核函数：对 cufftComplex 矩阵按行进行 fftshift 原地
+__global__ void fftshift_rows_inplace(cufftComplex *data, int pulsenum, int rangenum) {
+    // 声明动态共享内存
+    extern __shared__ cufftComplex shared_row[];
+
+    // 确定当前线程块处理的行
+    int row = blockIdx.x;
+    if (row >= pulsenum) return;
+
+    int tid = threadIdx.x;      // 线程在块内的索引
+    int stride = blockDim.x;    // 线程步幅
+
+    // 将全局内存的数据加载到共享内存
+    for (int i = tid; i < rangenum; i += stride) {
+        shared_row[i] = data[row * rangenum + i];
+    }
+    __syncthreads();  // 确保所有线程加载完成
+
+    // 计算移位量并写回全局内存
+    int shift = (rangenum + 1) / 2;
+    for (int i = tid; i < rangenum; i += stride) {
+        int src_idx = (i + shift) % rangenum;
+        data[row * rangenum + i] = shared_row[src_idx];
+    }
+}
+
+// 核函数：对 cufftComplex 矩阵按列进行 fftshift 原地
+__global__ void fftshift_cols_inplace(cufftComplex *data, int pulsenum, int rangenum) {
+    // 声明动态共享内存（大小为pulsenum）
+    extern __shared__ cufftComplex shared_col[];
+
+    // 确定当前线程块处理的列
+    int col = blockIdx.x;
+    if (col >= rangenum) return;
+
+    int tid = threadIdx.x;      // 线程在块内的索引
+    int stride = blockDim.x;    // 线程步幅
+
+    // 将全局内存的列数据加载到共享内存
+    for (int i = tid; i < pulsenum; i += stride) {
+        shared_col[i] = data[i * rangenum + col];
+    }
+    __syncthreads();  // 确保所有线程加载完成
+
+    // 计算列方向的移位量并写回全局内存
+    int shift = (pulsenum + 1) / 2;
+    for (int i = tid; i < pulsenum; i += stride) {
+        int src_idx = (i + shift) % pulsenum;
+        data[i * rangenum + col] = shared_col[src_idx];
+    }
+}
+
+// 外层函数：根据dim调用行或列fftshift，支持CUDA流
+void fftshift(cufftComplex *data, int pulsenum, int rangenum, int dim, cudaStream_t stream) {
+    // 设置线程块和网格
+    dim3 block(256); // 每块256个线程，可根据GPU架构调整
+    dim3 grid;
+    size_t shared_mem_size;
+
+    if (dim == 2) { // 行fftshift
+        grid = dim3(pulsenum); // 每个线程块处理一行
+        shared_mem_size = rangenum * sizeof(cufftComplex); // 共享内存大小为一行
+        fftshift_rows_inplace<<<grid, block, shared_mem_size, stream>>>(data, pulsenum, rangenum);
+    } else if (dim == 1) { // 列fftshift
+        grid = dim3(rangenum); // 每个线程块处理一列
+        shared_mem_size = pulsenum * sizeof(cufftComplex); // 共享内存大小为一列
+        fftshift_cols_inplace<<<grid, block, shared_mem_size, stream>>>(data, pulsenum, rangenum);
+    } else {
+        fprintf(stderr, "Invalid dim parameter: %d. Must be 1 (rows) or 2 (cols).\n", dim);
+        return;
+    }
+
+    // 检查CUDA错误
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        fprintf(stderr, "CUDA kernel launch error: %s\n", cudaGetErrorString(err));
+    }
+}
+
 
 __global__ void cfarKernel(const cufftComplex* data, cufftComplex* cfar_signal, int nrows, int ncols,
                            double alpha, int numGuardCells, int numRefCells, int leftBoundary, int rightBoundary) {
@@ -313,6 +396,26 @@ __global__ void cfar_col_kernel(const cufftComplex* data, cufftComplex* cfar_sig
             ref_end1++;
             ref_start2++;
             ref_end2++;
+        }
+    }
+}
+
+__global__ void zeroEdgeRows(cufftComplex* data, int pulse_num, int range_num, int NoiseWidth) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x; // 列索引
+    if (col < range_num) {
+        // 行优先存储：第 col 列的元素分散存储
+        int offset = col;
+
+        // 前 NoiseWidth + 1行置零
+        for (int row = 0; row < NoiseWidth + 1; row++) {
+            data[offset + row * range_num].x = 0.0f; // 实部
+            data[offset + row * range_num].y = 0.0f; // 虚部
+        }
+
+        // 后 NoiseWidth 行置零
+        for (int row = pulse_num - NoiseWidth; row < pulse_num; row++) {
+            data[offset + row * range_num].x = 0.0f; // 实部
+            data[offset + row * range_num].y = 0.0f; // 虚部
         }
     }
 }
@@ -499,4 +602,204 @@ __global__ void MTIkernel2(cufftComplex *data, int nrows, int ncols) {
         data[nextIndex].x = 0.0f;
         data[nextIndex].y = 0.0f;
     }
+}
+
+// 核函数：计算gn和hn，并直接存储到复用缓冲区
+__global__ void compute_gn_hn(cufftComplex *x, cufftComplex *gn, cufftComplex *hn,
+                             float *alpha, int pulsenum, int rangenum) {
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    int i = index % rangenum; // rangenum 维度
+    int j = index / rangenum; // pulsenum 或 gFFTNumber 维度
+
+    float pi = 3.141592653589793f;
+    float alpha_i = alpha[i];
+    float A_phase = -pi * alpha_i;
+    float W_phase = -2.0f * pi * alpha_i / (float)pulsenum;
+
+    // 计算 gn
+    if (j < pulsenum) {
+        float idx = (float)j;
+        // A^(-j) * W^(j^2/2)
+        cufftComplex A_term = make_cuComplex(cosf(A_phase * -idx), sinf(A_phase * -idx));
+        cufftComplex W_term = make_cuComplex(cosf(W_phase * idx * idx / 2.0f), sinf(W_phase * idx * idx / 2.0f));
+        cufftComplex tmpTerm = cuCmulf(cuCmulf(x[j * rangenum + i], A_term), W_term);
+        gn[j * rangenum + i] = tmpTerm;
+    }
+
+
+    // 计算 hn
+    if (j < pulsenum) {
+        float idx = (float)j;
+        hn[j * rangenum + i] = make_cuComplex(cosf(W_phase * -(idx * idx) / 2.0f), sinf(W_phase * -(idx * idx) / 2.0f));
+    } else if (j == pulsenum) {
+        hn[j * rangenum + i] = make_cuComplex(0.0f, 0.0f);
+    } else if (j < 2 * pulsenum) {
+        float idx_m = (float)(2 * pulsenum - j);
+        hn[j * rangenum + i] = make_cuComplex(cosf(W_phase * -(idx_m * idx_m) / 2.0f), sinf(W_phase * -(idx_m * idx_m) / 2.0f));
+    }
+}
+
+// 核函数：计算yn并存储到xSlowCZT
+__global__ void compute_yn(cufftComplex *YFFT, cufftComplex *xSlowCZT, float *alpha,
+                          int pulsenum, int rangenum, int gFFTNumber) {
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
+    int i = index % rangenum; // rangenum 维度
+    int j = index / rangenum; // pulsenum 或 gFFTNumber 维度
+    if (i >= rangenum || j >= pulsenum) return;
+
+    float pi = 3.141592653589793f;
+    float W_phase = -2.0f * pi * alpha[i] / pulsenum;
+    float idx = (float)j;
+    cufftComplex W_term = make_cuComplex(cosf(W_phase * idx * idx / 2.0f), sinf(W_phase * idx * idx / 2.0f));
+    xSlowCZT[j * rangenum + i] = cuCmulf(YFFT[j * rangenum + i], W_term);
+}
+
+// 计算两个矩阵的点乘
+__global__ void elementWiseMulKernel(cufftComplex *d_a, cufftComplex *d_b, cufftComplex *d_c, int size) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < size) {
+        cufftComplex temp_a = d_a[idx];
+        cufftComplex temp_b = d_b[idx];
+        d_c[idx].x = temp_a.x * temp_b.x - temp_a.y * temp_b.y;
+        d_c[idx].y = temp_a.x * temp_b.y + temp_a.y * temp_b.x;
+    }
+}
+
+
+__global__ void generateDechirpRes(cufftComplex* coef, float PRT, float TargetAccVelMax, int PulseNumber, int accNum, float Lambda) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x; // 脉冲索引
+    int idy = blockIdx.y * blockDim.y + threadIdx.y; // 加速度索引
+    if (idx < PulseNumber && idy < accNum) {
+        float step = 2 * TargetAccVelMax / (accNum - 1);
+        float phase = -2.0f * M_PI * (-TargetAccVelMax + idy * step) * (PRT * idx) * (PRT * idx) / Lambda;
+        coef[idx * accNum + idy].x = cosf(phase);
+        coef[idx * accNum + idy].y = sinf(phase);
+    }
+}
+
+__global__ void generateDechirpCoef(cufftComplex* coef, float PRT, float accScanStart, float accScanStep, int PulseNumber, int accNum, float Lambda) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x; // 时间索引
+    int idy = blockIdx.y * blockDim.y + threadIdx.y; // 加速度索引
+    if (idx < PulseNumber && idy < accNum) {
+        float phase = -2.0f * M_PI * (accScanStart + idy * accScanStep) * (PRT * idx) * (PRT * idx) / Lambda;
+        coef[idx * accNum + idy].x = cosf(phase);
+        coef[idx * accNum + idy].y = sinf(phase);
+    }
+}
+
+// 计算FirstDechirpRes， FirstDechirpRes(:, i) = x .* FirstDechirpCoef(:, i) .* WinCoef;
+__global__ void FirstDechirpRes(cufftComplex *d_FirstDechirpCoef, cufftComplex* data, float* windowCoef, cufftComplex* d_FirstDechirpRes, int accNum, int PulseNumber, int RangeNum) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x; // 脉冲索引
+    int idy = blockIdx.y * blockDim.y + threadIdx.y; // 加速度索引
+    if (idx < PulseNumber && idy < accNum) {
+        // Compute the index in the matrices
+        int matrix_idx = idx * accNum + idy;
+        int data_idx = idx * RangeNum;
+
+        // Complex multiplication: data[idx] * d_FirstDechirpCoef[matrix_idx]
+        cufftComplex temp;
+        temp.x = data[data_idx].x * d_FirstDechirpCoef[matrix_idx].x - data[data_idx].y * d_FirstDechirpCoef[matrix_idx].y; // Real part
+        temp.y = data[data_idx].x * d_FirstDechirpCoef[matrix_idx].y + data[data_idx].y * d_FirstDechirpCoef[matrix_idx].x; // Imaginary part
+
+        // Scale by windowCoef[idx] (real number)
+        d_FirstDechirpRes[matrix_idx].x = temp.x * windowCoef[idx];
+        d_FirstDechirpRes[matrix_idx].y = temp.y * windowCoef[idx];
+    }
+}
+
+
+// CUDA 函数：对 nrows × ncols 矩阵按列执行 FFT
+// 参数：
+//   d_matrix - 显存中的输入/输出矩阵，按行优先存储，类型为 cufftComplex
+//   nrows - 矩阵行数（每列的 FFT 长度）
+//   ncols - 矩阵列数（批量 FFT 的数量）
+//   stream - CUDA 流，用于异步执行
+// 返回值：true 表示成功，false 表示失败
+bool columnFFT(cufftComplex* d_matrix, int nrows, int ncols, int batch, cudaStream_t stream) {
+    // 定义静态 map，存储 ncols 到 cufftHandle 的映射
+    static std::map<int, cufftHandle> planCache;
+
+    // 检查是否已存在对应 ncols 的计划
+    cufftHandle plan;
+    auto it = planCache.find(ncols);
+    if (it != planCache.end()) {
+        // 计划已存在，重用
+        plan = it->second;
+    } else {
+        // 创建新计划
+        int rank = 1; // 1D FFT
+        int n[] = {nrows}; // FFT 长度（每列的长度）
+        int inembed[] = {ncols}; // 输入矩阵的总元素数（行优先存储）
+        int onembed[] = {ncols}; // 输出矩阵的总元素数（行优先存储）
+        int istride = ncols; // 输入步长：跳过 ncols 个元素到下一行
+        int ostride = ncols; // 输出步长：跳过 ncols 个元素到下一行
+        int idist = 1; // 输入列之间的距离（连续列）
+        int odist = 1; // 输出列之间的距离（连续列）
+
+        checkCufftErrors(cufftPlanMany(&plan, rank, n,
+                                       inembed, istride, idist,
+                                       onembed, ostride, odist,
+                                       CUFFT_C2C, batch));
+
+        // 存储计划到 map
+        planCache[ncols] = plan;
+    }
+
+    // 设置 CUDA 流
+    if (stream != nullptr) {
+        checkCufftErrors(cufftSetStream(plan, stream));
+    }
+
+    // 执行 FFT
+    checkCufftErrors(cufftExecC2C(plan, d_matrix, d_matrix, CUFFT_FORWARD));
+
+    // 注意：计划不在这里销毁，保持在 map 中重用
+    return true;
+}
+
+// 核函数：矩阵每列与向量逐元素相乘
+__global__ void column_vector_multiply(cufftComplex* matrix, float* vector, int nrows, int ncols) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x; // 列索引
+    int row = blockIdx.y * blockDim.y + threadIdx.y; // 行索引
+
+    if (row < nrows && col < ncols) {
+        int idx = row * ncols + col; // 行优先存储的矩阵索引
+        // cufftComplex 与 float 相乘：(a + bi) * c = (a * c) + (b * c)i
+        float a = matrix[idx].x; // 矩阵的实部
+        float b = matrix[idx].y; // 矩阵的虚部
+        float c = vector[row];   // 向量的实数值
+        matrix[idx].x = a * c;   // 实部结果
+        matrix[idx].y = b * c;   // 虚部结果
+    }
+}
+
+// 核函数：将矩阵的第 col 列复制到向量
+__global__ void copy_column_to_vector_kernel(cufftComplex* matrix, cufftComplex* vector, int nrows, int ncols, int col) {
+    int row = blockIdx.x * blockDim.x + threadIdx.x; // 行索引
+
+    if (row < nrows) {
+        int idx = row * ncols + col; // 行优先存储的矩阵索引
+        vector[row] = matrix[idx];   // 复制矩阵第 col 列的元素到向量
+    }
+}
+
+// 将矩阵的第 col 列复制到向量
+void copyColumnToVector(cufftComplex* matrix, cufftComplex* vector, int nrows, int ncols, int col, cudaStream_t stream_) {
+    // 验证输入参数
+    if (col < 0 || col >= ncols || nrows <= 0 || ncols <= 0) {
+        // 可以添加错误处理，例如抛出异常或打印错误
+        return;
+    }
+
+    // 配置线程块和网格大小
+    int threadsPerBlock = 256; // 每个块的线程数，可根据硬件调整
+    int blocksPerGrid = (nrows + threadsPerBlock - 1) / threadsPerBlock; // 向上取整
+
+    // 启动核函数
+    copy_column_to_vector_kernel<<<blocksPerGrid, threadsPerBlock, 0, stream_>>>(
+        matrix, vector, nrows, ncols, col
+    );
+
+    // 可选择同步（调试时使用，生产环境通常依赖流）
+    // cudaStreamSynchronize(stream_);
 }

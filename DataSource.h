@@ -17,7 +17,7 @@
 #define DEVICE_NAME_EVENT1 "/dev/xdma0_events_1"
 #define DEVICE_NAME_EVENT2 "/dev/xdma0_events_2"
 #define DEVICE_NAME_EVENT3 "/dev/xdma0_events_3"
-
+#define IRQ_REG_OFFSET 32768
 using namespace std;
 
 class DataSource {
@@ -56,6 +56,7 @@ private:
     void* map_user;
     char* pBufferData;
     char* pBufferAddr;
+    char* pBufferUser;
 
 public:
     XDMADataSource(std::atomic<bool>& running, SharedQueue* sharedQueue);
@@ -72,6 +73,8 @@ private:
     void writeXDMAUserByte(int index_addr, char data);
     void readXDMAData(int blockIdx);
     void writeXDMAUserReset(int blockIdx);
+    void readXDMAIRQReg(int index_addr, int readSize);
+    void waitForIRQRegChange(int blockIdx);
 };
 
 

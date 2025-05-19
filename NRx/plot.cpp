@@ -1395,11 +1395,7 @@ void Plot::PlotsDetect(NRx8BitPulse *curPulse) {
                         swStateInfo.body.softwareID = NRxSW_ObjDet;
                         memcpy(swStateInfo.body.state, msg.str().data(), msg.str().size());
                         swStateInfo.HostToNetEndian(swStateInfo);
-                        string dispIP = "239.168.6.189";
-//                        string dispIP = getStrParam("RadarDataDistribution", "dispIP");
-                        int32 dispHeartPort = 8200;
-//                        int32 dispHeartPort = getIntParam("RadarDataDistribution", "dispHeartPort");
-//                        udpSender::udpSendMsg(&swStateInfo, sizeof(NRxSWStateInfo), dispIP, dispHeartPort, "heart");
+
                         auto sendRes = sendto(localSocket, &swStateInfo, sizeof(NRxSWStateInfo), 0, (sockaddr *)&remotePlotAddr, sizeof(remotePlotAddr));
 
                         if (sendRes < 0) {

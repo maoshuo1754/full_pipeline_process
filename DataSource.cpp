@@ -71,6 +71,7 @@ XDMADataSource::XDMADataSource(std::atomic<bool>& running, SharedQueue* sharedQu
 }
 
 XDMADataSource::~XDMADataSource() {
+    delete[] pBufferUser;
     closeDevices();
 }
 
@@ -81,35 +82,36 @@ void XDMADataSource::run() {
         for (int blockIdx = 0; blockIdx < 4; blockIdx++) {
             auto start = std::chrono::high_resolution_clock::now();
 
-            auto res = read(dev_fd_events[blockIdx], &eventVal, 4);
-            if (eventVal == 1) {
-                // Time each function
-                auto read_fd_events_end = std::chrono::high_resolution_clock::now();
-                acquireSlot();
-                auto acquire_end = std::chrono::high_resolution_clock::now();
-                readXDMAData(blockIdx);
-                auto read_end = std::chrono::high_resolution_clock::now();
-                writeXDMAUserReset(blockIdx);
-                auto write_end = std::chrono::high_resolution_clock::now();
-                releaseSlot();
-                auto curr_time = std::chrono::high_resolution_clock::now();
-                auto durant = curr_time - prev_time;
-                auto durant_ms = std::chrono::duration_cast<std::chrono::milliseconds>(durant).count();
-                if (durant_ms > 100 ) {
-                    // Calculate durations in microseconds for better precision
-                    auto read_fd_events_dur = std::chrono::duration_cast<std::chrono::milliseconds>(read_fd_events_end - start).count();
-                    auto acquire_dur = std::chrono::duration_cast<std::chrono::milliseconds>(acquire_end - read_fd_events_end).count();
-                    auto read_dur = std::chrono::duration_cast<std::chrono::milliseconds>(read_end - acquire_end).count();
-                    auto write_dur = std::chrono::duration_cast<std::chrono::milliseconds>(write_end - read_end).count();
-                    auto release_dur = std::chrono::duration_cast<std::chrono::milliseconds>(curr_time - write_end).count();
+            // auto res = read(dev_fd_events[blockIdx], &eventVal, 4);
+            waitForIRQRegChange(blockIdx);
 
-                    std::cerr << "durant: " << durant_ms << "ms" << std::endl;
-                    std::cerr << "read_fd_events_dur: " << read_fd_events_dur << "ms" << std::endl;
-                    std::cerr << "acquireSlot: " << acquire_dur << "ms" << std::endl;
-                    std::cerr << "readXDMAData: " << read_dur << "ms" << std::endl;
-                    std::cerr << "writeXDMAUserReset: " << write_dur << "ms" << std::endl;
-                    std::cerr << "releaseSlot: " << release_dur << "ms" << std::endl;
-                }
+            // Time each function
+            auto read_fd_events_end = std::chrono::high_resolution_clock::now();
+            acquireSlot();
+            auto acquire_end = std::chrono::high_resolution_clock::now();
+            readXDMAData(blockIdx);
+            auto read_end = std::chrono::high_resolution_clock::now();
+            writeXDMAUserReset(blockIdx);
+            auto write_end = std::chrono::high_resolution_clock::now();
+            releaseSlot();
+            auto curr_time = std::chrono::high_resolution_clock::now();
+            auto durant = curr_time - start;
+            auto durant_ms = std::chrono::duration_cast<std::chrono::milliseconds>(durant).count();
+            if (durant_ms > 100 ) {
+                // Calculate durations in microseconds for better precision
+                auto read_fd_events_dur = std::chrono::duration_cast<std::chrono::milliseconds>(read_fd_events_end - start).count();
+                auto acquire_dur = std::chrono::duration_cast<std::chrono::milliseconds>(acquire_end - read_fd_events_end).count();
+                auto read_dur = std::chrono::duration_cast<std::chrono::milliseconds>(read_end - acquire_end).count();
+                auto write_dur = std::chrono::duration_cast<std::chrono::milliseconds>(write_end - read_end).count();
+                auto release_dur = std::chrono::duration_cast<std::chrono::milliseconds>(curr_time - write_end).count();
+
+                std::cerr << "durant: " << durant_ms << "ms" << std::endl;
+                std::cerr << "read_fd_events_dur: " << read_fd_events_dur << "ms" << std::endl;
+                std::cerr << "acquireSlot: " << acquire_dur << "ms" << std::endl;
+                std::cerr << "readXDMAData: " << read_dur << "ms" << std::endl;
+                std::cerr << "writeXDMAUserReset: " << write_dur << "ms" << std::endl;
+                std::cerr << "releaseSlot: " << release_dur << "ms" << std::endl;
+
 
                 prev_time = curr_time;
             }
@@ -137,6 +139,7 @@ void XDMADataSource::initializeDevices() {
 void XDMADataSource::initializeBuffers() {
     pBufferData = reinterpret_cast<char*>(sharedQueue->buffer);
     pBufferAddr = reinterpret_cast<char*>(sharedQueue->index_buffer);
+    pBufferUser = new char[4];
     memset(pBufferAddr, 0, INDEX_SIZE * 4);
 }
 
@@ -222,6 +225,41 @@ void XDMADataSource::writeXDMAUserReset(int blockIdx) {// 没有使用这个函�
     if (munmap(map_user_write, INDEX_SIZE) == -1) {
         printf("Memory 0x%lx mapped failed: %s.\n",
                target, strerror(errno));
+    }
+}
+
+void XDMADataSource::readXDMAIRQReg(int index_addr, int readSize) {
+    off_t pgsz, target_aligned, offset;
+    off_t target = index_addr;
+    pgsz = sysconf(_SC_PAGESIZE);
+    offset = target & (pgsz - 1);
+    target_aligned = target & (~(pgsz - 1));
+    map_user = mmap(nullptr, offset+4, PROT_READ | PROT_WRITE, MAP_SHARED, dev_fd_user, target_aligned);
+    memcpy(pBufferUser, map_user, readSize);
+    //     memset(map_user,0x00,readSize);
+    if (munmap(map_user, offset+4) == -1) {
+        printf("Memory 0x%lx mapped failed: %s.\n",
+               target, strerror(errno));
+    }
+}
+
+// 阻塞，一直到寄存器的值发生变化
+void XDMADataSource::waitForIRQRegChange(int blockIdx) {
+    uint32_t expect_value = 1 << blockIdx;
+    uint32_t IRQ_REG_Value;
+
+    while (true) {
+        // 读取寄存器函数
+        readXDMAIRQReg(IRQ_REG_OFFSET, 4);
+        IRQ_REG_Value = (uint32_t)pBufferUser[3];
+
+        // 检查寄存器值是否发生变化
+        if (IRQ_REG_Value == expect_value) {
+            // cout << expect_value << endl;
+            return;
+        }
+        // 短暂休眠避免过度占用 CPU
+        std::this_thread::sleep_for(std::chrono::microseconds(1000));
     }
 }
 
