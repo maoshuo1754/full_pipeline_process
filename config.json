@@ -2,7 +2,7 @@
   "dataPath": "/backup2/data/Fang_data/20250425154422_256GB.dat",
 
   "0表示文件": "1表示Pcie",
-  "dataSource_type": 1,
+  "dataSource_type": 0,
 
   "THREADS_MEM_SIZE": 1073741824,
 
@@ -12,7 +12,7 @@
   "MTI_pulse_num": 2,
 
   "x1": "杂波图参数",
-  "clutter_map_enable": 1,
+  "clutter_map_enable": 0,
   "Pfa_clutter_map": 1e-7,
   "forgetting_factor": "15/16",
   "clutter_map_range": 4500,

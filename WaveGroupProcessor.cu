@@ -246,9 +246,6 @@ void WaveGroupProcessor::processPulseCompression() {
     rowWiseMulKernel<<<gridSize, blockSize, 0, stream_>>>(data, d_pc_coeffs_, pulse_num_, range_num_);
     // ifft
     checkCufftErrors(cufftExecC2C(row_plan_, data, data, CUFFT_INVERSE));
-    //
-    // this->streamSynchronize();
-    // writeArrayToFile(data, pulse_num_, range_num_, "unpackdata.dat");
 }
 
 void WaveGroupProcessor::processMTI()
