@@ -1,8 +1,8 @@
 {
-  "dataPath": "/backup2/data/Fang_data/20250425154422_256GB.dat",
+  "dataPath": "/backup2/data/Fang_data/output.dat",
 
   "0表示文件": "1表示Pcie",
-  "dataSource_type": 0,
+  "dataSource_type": 1,
 
   "THREADS_MEM_SIZE": 1073741824,
 

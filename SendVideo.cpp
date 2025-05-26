@@ -90,7 +90,8 @@ void SendVideo::send(RadarParams* radar_params_) {
     videoMsg.RadarVideoHeader.dwTxRelMilliSecondTime_L = dwTemp % 1000 * 1000;
 
     auto fLFMStartWord = rawMsg[16];
-    videoMsg.RadarVideoHeader.dwSigBWHz = (Fs_system - fLFMStartWord / pow(2.0f, 32) * Fs_system) * 2.0;
+    videoMsg.RadarVideoHeader.dwSigBWHz = htonl((Fs_system - fLFMStartWord / pow(2.0f, 32) * Fs_system) * 2.0);
+    videoMsg.RadarVideoHeader.dwSampleFreqHz = htonl(Fs);
 
     // for (int ii = WAVE_NUM - 1; ii >= 0; ii--) {
     for (int ii = end_wave - 1; ii >= start_wave; ii--) {

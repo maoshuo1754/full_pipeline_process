@@ -195,6 +195,7 @@ void ThreadPool::copyToThreadMemory() {
 
         if (indexValue == 0)
         {
+            logFile << "block_index:" << block_index << " indexValue:" << indexValue << endl;
             if (inPacket) {
                 unsigned int copyEndAddr = (block_index + 1) * BLOCK_SIZE;
                 memcpyDataToThread(copyStartAddr, copyEndAddr);
@@ -227,6 +228,10 @@ void ThreadPool::copyToThreadMemory() {
         uint64_t header = *(uint64_t *)(sharedQueue->buffer + indexValue);
         if (indexValue >= block_index * BLOCK_SIZE && header == uint64Pattern) {
             seqNum = *(uint32_t *) (sharedQueue->buffer + indexValue + SEQ_OFFSET);
+            auto time_ms = *(uint32_t *) (sharedQueue->buffer + indexValue + 6 * 4);
+            logFile << "seqNum: " << seqNum << " time:" << time_ms << endl;
+
+
             if (seqNum != prevSeqNum + 1 && prevSeqNum != 0) {
                 inPacket = false;
                 std::cerr << "Error! Sequence number not continuous!" << prevIndexValue1 << ":" << prevSeqNum << " " << indexValue << ":" << seqNum << std::endl;
@@ -240,8 +245,9 @@ void ThreadPool::copyToThreadMemory() {
             startFlag = *(uint8_t *) (sharedQueue->buffer + indexValue + 20) & 0x02;
 
             if (startFlag) {
-
-//                cout << "Packege start. seqNum:" << seqNum << endl;
+                logFile << "========================" << endl;
+                logFile << "startFlag: " << startFlag << endl;
+                logFile << "Packege start. seqNum:" << seqNum << endl;
 //                auto startTime = high_resolution_clock::now();
 //                cout << "Total processing time for pulse group data: "
 //                     << duration_cast<microseconds>(startTime - circleStartTime).count() << " us" << endl;
