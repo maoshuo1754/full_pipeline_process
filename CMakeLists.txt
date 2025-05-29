@@ -18,7 +18,6 @@ set(CUDA_NVCC_FLAGS_DEBUG "-G -g")
 # Enable CUDA language
 enable_language(CUDA)
 set(SOURCE_FILES
-#        CudaMatrix.cu
         utils.cu
         ThreadPool.cu
         main.cpp
@@ -44,12 +43,18 @@ add_executable(${PROJECT_NAME} ${SOURCE_FILES} ${MYSRCS})
 
 find_package(CUDAToolkit REQUIRED)
 
-target_link_libraries(${PROJECT_NAME}
+ set(IPP_ROOT "/home/csic724/intel/oneapi/ipp/2021.12")
+ include_directories("${IPP_ROOT}/include")
+
+target_link_libraries(${PROJECT_NAME} PRIVATE
         pthread
         rt
         CUDA::cublas
         CUDA::cufft
         ${DLLFILES}
+        ${IPP_ROOT}/lib/intel64/libippcore.so
+        ${IPP_ROOT}/lib/intel64/libipps.so
+        ${IPP_ROOT}/lib/intel64/libippi.so
 )
 
 # Include CUDA Toolkit headers
@@ -59,3 +64,5 @@ target_include_directories(${PROJECT_NAME} PRIVATE
         ./NRx/include
 )
 
+# 可选：打印IPP信息
+message(STATUS "IPP include路径: ${IPP_ROOT}/include")

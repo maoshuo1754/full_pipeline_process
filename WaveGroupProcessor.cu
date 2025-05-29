@@ -4,7 +4,6 @@
 #include <vector>
 #include "kelnels.cuh"
 #include "nlohmann/json.hpp"
-#include "fdacoefs.h"
 #include "ThreadPool.h"
 
 WaveGroupProcessor::WaveGroupProcessor(int waveNum, int pulseNum, int rangeNum)
@@ -52,8 +51,6 @@ void WaveGroupProcessor::allocateDeviceMemory() {
     currentAddrOffset = 0;
     checkCudaErrors(cudaMalloc(&d_pc_coeffs_, range_num_ * sizeof(cufftComplex)));
     checkCudaErrors(cudaMalloc(&d_cfar_coeffs_, range_num_ * sizeof(cufftComplex)));
-    checkCudaErrors(cudaMalloc(&d_filtered_coeffs_, range_num_ * sizeof(cufftComplex)));
-    checkCudaErrors(cudaMalloc(&d_is_masked_, wave_num_ * range_num_));
     checkCudaErrors(cudaMalloc(&d_clutterMap_masked_, wave_num_ * pulse_num_ * range_num_));
     checkCudaErrors(cudaMemset(d_clutterMap_masked_, 1, wave_num_ * pulse_num_ * range_num_));
     checkCudaErrors(cudaMalloc(&d_chnSpeeds, pulse_num_ * sizeof(int)));
@@ -68,14 +65,20 @@ void WaveGroupProcessor::allocateDeviceMemory() {
     checkCudaErrors(cudaMemset(d_speed_channels_, 0, sizeof(int) * wave_num_ * range_num_));
     checkCudaErrors(cudaMalloc(&d_detect_rows_, sizeof(int) * pulse_num_));
 
+    // 锁定页内存
+    if (cudaHostAlloc(&h_data_after_Integration, total_size * sizeof(cufftComplex), cudaHostAllocDefault)!= cudaSuccess) {
+        std::cerr << "Device memory allocation failed" << std::endl;
+        cudaFreeHost(h_data_after_Integration);
+    }
+
+    h_azi_densify_buffer = static_cast<Ipp32fc*>(ippMalloc(azi_densify_group_num * crow_number * sizeof(Ipp32fc)));
+    h_data_after_Integration = new cufftComplex[total_size];
     thrust_cfar_ = thrust::device_ptr<cufftComplex>(d_cfar_res_);
 }
 
 void WaveGroupProcessor::freeDeviceMemory() {
     checkCudaErrors(cudaFree(d_pc_coeffs_));
     checkCudaErrors(cudaFree(d_cfar_coeffs_));
-    checkCudaErrors(cudaFree(d_filtered_coeffs_));
-    checkCudaErrors(cudaFree(d_is_masked_));
     checkCudaErrors(cudaFree(d_clutterMap_masked_));
     checkCudaErrors(cudaFree(d_chnSpeeds));
     checkCufftErrors(cufftDestroy(pc_plan_));
@@ -86,6 +89,7 @@ void WaveGroupProcessor::freeDeviceMemory() {
     checkCudaErrors(cudaFree(d_max_results_));
     checkCudaErrors(cudaFree(d_speed_channels_));
     checkCudaErrors(cudaFree(d_detect_rows_));
+    cudaFreeHost(h_data_after_Integration);
 }
 
 
@@ -125,10 +129,8 @@ void WaveGroupProcessor::getCoef() {
     if (coef_is_initialized_) {
         return;
     }
-    double delta_range = c_speed / Fs / 2.0;
-
     coef_is_initialized_ = true;
-    clutterMap_range_num_ = ceil(clutter_map_range / delta_range) + radar_params_->numSamples + range_correct;
+    clutterMap_range_num_ = ceil(clutter_map_range / radar_params_->distance_resolution) + radar_params_->numSamples + range_correct;
     checkCudaErrors(cudaMemcpy(d_pc_coeffs_, radar_params_->pcCoef.data(), NFFT * sizeof(cufftComplex), cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy(d_cfar_coeffs_, radar_params_->cfarCoef.data(), NFFT * sizeof(cufftComplex), cudaMemcpyHostToDevice));
     checkCudaErrors(cudaMemcpy(d_chnSpeeds, radar_params_->chnSpeeds.data(), pulse_num_ * sizeof(int), cudaMemcpyHostToDevice));
@@ -138,40 +140,6 @@ void WaveGroupProcessor::getCoef() {
     checkCufftErrors(cufftExecC2C(pc_plan_, d_pc_coeffs_, d_pc_coeffs_, CUFFT_FORWARD));
     checkCufftErrors(cufftExecC2C(pc_plan_, d_cfar_coeffs_, d_cfar_coeffs_, CUFFT_FORWARD));
 
-    int mask_size = WAVE_NUM * NFFT;
-    bool* h_isMasked = new bool[mask_size];
-    memset(h_isMasked, 0, mask_size);
-
-    for (const auto& region: clutterRegions) {
-        for (int wave = region.waveStartIdx; wave < region.waveEndIdx; wave++) {
-            float startRange = region.startRange;
-            float endRange = region.endRange;
-
-            int startIdx = static_cast<int>(startRange / delta_range) + range_correct;
-            int endIdx = static_cast<int>(endRange / delta_range) + range_correct;
-            assert(startRange < endRange);
-            assert(startIdx < endIdx);
-            assert(wave >= 0 && wave < WAVE_NUM);
-            assert(startIdx >= 0 && startIdx < NFFT);
-            assert(endIdx >= 0 && endIdx < NFFT);
-            for (int i = startIdx; i < endIdx; i++) {
-                h_isMasked[wave * NFFT + i] = true;
-            }
-        }
-    }
-    checkCudaErrors(cudaMemcpy(d_is_masked_, h_isMasked, mask_size, cudaMemcpyHostToDevice));
-
-    cufftComplex* h_filtered_coeffs_ = new cufftComplex[range_num_];
-    memset(h_filtered_coeffs_, 0, range_num_ * sizeof(cufftComplex));
-    for (int i = 0; i < BL; i++)
-    {
-        h_filtered_coeffs_[i].x = B[i];
-    }
-    checkCudaErrors(cudaMemcpy(d_filtered_coeffs_, h_filtered_coeffs_, range_num_ * sizeof(cufftComplex), cudaMemcpyHostToDevice));
-    checkCufftErrors(cufftExecC2C(pc_plan_, d_filtered_coeffs_, d_filtered_coeffs_, CUFFT_FORWARD));
-
-    delete[] h_filtered_coeffs_;
-    delete[] h_isMasked;
 }
 
 void WaveGroupProcessor::getResult() {
@@ -221,8 +189,7 @@ void WaveGroupProcessor::fullPipelineProcess()
             this->processMTI();
         }
         this->processCoherentIntegration(radar_params_->scale);
-        // this->clutterNoiseClassify();
-        this->processFFTshift();
+
         if (clutter_map_enable)
         {
             this->processClutterMap();
@@ -266,38 +233,33 @@ void WaveGroupProcessor::processMTI()
 
 void WaveGroupProcessor::processCoherentIntegration(float scale) {
 
-    cufftComplex* wavePtr = d_data_ + cur_wave_ * pulse_num_ * range_num_;
+    size_t offset = cur_wave_ * pulse_num_ * range_num_;
+    cufftComplex* wavePtr = d_data_ + offset;
+
     checkCufftErrors(cufftExecC2C(col_plan_, wavePtr, wavePtr, CUFFT_FORWARD));
 
     thrust_data_ = thrust::device_ptr<cufftComplex>(wavePtr);
     // 抵消脉压增益，同时除以range_num_是ifft之后必须除以ifft才能和matlab结果一样
     int size = pulse_num_ * range_num_;
     thrust::transform(exec_policy_, thrust_data_, thrust_data_ + size, thrust_data_, ScaleFunctor(scale / range_num_ / normFactor));
-}
 
-void WaveGroupProcessor::clutterNoiseClassify()
-{
-    static int count = 0;
-    count++;
-    // std::string filename1 = "WaveGroupProcessor_" + std::to_string(count) + ".txt";
-    // std::string filename2 = "bool" + std::to_string(count) + ".txt";
-    this->streamSynchronize();
-    // writeComplexToFile(d_data_ + 16*pulse_num_*range_num_, pulse_num_, range_num_, filename1);
-    gpu_manager.update_queues(d_data_, cur_wave_);
-    // 获取杂噪分类的结果到d_is_masked_
-    gpu_manager.get_clutter_copy(d_is_masked_, wave_num_ * range_num_);
-    // this->streamSynchronize();
-    // writeBoolToFile(d_is_masked_ + 16*range_num_, 1, range_num_, filename2);
-}
-
-void WaveGroupProcessor::processFFTshift()
-{
     dim3 blockDim_(CUDA_BLOCK_SIZE);
     dim3 gridDim_((range_num_ + blockDim_.x - 1) / blockDim_.x);
 
-    cufftComplex* wavePtr = d_data_ + cur_wave_ * pulse_num_ * range_num_;
+    // 做列 fftshift
     fftshift_columns_inplace_kernel<<<gridDim_, blockDim_, 0, stream_>>>(wavePtr, pulse_num_, range_num_);
+
+    // 拷贝相参积累后的数据到内存，做后续处理
+    cufftComplex* hostPtr = h_data_after_Integration + offset;
+    // checkCudaErrors(cudaMemcpyAsync(h_data_after_Integration+offset, wavePtr, sizeof(cufftComplex) * pulse_num_ * range_num_, cudaMemcpyDeviceToHost, stream_));
+
+    int range = round(azi_densify_range_end / radar_params_->distance_resolution) + range_correct + radar_params_->numSamples - 1;
+    for (int row = radar_params_->detect_rows[0]; row < radar_params_->detect_rows.back(); row++) {
+        checkCudaErrors(cudaMemcpyAsync(hostPtr + row * range_num_, wavePtr + row * range_num_, sizeof(cufftComplex) * range, cudaMemcpyDeviceToHost, stream_));
+    }
+
 }
+
 
 void WaveGroupProcessor::processClutterMap()
 {
@@ -372,24 +334,6 @@ void WaveGroupProcessor::cfar(int numSamples)  {
                                                   numRefCells, numSamples-1, numSamples+RANGE_NUM-range_correct);
 }
 
-void WaveGroupProcessor::cfar_by_col()
-{
-    double alpha = (numRefCells * 2 * (pow(Pfa_cfar, -1.0 / (numRefCells * 2)) - 1));
-    dim3 blockDim_(CUDA_BLOCK_SIZE);
-    dim3 gridDim_((range_num_ + blockDim_.x - 1) / blockDim_.x);
-
-    int size = wave_num_ * pulse_num_ * range_num_;
-    thrust::transform(exec_policy_, thrust_data_, thrust_data_ + size, thrust_data_, SquareFunctor());
-
-    for (int w = start_wave; w < end_wave; ++w)
-    {
-        auto* waveDataPtr = d_data_ + w * pulse_num_ * range_num_;
-        auto* cfarPtr = d_cfar_res_ + w * pulse_num_ * range_num_;
-        cfar_col_kernel<<<gridDim_, blockDim_, 0, stream_>>>(waveDataPtr, cfarPtr, pulse_num_, range_num_, alpha,
-                                                             numGuardCells, numRefCells);
-    }
-}
-
 
 void WaveGroupProcessor::processMaxSelection() {
     size_t offset = cur_wave_ * pulse_num_ * range_num_;
@@ -414,9 +358,34 @@ void WaveGroupProcessor::processMaxSelection() {
     );
 }
 
-void WaveGroupProcessor::getRadarParams() {
-    static double delta_range = 0.0;
+// 方位加密
+void WaveGroupProcessor::processAziDensify() {
+    for (int w = azi_densify_wave_start; w < azi_densify_wave_end; ++w) {
+        size_t offset = w * range_num_;
+        float* maxresPtr = radar_params_->h_max_results_ + offset;
+        int* speedsPtr = radar_params_->h_speed_channels_ + offset;
 
+        int idx_offset = range_correct + radar_params_->numSamples - 1;
+        int start_idx = round(azi_densify_range_start / radar_params_->distance_resolution) + idx_offset;
+        int end_idx   = round(azi_densify_range_end / radar_params_->distance_resolution) + idx_offset;
+
+        for (int idx = start_idx; idx <= end_idx; idx++) {
+            if (maxresPtr[idx] != 0.0) {
+                memset(h_azi_densify_buffer, 0, crow_number * sizeof(Ipp32fc));
+                int doppler_channel = radar_params_->speedsMap[speedsPtr[idx]];
+                for (int i = 0; i < wave_num_; i++) {
+                    // 自动拷贝到fftshift之后的位置
+                    *(h_azi_densify_buffer + (i + wave_num_ / 2) % wave_num_) = *reinterpret_cast<Ipp32fc*>(h_data_after_Integration + i * pulse_num_ * range_num_ + doppler_channel * range_num_ + idx);
+                }
+
+                perform_ifft_inplace(h_azi_densify_buffer, crow_number);
+            }
+        }
+    }
+}
+
+
+void WaveGroupProcessor::getRadarParams() {
     checkCudaErrors(cudaMemcpyAsync(radar_params_->rawMessage, d_unpack_data_, DATA_OFFSET, cudaMemcpyDeviceToHost, stream_));
 
     if (!radar_params_->isInit) {
@@ -429,6 +398,7 @@ void WaveGroupProcessor::getRadarParams() {
         radar_params_->PRT = packageArr[14] / Fs_system;  //120e-6
         auto fLFMStartWord = packageArr[16];
         radar_params_->bandWidth = (Fs_system - fLFMStartWord / pow(2.0f, 32) * Fs_system) * 2.0;
+        radar_params_->distance_resolution = c_speed / Fs / 2;
 
         double fs = 1.0 / radar_params_->PRT;
         double f_step = fs / PULSE_NUM;
@@ -439,6 +409,7 @@ void WaveGroupProcessor::getRadarParams() {
             double v = f * radar_params_->lambda / 2.0;
             int v_int = static_cast<int>(std::round(v * 100));
             radar_params_->chnSpeeds.push_back(v_int);
+            radar_params_->speedsMap[v_int] = i;
         }
 
         radar_params_->detect_rows.clear();
@@ -448,10 +419,6 @@ void WaveGroupProcessor::getRadarParams() {
             if (speed >= v1 && speed <= v2) {
                 radar_params_->detect_rows.push_back(row);
             }
-        }
-        if (delta_range == 0)
-        {
-            delta_range = c_speed / Fs / 2.0;
         }
         radar_params_->scale = 1.0f / sqrt(radar_params_->bandWidth * radar_params_->pulseWidth) / PULSE_NUM;
         radar_params_->getCoef();

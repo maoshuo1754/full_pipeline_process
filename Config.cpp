@@ -46,6 +46,14 @@ double clutter_map_range;
 float cfar_db_offset;
 float clutter_db_offset;
 
+int crow_number;
+int azi_densify_group_num;
+double azi_densify_range_start;
+double azi_densify_range_end;
+float azi_densify_invalid_num;
+int azi_densify_wave_start;
+int azi_densify_wave_end;
+
 int velocityCoalescenceMethod;
 int dataSource_type;
 int hamming_window_enable;
@@ -111,6 +119,14 @@ void loadConfig(const std::string& filename) {
     clutter_map_range = config["clutter_map_range"];
     cfar_db_offset = config["cfar_db_offset"];
     clutter_db_offset = config["clutter_db_offset"];
+
+    crow_number = config["crow_number"];
+    azi_densify_group_num = config["azi_densify_group_num"];
+    azi_densify_range_start = config["azi_densify_range_start"];
+    azi_densify_range_end = config["azi_densify_range_end"];
+    azi_densify_invalid_num = config["azi_densify_invalid_num"];
+    azi_densify_wave_start = config["azi_densify_wave_start"];
+    azi_densify_wave_end = config["azi_densify_wave_end"];
 
     velocityCoalescenceMethod = config["velocityCoalescenceMethod"];
     dataSource_type = config["dataSource_type"];

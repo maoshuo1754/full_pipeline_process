@@ -225,3 +225,52 @@ double getClutterMapAlpha(double q, double P_fa) {
              "No alpha value found for q=%.4f and P_fa=%.0e", q, P_fa);
     throw std::invalid_argument(errorMsg);
 }
+
+
+
+IppStatus perform_ifft_inplace(Ipp32fc* h_azi_densify_buffer, int crow_number) {
+    // 1. Initialize FFT specification
+    IppsFFTSpec_C_32fc* pFFTSpec = nullptr;
+    int order = (int)(log2(crow_number)); // FFT order: 2^order = crow_number
+    int sizeSpec = 0, sizeInit = 0, sizeBuf = 0;
+
+    // Get buffer sizes
+    IppStatus status = ippsFFTGetSize_C_32fc(order, IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate,
+                                            &sizeSpec, &sizeInit, &sizeBuf);
+    if (status != ippStsNoErr) return status;
+
+    // Allocate memory
+    Ipp8u* pSpec = (Ipp8u*)ippMalloc(sizeSpec);
+    Ipp8u* pInit = (Ipp8u*)ippMalloc(sizeInit);
+    Ipp8u* pBuf = sizeBuf ? (Ipp8u*)ippMalloc(sizeBuf) : NULL;
+    if (!pSpec || !pInit || (sizeBuf && !pBuf)) return ippStsMemAllocErr;
+
+    // Initialize FFT specification
+    status = ippsFFTInit_C_32fc(&pFFTSpec, order, IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate,
+                                pSpec, pInit);
+    if (status != ippStsNoErr) {
+        ippFree(pSpec);
+        ippFree(pInit);
+        if (pBuf) ippFree(pBuf);
+        return status;
+    }
+
+    // 2. Perform in-place IFFT
+    status = ippsFFTInv_CToC_32fc_I(h_azi_densify_buffer, pFFTSpec, pBuf);
+    if (status != ippStsNoErr) {
+        ippFree(pSpec);
+        ippFree(pInit);
+        if (pBuf) ippFree(pBuf);
+        return status;
+    }
+
+    // 3. Normalize to match MATLAB's ifft (divide by crow_number)
+    status = ippsDivC_32fc_I((Ipp32fc){(float)crow_number, 0}, h_azi_densify_buffer, crow_number);
+
+    // 4. Free memory
+    ippFree(pSpec);
+    ippFree(pInit);
+    if (pBuf) ippFree(pBuf);
+
+    return status;
+}

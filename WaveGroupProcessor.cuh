@@ -11,6 +11,8 @@
 #include "GpuQueueManager.cuh"
 #include <thrust/device_ptr.h>
 #include "SharedQueue.h"
+#include <ipp.h>
+#include <omp.h>
 using namespace std;
 
 struct RadarParams
@@ -21,11 +23,14 @@ struct RadarParams
     double pulseWidth;          // 脉宽
     double PRT;                 // 脉冲重复时间
     double lambda;              // 波长
+    double distance_resolution; // 距离分辨力
     int numSamples;             // 脉压采样点数
     float scale;                // 归一化系数(脉压和ifft之后)
     float* h_max_results_;      // 选大结果 (wave_num_ x range_num_)
+    float* h_azi_densify_results_; // 方位加密结果 (wave_num_ x range_num_)
     int* h_speed_channels_;     // 速度通道 (wave_num_ x range_num_)
     vector<int> chnSpeeds;      // 速度通道对应的速度
+    map<int, int> speedsMap;    // 速度对应的速度通道
     vector<int> detect_rows;           // 速度范围内的行
     vector<cufftComplex> pcCoef;    // 脉压系数
     vector<cufftComplex> cfarCoef;  // CFAR系数
@@ -35,12 +40,15 @@ struct RadarParams
         isInit = false;
         rawMessage = new uint8_t[2 * DATA_OFFSET];
         h_max_results_ = new float[WAVE_NUM * NFFT];
+        h_azi_densify_results_ = new float[WAVE_NUM * NFFT];
+        ippsSet_32f(azi_densify_invalid_num, h_azi_densify_results_, WAVE_NUM * NFFT);
         h_speed_channels_ = new int[WAVE_NUM * NFFT];
     }
 
     ~RadarParams() {
         delete[] rawMessage;
         delete[] h_max_results_;
+        delete[] h_azi_densify_results_;
         delete[] h_speed_channels_;
     }
 
@@ -80,13 +88,11 @@ public:
     void processPulseCompression();
     void processMTI();
     void processCoherentIntegration(float scale);
-    void clutterNoiseClassify();
-    void processFFTshift();
     void processClutterMap();
     void processCFAR();
     void cfar(int numSamples);
-    void cfar_by_col();
     void processMaxSelection();
+    void processAziDensify();
     void getRadarParams();
     void saveToDebugFile(int frame, std::ofstream& debugFile);
     void getCoef();
@@ -112,10 +118,14 @@ private:
     cufftComplex* d_cfar_res_;       // cfar结果  (wave_num_ x pulse_num_ x range_num_)
     float* d_max_results_;           // 选大结果   (wave_num_ x range_num_)
     int* d_speed_channels_;          // 每个距离单元选出来的速度   (wave_num_ x range_num_)
-    int* d_chnSpeeds;                // 多普勒维度对应的速度
+    int* d_chnSpeeds;                // 多普勒维度对应的速度 (pulse_num_)
     int* d_detect_rows_;             // 需要检测的通道
     bool* d_clutterMap_masked_;      // 杂波图
     int cur_wave_;                   // 正在处理的波束号
+
+    // 主机内存，用于波束加密
+    cufftComplex* h_data_after_Integration;  //积累后数据  (wave_num_ x pulse_num_ x range_num_)
+    Ipp32fc* h_azi_densify_buffer;      // 方位加密中间变量
 
     int detect_rows_num_;            // 需要检测的通道数
     int clutterMap_range_num_;          // 做杂波图的距离单元数
@@ -128,9 +138,6 @@ private:
     cufftHandle pc_plan_;            // 脉压FFT，用于对下面两个系数做脉压
     cufftComplex* d_pc_coeffs_;      // 脉压系数    (1 x range_num_)
     cufftComplex* d_cfar_coeffs_;    // cfar系数   (1 x range_num_)
-
-    cufftComplex* d_filtered_coeffs_;// 滤波器系数
-    bool* d_is_masked_;              // 需要杂波处理的区域
 
     RadarParams* radar_params_;
     // 杂波区域判断类

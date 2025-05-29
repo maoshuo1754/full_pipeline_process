@@ -2,7 +2,7 @@
   "dataPath": "/backup2/data/Fang_data/output.dat",
 
   "0表示文件": "1表示Pcie",
-  "dataSource_type": 1,
+  "dataSource_type": 0,
 
   "THREADS_MEM_SIZE": 1073741824,
 
@@ -25,8 +25,17 @@
   "numRefCells": 64,
   "cfar_db_offset": 0,
 
+  "x3": "方位加密参数",
+  "crow_number": 8192,
+  "azi_densify_group_num": 20,
+  "azi_densify_range_start": 500,
+  "azi_densify_range_end": 2000,
+  "azi_densify_invalid_num": 99999,
+  "azi_densify_wave_start": 4,
+  "azi_densify_wave_end": 28,
+
   "num_threads": 4,
-  "normFactor": 2,
+  "normFactor": 4,
 
   "local_video_ip": " 192.168.6.35",
   "local_video_port": 0,

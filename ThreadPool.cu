@@ -39,7 +39,8 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue) :
 
         debugFile.open(debug_file_path, std::ios::binary);
     }
-    logFile = ofstream("error_log.txt", ios_base::app);
+    // logFile = ofstream("error_log.txt", ios_base::app);
+    logFile = ofstream("error_log.txt");
     cout << "Initial Finished" << endl;
 }
 
@@ -125,6 +126,7 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
     waveGroupProcessor->saveToDebugFile(taskId, debugFile);
     waveGroupProcessor->fullPipelineProcess();
     waveGroupProcessor->getResult();
+    waveGroupProcessor->processAziDensify();
 
     // 存储结果到共享 map，而不是直接发送
     {

@@ -13,6 +13,7 @@
 #include <string>
 #include <cuComplex.h>
 #include <chrono>
+#include <ipp.h>
 #include <sys/time.h>
 #include <map>
 
@@ -41,6 +42,8 @@ void saveToBinaryFile(const cufftComplex* d_data, size_t size, const char* filen
 std::vector<cufftComplex> readFilterFromFile(const std::string& filename);
 
 double getClutterMapAlpha(double q, double P_fa);
+
+IppStatus perform_ifft_inplace(Ipp32fc* h_azi_densify_buffer, int crow_number);
 
 // 枚举用于标识数据类型
 enum class DataType : int {

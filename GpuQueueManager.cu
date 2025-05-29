@@ -4,6 +4,7 @@
 
 #include "GpuQueueManager.cuh"
 #include "kelnels.cuh"
+#include "ipp.h"
 
 void GpuQueueManager::update_queues(const cufftComplex* d_frame, int wave_idx)
 {
