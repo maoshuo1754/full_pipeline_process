@@ -1,5 +1,10 @@
 #include "utils.h"
 
+#include <complex>
+#include <iomanip>
+
+#include "Config.h"
+
 using namespace std;
 std::vector<cufftComplex> PCcoef(double BandWidth, double PulseWidth, double Fs, int _NFFT, int hamming_window_enable) {
 //    std::cout << "BandWidth:" << BandWidth << " PulseWidth:" << PulseWidth << " Fs:" << Fs << std::endl;
@@ -226,51 +231,54 @@ double getClutterMapAlpha(double q, double P_fa) {
     throw std::invalid_argument(errorMsg);
 }
 
-
-
-IppStatus perform_ifft_inplace(Ipp32fc* h_azi_densify_buffer, int crow_number) {
-    // 1. Initialize FFT specification
-    IppsFFTSpec_C_32fc* pFFTSpec = nullptr;
-    int order = (int)(log2(crow_number)); // FFT order: 2^order = crow_number
-    int sizeSpec = 0, sizeInit = 0, sizeBuf = 0;
-
-    // Get buffer sizes
-    IppStatus status = ippsFFTGetSize_C_32fc(order, IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate,
-                                            &sizeSpec, &sizeInit, &sizeBuf);
-    if (status != ippStsNoErr) return status;
-
-    // Allocate memory
-    Ipp8u* pSpec = (Ipp8u*)ippMalloc(sizeSpec);
-    Ipp8u* pInit = (Ipp8u*)ippMalloc(sizeInit);
-    Ipp8u* pBuf = sizeBuf ? (Ipp8u*)ippMalloc(sizeBuf) : NULL;
-    if (!pSpec || !pInit || (sizeBuf && !pBuf)) return ippStsMemAllocErr;
-
-    // Initialize FFT specification
-    status = ippsFFTInit_C_32fc(&pFFTSpec, order, IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate,
-                                pSpec, pInit);
-    if (status != ippStsNoErr) {
-        ippFree(pSpec);
-        ippFree(pInit);
-        if (pBuf) ippFree(pBuf);
-        return status;
+IppStatus save_ipp32fc_to_txt(const Ipp32fc* data, int length, const std::string& filename) {
+    // 打开文件以写入
+    std::ofstream out_file(filename);
+    if (!out_file.is_open()) {
+        return ippStsErr; // 返回错误状态，表示文件打开失败
     }
 
-    // 2. Perform in-place IFFT
-    status = ippsFFTInv_CToC_32fc_I(h_azi_densify_buffer, pFFTSpec, pBuf);
-    if (status != ippStsNoErr) {
-        ippFree(pSpec);
-        ippFree(pInit);
-        if (pBuf) ippFree(pBuf);
-        return status;
+    // 设置输出格式：高精度，固定点表示
+    out_file << std::fixed << std::setprecision(10);
+
+    // 逐个写入复数的实部和虚部，用空格分隔
+    for (int i = 0; i < length; ++i) {
+        out_file << data[i].re;
+        if (data[i].im >= 0) {
+            out_file << "+";
+        }
+        out_file << data[i].im << "i\n";
     }
 
-    // 3. Normalize to match MATLAB's ifft (divide by crow_number)
-    status = ippsDivC_32fc_I((Ipp32fc){(float)crow_number, 0}, h_azi_densify_buffer, crow_number);
+    // 检查写入是否成功
+    if (out_file.fail()) {
+        out_file.close();
+        return ippStsErr; // 返回错误状态，表示写入失败
+    }
 
-    // 4. Free memory
-    ippFree(pSpec);
-    ippFree(pInit);
-    if (pBuf) ippFree(pBuf);
+    // 关闭文件
+    out_file.close();
+    return ippStsNoErr; // 返回成功状态
+}
 
-    return status;
+double asind(double x) {
+    std::complex<double> z(x, 0.0);
+    std::complex<double> result = std::asin(z) * 180.0 / M_PI;
+    return result.real();
+}
+
+// wave_idx: 波束号，0 ~ WAVE_NUM-1
+// 根据波束号和lambda获取当前波束方位
+float getAzi(int wave_idx, double lambda) {
+    int nAzmCode = (azi_table[31 - wave_idx] & 0xffff);
+
+    if (nAzmCode > 32768)
+        nAzmCode -= 65536;
+
+    //rAzm = 153.4 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0f;
+    // rAzm = 183.4 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0f;//-83
+    float rAzm = 249.0633 + asin(nAzmCode * lambda / (65536 * d)) / 3.1415926 * 180.0f;//-13
+    if (rAzm < 0)
+        rAzm += 360.f;
+    return rAzm;
 }

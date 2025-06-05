@@ -57,13 +57,16 @@ extern double forgetting_factor;
 extern double clutter_map_range;
 extern float clutter_db_offset;
 
-extern int crow_number;
+extern int azi_densify_enable;
+extern int azi_densify_crow_num;
+extern int azi_densify_EstSample_num;
 extern int azi_densify_group_num;
 extern double azi_densify_range_start;
 extern double azi_densify_range_end;
 extern float azi_densify_invalid_num;
 extern int azi_densify_wave_start;
 extern int azi_densify_wave_end;
+extern double azi_densify_d;
 
 extern int velocityCoalescenceMethod;  // 0代表质心法，1代表选大
 extern int dataSource_type;                 // 0表示文件，1表示Pcie

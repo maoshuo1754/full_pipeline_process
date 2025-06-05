@@ -12,7 +12,6 @@
 #include <thrust/device_ptr.h>
 #include "SharedQueue.h"
 #include <ipp.h>
-#include <omp.h>
 using namespace std;
 
 struct RadarParams
@@ -27,7 +26,6 @@ struct RadarParams
     int numSamples;             // 脉压采样点数
     float scale;                // 归一化系数(脉压和ifft之后)
     float* h_max_results_;      // 选大结果 (wave_num_ x range_num_)
-    float* h_azi_densify_results_; // 方位加密结果 (wave_num_ x range_num_)
     int* h_speed_channels_;     // 速度通道 (wave_num_ x range_num_)
     vector<int> chnSpeeds;      // 速度通道对应的速度
     map<int, int> speedsMap;    // 速度对应的速度通道
@@ -35,12 +33,16 @@ struct RadarParams
     vector<cufftComplex> pcCoef;    // 脉压系数
     vector<cufftComplex> cfarCoef;  // CFAR系数
 
+    float* h_azi_densify_results_;  // 方位加密结果 (wave_num_ x range_num_)
+    double* h_azi_theta;             // 方位
+
 
     RadarParams(): cfarCoef(NFFT, {0, 0}) {
         isInit = false;
         rawMessage = new uint8_t[2 * DATA_OFFSET];
         h_max_results_ = new float[WAVE_NUM * NFFT];
         h_azi_densify_results_ = new float[WAVE_NUM * NFFT];
+        h_azi_theta = new double[azi_densify_crow_num];
         ippsSet_32f(azi_densify_invalid_num, h_azi_densify_results_, WAVE_NUM * NFFT);
         h_speed_channels_ = new int[WAVE_NUM * NFFT];
     }
@@ -49,6 +51,7 @@ struct RadarParams
         delete[] rawMessage;
         delete[] h_max_results_;
         delete[] h_azi_densify_results_;
+        delete[] h_azi_theta;
         delete[] h_speed_channels_;
     }
 
@@ -64,7 +67,78 @@ struct RadarParams
         for(int i = startIdx; i < startIdx + numRefCells; i++) {
             cfarCoef[i].x = 1.0f;
         }
+
+        for (int i = 0; i < azi_densify_crow_num; i++) {
+            h_azi_theta[azi_densify_crow_num - i - 1] = asind((i - azi_densify_crow_num / 2) * lambda / azi_densify_crow_num / azi_densify_d);
+            // std::cout << i << " " << h_azi_theta[i] << std::endl;
+        }
+
     }
+};
+
+
+class FFTProcessor {
+public:
+    // 构造函数：初始化 FFT 规格
+    FFTProcessor(int dim) : dim_(dim) {
+        order_ = (int)(log2(dim_)); // 计算 FFT 阶数
+
+        // 获取 FFT 所需的缓冲区大小
+        IppStatus status = ippsFFTGetSize_C_32fc(order_, IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate,
+                                                &sizeSpec_, &sizeInit_, &sizeBuf_);
+        if (status != ippStsNoErr) {
+            throw std::runtime_error("获取 FFT 大小失败");
+        }
+
+        // 分配内存
+        pSpec_ = (Ipp8u*)ippMalloc(sizeSpec_);
+        pInit_ = (Ipp8u*)ippMalloc(sizeInit_);
+        pBuf_ = sizeBuf_ ? (Ipp8u*)ippMalloc(sizeBuf_) : nullptr;
+        // if (!pSpec_ || !pInit_ || (sizeBuf_ && !pBuf_)) {
+        //     throw std::runtime_error("内存分配失败");
+        // }
+
+        // 初始化 FFT 规格
+        status = ippsFFTInit_C_32fc(&pFFTSpec_, order_, IPP_FFT_NODIV_BY_ANY, ippAlgHintAccurate,
+                                    pSpec_, pInit_);
+        if (status != ippStsNoErr) {
+            throw std::runtime_error("初始化 FFT 失败");
+        }
+    }
+
+    // 析构函数：释放内存
+    ~FFTProcessor() {
+        ippFree(pSpec_);
+        ippFree(pInit_);
+        if (pBuf_) ippFree(pBuf_);
+    }
+
+    IppStatus perform_fft_inplace(Ipp32fc* buffer) {
+        // 执行就地 FFT，不进行缩放以匹配 MATLAB 的 fft
+        return ippsFFTFwd_CToC_32fc_I(buffer, pFFTSpec_, pBuf_);
+    }
+
+    // 执行 IFFT 的优化函数
+    IppStatus perform_ifft_inplace(Ipp32fc* buffer) {
+        // 执行就地 IFFT
+        IppStatus status = ippsFFTInv_CToC_32fc_I(buffer, pFFTSpec_, pBuf_);
+        if (status != ippStsNoErr) {
+            return status;
+        }
+        // 归一化以匹配 MATLAB 的 ifft（除以 dim_）
+        return ippsDivC_32fc_I((Ipp32fc){(float)dim_, 0}, buffer, dim_);
+    }
+
+private:
+    int dim_;                     // 输入的 ifft阶数
+    int order_;                  // FFT 阶数
+    int sizeSpec_;               // FFT 规格缓冲区大小
+    int sizeInit_;               // 初始化缓冲区大小
+    int sizeBuf_;                // 工作缓冲区大小
+    Ipp8u* pSpec_;               // FFT 规格缓冲区
+    Ipp8u* pInit_;               // 初始化缓冲区
+    Ipp8u* pBuf_;                // 工作缓冲区
+    IppsFFTSpec_C_32fc* pFFTSpec_; // FFT 规格指针
 };
 
 class WaveGroupProcessor {
@@ -126,6 +200,7 @@ private:
     // 主机内存，用于波束加密
     cufftComplex* h_data_after_Integration;  //积累后数据  (wave_num_ x pulse_num_ x range_num_)
     Ipp32fc* h_azi_densify_buffer;      // 方位加密中间变量
+    Ipp32f* h_azi_densify_abs_buffer;   // 方位加密求模中间变量
 
     int detect_rows_num_;            // 需要检测的通道数
     int clutterMap_range_num_;          // 做杂波图的距离单元数
@@ -142,6 +217,8 @@ private:
     RadarParams* radar_params_;
     // 杂波区域判断类
     GpuQueueManager& gpu_manager;    // 共享的单例引用
+    FFTProcessor ifft_processor_32;         // ipp库进行ifft的对象
+    FFTProcessor ifft_processor_8192;         // ipp库进行ifft的对象
 
     static void cleanup();
     void setupFFTPlans();

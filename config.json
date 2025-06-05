@@ -1,5 +1,5 @@
 {
-  "dataPath": "/backup2/data/Fang_data/output.dat",
+    "dataPath": "/backup2/data/caiji/20250525193945_150GB.dat",
 
   "0表示文件": "1表示Pcie",
   "dataSource_type": 0,
@@ -26,13 +26,16 @@
   "cfar_db_offset": 0,
 
   "x3": "方位加密参数",
-  "crow_number": 8192,
+  "azi_densify_enable": 1,
+  "azi_densify_crow_num": 8192,
+  "azi_densify_EstSample_num": 512,
   "azi_densify_group_num": 20,
-  "azi_densify_range_start": 500,
-  "azi_densify_range_end": 2000,
+  "azi_densify_range_start": 1350,
+  "azi_densify_range_end": 1550,
   "azi_densify_invalid_num": 99999,
-  "azi_densify_wave_start": 4,
-  "azi_densify_wave_end": 28,
+  "azi_densify_wave_start": 11,
+  "azi_densify_wave_end": 14,
+  "azi_densify_d": 0.0135,
 
   "num_threads": 4,
   "normFactor": 4,
@@ -69,8 +72,8 @@
   "debug_mode": 0,
   "start_frame": 1,
   "end_frame": 10,
-  "start_wave": 0,
-  "end_wave": 32,
+  "start_wave": 4,
+  "end_wave": 28,
 
   "file_data_delay": 0,
 

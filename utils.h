@@ -43,7 +43,11 @@ std::vector<cufftComplex> readFilterFromFile(const std::string& filename);
 
 double getClutterMapAlpha(double q, double P_fa);
 
-IppStatus perform_ifft_inplace(Ipp32fc* h_azi_densify_buffer, int crow_number);
+IppStatus save_ipp32fc_to_txt(const Ipp32fc* data, int length, const std::string& filename);
+
+double asind(double x);
+
+float getAzi(int wave_idx, double lambda);
 
 // 枚举用于标识数据类型
 enum class DataType : int {

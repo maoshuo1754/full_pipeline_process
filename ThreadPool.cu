@@ -126,7 +126,10 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
     waveGroupProcessor->saveToDebugFile(taskId, debugFile);
     waveGroupProcessor->fullPipelineProcess();
     waveGroupProcessor->getResult();
-    waveGroupProcessor->processAziDensify();
+
+    if (azi_densify_enable) {
+        waveGroupProcessor->processAziDensify();
+    }
 
     // 存储结果到共享 map，而不是直接发送
     {

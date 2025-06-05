@@ -151,12 +151,12 @@ Plot::~Plot() {
     outfile.close();
 }
 
-void Plot::MainFun(char *dataBuf, unsigned int dataSize, int *speeds) {
+void Plot::MainFun(char *dataBuf, unsigned int dataSize, int *speeds, float* azi_arr) {
     // 将dataBuf转为NRx8bitPulse
     XX92NRx8bit(dataBuf);
 
     // 点迹凝聚使用速度信息
-    PlotConv(nrx8bitPulse, speeds, NFFT);
+    PlotConv(nrx8bitPulse, speeds, NFFT, azi_arr);
 
 }
 
@@ -277,7 +277,7 @@ void Plot::XX92NRx8bit(char *xx9buf) {
 }
 
 
-void Plot::PlotConv(NRx8BitPulse *res_a, int *speed, size_t speedLength) {
+void Plot::PlotConv(NRx8BitPulse *res_a, int *speed, size_t speedLength, float* azi_arr) {
 //    cout << speed[326] << endl;
     // 是否测试时间
 //    bool bIsTestTime = NRxObj::isTestTime();

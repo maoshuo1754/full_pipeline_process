@@ -46,13 +46,16 @@ double clutter_map_range;
 float cfar_db_offset;
 float clutter_db_offset;
 
-int crow_number;
+int azi_densify_enable;
+int azi_densify_crow_num;
+int azi_densify_EstSample_num;
 int azi_densify_group_num;
 double azi_densify_range_start;
 double azi_densify_range_end;
 float azi_densify_invalid_num;
 int azi_densify_wave_start;
 int azi_densify_wave_end;
+double azi_densify_d;
 
 int velocityCoalescenceMethod;
 int dataSource_type;
@@ -120,13 +123,16 @@ void loadConfig(const std::string& filename) {
     cfar_db_offset = config["cfar_db_offset"];
     clutter_db_offset = config["clutter_db_offset"];
 
-    crow_number = config["crow_number"];
+    azi_densify_enable = config["azi_densify_enable"];
+    azi_densify_crow_num = config["azi_densify_crow_num"];
+    azi_densify_EstSample_num = config["azi_densify_EstSample_num"];
     azi_densify_group_num = config["azi_densify_group_num"];
     azi_densify_range_start = config["azi_densify_range_start"];
     azi_densify_range_end = config["azi_densify_range_end"];
     azi_densify_invalid_num = config["azi_densify_invalid_num"];
     azi_densify_wave_start = config["azi_densify_wave_start"];
     azi_densify_wave_end = config["azi_densify_wave_end"];
+    azi_densify_d = config["azi_densify_d"];
 
     velocityCoalescenceMethod = config["velocityCoalescenceMethod"];
     dataSource_type = config["dataSource_type"];

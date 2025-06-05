@@ -132,10 +132,10 @@ public:
     Plot();
     ~Plot();
 
-    void MainFun(char *dataBuf, unsigned int dataSize, int *speedChannels);
+    void MainFun(char *dataBuf, unsigned int dataSize, int *speedChannels, float* azi_arr);
 
     void XX92NRx8bit(char *xx9buf);
-    void PlotConv(NRx8BitPulse* res_a, int *speed, size_t speedLength);
+    void PlotConv(NRx8BitPulse* res_a, int *speed, size_t speedLength, float* azi_arr);
 
     void setMTDRange(int low, int high);
     void setSocket(int socket, sockaddr_in addr);

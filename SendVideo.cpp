@@ -94,27 +94,18 @@ void SendVideo::send(RadarParams* radar_params_) {
     videoMsg.RadarVideoHeader.dwSampleFreqHz = htonl(Fs);
 
     // for (int ii = WAVE_NUM - 1; ii >= 0; ii--) {
-    for (int ii = end_wave - 1; ii >= start_wave; ii--) {
-        int sec = dwTemp / 1000 % 60 + timeArray[ii];
-//        cout << "time:" << h << ":" << min << ":" << sec << endl;
+    for (int wave_idx = end_wave - 1; wave_idx >= start_wave; wave_idx--) {
+        int sec = dwTemp / 1000 % 60 + timeArray[wave_idx];
 
-        nAzmCode = (azi_table[31 - ii] & 0xffff);
-
-        if (nAzmCode > 32768)
-            nAzmCode -= 65536;
-
-        //rAzm = 153.4 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0f;
-        // rAzm = 183.4 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0f;//-83
-        rAzm = 249.0633 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0f;//-13
-        if (rAzm < 0)
-            rAzm += 360.f;
+        rAzm = getAzi(wave_idx, radar_params_->lambda);
 
         // cout << ii << " " << rAzm << endl;
         dwTemp = UINT16(rAzm / 360.0f * 65536.0f);
         videoMsg.RadarVideoHeader.wAziCode = htons(dwTemp);
 
-        auto* rowData = radar_params_->h_max_results_ + ii * NFFT;
-        auto* rowSpeed = radar_params_->h_speed_channels_ + ii * NFFT;
+        auto* rowData = radar_params_->h_max_results_ + wave_idx * NFFT;
+        auto* rowSpeed = radar_params_->h_speed_channels_ + wave_idx * NFFT;
+        auto* rowAzi = radar_params_->h_azi_densify_results_ + wave_idx * NFFT;
 
         // int offset = range_correct + radar_params_->numSamples - 1 + floor((BL-1)/2);
         int offset = range_correct + radar_params_->numSamples - 1;
@@ -127,6 +118,7 @@ void SendVideo::send(RadarParams* radar_params_) {
                 data_amp = 255;
             videoMsg.bytVideoData[k] = (unsigned char)data_amp;
             rowSpeed[k] = rowSpeed[k + offset];
+            rowAzi[k] = rowAzi[k + offset];
         }
 
 
@@ -139,7 +131,7 @@ void SendVideo::send(RadarParams* radar_params_) {
             std::cerr << "Detected video sendto() failed!" << std::endl;
             break;
         }
-        plot.MainFun(reinterpret_cast<char *>(&videoMsg), sizeof(videoMsg), rowSpeed);
+        plot.MainFun(reinterpret_cast<char *>(&videoMsg), sizeof(videoMsg), rowSpeed, rowAzi);
     }
 
 

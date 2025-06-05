@@ -11,6 +11,9 @@ WaveGroupProcessor::WaveGroupProcessor(int waveNum, int pulseNum, int rangeNum)
       pulse_num_(pulseNum),
       range_num_(rangeNum),
       coef_is_initialized_(false),
+ifft_processor_32(waveNum),
+      ifft_processor_8192(azi_densify_crow_num),
+
       gpu_manager(GpuQueueManager::getInstance())
 {
     radar_params_ = new RadarParams();
@@ -71,7 +74,8 @@ void WaveGroupProcessor::allocateDeviceMemory() {
         cudaFreeHost(h_data_after_Integration);
     }
 
-    h_azi_densify_buffer = static_cast<Ipp32fc*>(ippMalloc(azi_densify_group_num * crow_number * sizeof(Ipp32fc)));
+    h_azi_densify_buffer = static_cast<Ipp32fc*>(ippMalloc(azi_densify_crow_num * sizeof(Ipp32fc)));
+    h_azi_densify_abs_buffer = static_cast<Ipp32f*>(ippMalloc(azi_densify_crow_num * sizeof(Ipp32f)));
     h_data_after_Integration = new cufftComplex[total_size];
     thrust_cfar_ = thrust::device_ptr<cufftComplex>(d_cfar_res_);
 }
@@ -90,6 +94,9 @@ void WaveGroupProcessor::freeDeviceMemory() {
     checkCudaErrors(cudaFree(d_speed_channels_));
     checkCudaErrors(cudaFree(d_detect_rows_));
     cudaFreeHost(h_data_after_Integration);
+
+    ippFree(h_azi_densify_buffer);
+    ippFree(h_azi_densify_abs_buffer);
 }
 
 
@@ -179,7 +186,7 @@ void WaveGroupProcessor::streamSynchronize() {
 void WaveGroupProcessor::fullPipelineProcess()
 {
 
-    for (cur_wave_ = start_wave; cur_wave_ < end_wave; cur_wave_++)
+    for (cur_wave_ = 0; cur_wave_ < wave_num_; cur_wave_++)
     {
 
         this->processPulseCompression();
@@ -360,25 +367,57 @@ void WaveGroupProcessor::processMaxSelection() {
 
 // 方位加密
 void WaveGroupProcessor::processAziDensify() {
+    int idx_offset = range_correct + radar_params_->numSamples - 1;
+    int start_idx = round(azi_densify_range_start / radar_params_->distance_resolution) + idx_offset;
+    int end_idx   = round(azi_densify_range_end / radar_params_->distance_resolution) + idx_offset;
+
+    // 先初始化
+    ippsSet_32f(azi_densify_invalid_num, radar_params_->h_azi_densify_results_, WAVE_NUM * NFFT);
+
     for (int w = azi_densify_wave_start; w < azi_densify_wave_end; ++w) {
         size_t offset = w * range_num_;
         float* maxresPtr = radar_params_->h_max_results_ + offset;
         int* speedsPtr = radar_params_->h_speed_channels_ + offset;
 
-        int idx_offset = range_correct + radar_params_->numSamples - 1;
-        int start_idx = round(azi_densify_range_start / radar_params_->distance_resolution) + idx_offset;
-        int end_idx   = round(azi_densify_range_end / radar_params_->distance_resolution) + idx_offset;
-
+        double targetAziEst = 0;
+        double AmpSum = 0;
+        Ipp32f maxAmp;
+        int maxIdx;
         for (int idx = start_idx; idx <= end_idx; idx++) {
             if (maxresPtr[idx] != 0.0) {
-                memset(h_azi_densify_buffer, 0, crow_number * sizeof(Ipp32fc));
+                memset(h_azi_densify_buffer, 0, azi_densify_crow_num * sizeof(Ipp32fc));
                 int doppler_channel = radar_params_->speedsMap[speedsPtr[idx]];
+                // Ipp32fc* tmp = new Ipp32fc[wave_num_];
                 for (int i = 0; i < wave_num_; i++) {
-                    // 自动拷贝到fftshift之后的位置
-                    *(h_azi_densify_buffer + (i + wave_num_ / 2) % wave_num_) = *reinterpret_cast<Ipp32fc*>(h_data_after_Integration + i * pulse_num_ * range_num_ + doppler_channel * range_num_ + idx);
+                    // 自动拷贝到fftshift之后的位置 + (i + wave_num_ / 2) % wave_num_
+                    *(h_azi_densify_buffer + i) = *reinterpret_cast<Ipp32fc*>(h_data_after_Integration + i * pulse_num_ * range_num_ + doppler_channel * range_num_ + idx);
                 }
+                // save_ipp32fc_to_txt(h_azi_densify_buffer, wave_num_, "origin_data.txt");
 
-                perform_ifft_inplace(h_azi_densify_buffer, crow_number);
+                ifft_processor_32.perform_ifft_inplace(h_azi_densify_buffer);  // 32点fft
+
+                ifft_processor_8192.perform_fft_inplace(h_azi_densify_buffer); // 8192点ifft
+
+                // save_ipp32fc_to_txt(h_azi_densify_buffer, azi_densify_crow_num, "data1.txt");
+
+                ippsMagnitude_32fc(h_azi_densify_buffer, h_azi_densify_abs_buffer, azi_densify_crow_num);  // 求模
+
+                ippsMaxIndx_32f(h_azi_densify_abs_buffer, azi_densify_crow_num, &maxAmp, &maxIdx);      // 选最大值
+
+                int startIdx = max(maxIdx - azi_densify_EstSample_num, 0);
+                int endIdx = min(maxIdx + azi_densify_EstSample_num, azi_densify_crow_num);
+                for (int i = startIdx; i < endIdx; i++) {
+                    float tmp = h_azi_densify_abs_buffer[(i + azi_densify_crow_num/2) % azi_densify_crow_num];
+                    targetAziEst += radar_params_->h_azi_theta[i] * tmp;
+                    AmpSum += tmp;
+                }
+                radar_params_->h_azi_densify_results_[w * range_num_ + idx] = targetAziEst / AmpSum + 254.0;
+
+                float wave_azi = getAzi(w, radar_params_->lambda);
+                float AziEst = targetAziEst / AmpSum + 254.0;
+                // cout << "wave_num:" << w << endl;
+                cout << "range:" << radar_params_->distance_resolution * (idx - idx_offset) << endl;
+                cout << "originAzi:" << wave_azi << " EstAzi:" << AziEst << " Diff:" << wave_azi - AziEst << endl;
             }
         }
     }
@@ -518,7 +557,7 @@ void WaveGroupProcessor::saveToDebugFile(int frame, ofstream& debugFile)
 
     // 更新 nextToSave 并通知其他线程
     {
-        std::lock_guard<std::mutex> lock(saveMutex);
+        std::lock_guard<std::mutex> lock_2(saveMutex);
         nextToSave++;  // 移到下一个 frame
         save_cv.notify_all();  // 通知等待的线程
     }
