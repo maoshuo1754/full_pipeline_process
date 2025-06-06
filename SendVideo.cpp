@@ -121,11 +121,6 @@ void SendVideo::send(RadarParams* radar_params_) {
             rowAzi[k] = rowAzi[k + offset];
         }
 
-
-//        cout << "ii:" << ii << " [rAzm]:" << rAzm << endl;
-        dwTemp = UINT16(rAzm / 360.0 * 65536.0f);
-        videoMsg.RadarVideoHeader.wAziCode = htons(dwTemp);
-
         auto sendres = sendto(sendSocket, &videoMsg, sizeof(videoMsg), 0, (sockaddr *)&remoteAddr, sizeof(remoteAddr));
         if (sendres < 0) {
             std::cerr << "Detected video sendto() failed!" << std::endl;

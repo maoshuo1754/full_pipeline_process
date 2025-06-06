@@ -416,8 +416,8 @@ void WaveGroupProcessor::processAziDensify() {
                 float wave_azi = getAzi(w, radar_params_->lambda);
                 float AziEst = targetAziEst / AmpSum + 254.0;
                 // cout << "wave_num:" << w << endl;
-                cout << "range:" << radar_params_->distance_resolution * (idx - idx_offset) << endl;
-                cout << "originAzi:" << wave_azi << " EstAzi:" << AziEst << " Diff:" << wave_azi - AziEst << endl;
+                // cout << "range:" << radar_params_->distance_resolution * (idx - idx_offset) << endl;
+                // cout << "originAzi:" << wave_azi << " EstAzi:" << AziEst << " Diff:" << wave_azi - AziEst << endl;
             }
         }
     }

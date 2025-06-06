@@ -35,6 +35,9 @@ typedef struct sTempPlotBuff
     double dMaxSpeed; // 最大速度
     double dPowerSum; // 幅度和
     double dMaxPower; // 最大幅度
+    double dAziEst;   // 最大幅度对应的方位
+    double dAziEstAmpSum; // 方位加密算出的方位幅度和
+    bool dAziEstEnable;     // 方位加密算法有效位
     uint32 unSamCellSum;  // 过门限单元数
     uint32 unPulseSum;    // 脉冲计数
     uint32 unStartAziIdx; // 起始方位码
@@ -68,6 +71,9 @@ typedef struct sTempPlotBuff
         dSumSpeed = 0.0;
         dMaxSpeed = -1.0;
         dMaxPower = -1.0;
+        dAziEst = 0.0;
+        dAziEstAmpSum = 0.0;
+        dAziEstEnable = true;
         dPowerSum = -1.0;
         unSamCellSum = 0;
         unPulseSum = 0;
@@ -146,7 +152,7 @@ private:
     bool checkPolyArea(uint16 azi, uint32 dis);
 
     void PlotNetSend(NRx8BitPulse*);
-    void DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPulse *curDetThr, int *speed);
+    void DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPulse *curDetThr, int *speed, float* azi_arr);
     void AziDetCov(NRx8BitPulse*);
     void PlotsDetect(NRx8BitPulse*);
 

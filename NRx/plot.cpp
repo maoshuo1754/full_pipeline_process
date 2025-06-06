@@ -278,7 +278,6 @@ void Plot::XX92NRx8bit(char *xx9buf) {
 
 
 void Plot::PlotConv(NRx8BitPulse *res_a, int *speed, size_t speedLength, float* azi_arr) {
-//    cout << speed[326] << endl;
     // 是否测试时间
 //    bool bIsTestTime = NRxObj::isTestTime();
 //    static uint32 uiProPulseAll = 0;
@@ -334,7 +333,7 @@ void Plot::PlotConv(NRx8BitPulse *res_a, int *speed, size_t speedLength, float* 
     /* 过正北判断 */
     ScanOverNorthJudge(res_a);
     /* 距离检测 */
-    DisDetCov(res_a, res_b, res_c, speed);
+    DisDetCov(res_a, res_b, res_c, speed, azi_arr);
     /* 方位检测 */
     AziDetCov(res_a);
     /* 点迹检测 */
@@ -1029,7 +1028,7 @@ void Plot::PlotNetSend(NRx8BitPulse *curPulse) {
 *   返回：
 *       无
 *******************************************************************/
-void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPulse *curDetThr, int *speed) {
+void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPulse *curDetThr, int *speed, float* azi_arr) {
     /* ************************** 获取当前脉冲参数 ***************************** */
     double dCurPulseTime = (double) (((uint64) (curPulse->vidinfo.relTime0) << 32) + curPulse->vidinfo.relTime1);
     // std::cout << "dCurPulseTime" << dCurPulseTime << std::endl;
@@ -1085,6 +1084,9 @@ void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPul
     double dMaxSpeed = -65536.0;
     double dPowerSum = 0.0;
     double dMaxPower = - 65536.0;
+    double dAziEst = 0.0;
+    double dAziEstAmpSum = 0.0;
+    bool dAziEstEnable = true;
 
     uint32 uiDisRowIdx = 0;          // 格子行号
     uint32 uiStartDisRowIdx = 0;     // 格子起始行号
@@ -1146,9 +1148,15 @@ void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPul
                     double tmp_speed = speed[idx3] / 100.0; // 质心法
                     dSumSpeed += tmp_speed * dCurPulseData[idx3]; // 求和
                     dPowerSum += dCurPulseData[idx3]; // 功率求和
+
+                    if (azi_arr[idx3] == azi_densify_invalid_num) {
+                        dAziEstEnable = false;
+                    }
+                    dAziEstAmpSum += azi_arr[idx3] * dCurPulseData[idx3]; // 加密方位求和
                     if (dCurPulseData[idx3] > dMaxPower) {
                         dMaxPower = dCurPulseData[idx3];
                         dMaxSpeed = abs(tmp_speed); // 取大
+                        dAziEst = azi_arr[idx3]; // 方位取大
                     }
 
                     if (curBaGAmp != nullptr) {
@@ -1212,7 +1220,9 @@ void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPul
                 CurPlotBuff_Row.dMaxSpeed = dMaxSpeed;
                 CurPlotBuff_Row.dPowerSum = dPowerSum;
                 CurPlotBuff_Row.dMaxPower = dMaxPower;
-
+                CurPlotBuff_Row.dAziEst = dAziEst;
+                CurPlotBuff_Row.dAziEstAmpSum = dAziEstAmpSum;
+                CurPlotBuff_Row.dAziEstEnable = dAziEstEnable;
                 CurPlotBuff[uiDisRowIdx] = CurPlotBuff_Row;
 
                 /* ********************* 过程变量值重置 ************************ */
@@ -1229,6 +1239,9 @@ void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPul
                 dPowerSum = 0.0;
                 dMaxSpeed = 0.0;
                 dMaxPower = -65536.0;
+                dAziEst = 0.0;
+                dAziEstAmpSum = 0.0;
+                dAziEstEnable = true;
                 bDisDetStart = false;
                 /* ********************************************************** */
             } else // 如果未开始，则继续滑动
@@ -1432,6 +1445,15 @@ void Plot::PlotsDetect(NRx8BitPulse *curPulse) {
                         if (dPlotAzi > 360.0) {
                             dPlotAzi = dPlotAzi - 360.0;
                         }
+                        if (PrePlotBuff_idx.dAziEstEnable && azi_densify_enable) {
+                            if (azi_densify_plot_conv_method == 0) {
+                                dPlotAzi = PrePlotBuff_idx.dAziEst;
+                            }
+                            else {
+                                dPlotAzi = PrePlotBuff_idx.dAziEstAmpSum / PrePlotBuff_idx.dAmpSum;
+                            }
+                        }
+
                         dPlotDis = PrePlotBuff_idx.dDisAmpSum / PrePlotBuff_idx.dAmpSum;
                         break;
                     case 1:  // 几何中心
@@ -1586,8 +1608,11 @@ sTempPlotBuff Plot::GridCombine(sTempPlotBuff plotGrid_1, sTempPlotBuff plotGrid
     // TODO 合并plotGrid_1和plotGrid_2的速度信息
     plotGrid_1.dSumSpeed += plotGrid_2.dSumSpeed;
     plotGrid_1.dPowerSum += plotGrid_2.dPowerSum;
+    plotGrid_1.dAziEstAmpSum += plotGrid_2.dAziEstAmpSum;
+    plotGrid_1.dAziEstEnable &= plotGrid_2.dAziEstEnable;
     if (plotGrid_1.dMaxPower < plotGrid_2.dMaxPower) {
         plotGrid_1.dMaxSpeed = plotGrid_2.dMaxSpeed;
+        plotGrid_1.dAziEst = plotGrid_2.dAziEst;
     }
 
     if (plotGrid_1.dStartAzi > plotGrid_2.dStartAzi) {

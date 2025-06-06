@@ -58,6 +58,7 @@ extern double clutter_map_range;
 extern float clutter_db_offset;
 
 extern int azi_densify_enable;
+extern int azi_densify_plot_conv_method;
 extern int azi_densify_crow_num;
 extern int azi_densify_EstSample_num;
 extern int azi_densify_group_num;

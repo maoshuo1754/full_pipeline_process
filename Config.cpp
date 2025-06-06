@@ -47,6 +47,7 @@ float cfar_db_offset;
 float clutter_db_offset;
 
 int azi_densify_enable;
+int azi_densify_plot_conv_method;
 int azi_densify_crow_num;
 int azi_densify_EstSample_num;
 int azi_densify_group_num;
@@ -124,6 +125,7 @@ void loadConfig(const std::string& filename) {
     clutter_db_offset = config["clutter_db_offset"];
 
     azi_densify_enable = config["azi_densify_enable"];
+    azi_densify_plot_conv_method = config["azi_densify_plot_conv_method"];
     azi_densify_crow_num = config["azi_densify_crow_num"];
     azi_densify_EstSample_num = config["azi_densify_EstSample_num"];
     azi_densify_group_num = config["azi_densify_group_num"];
