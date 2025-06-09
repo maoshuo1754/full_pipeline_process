@@ -50,6 +50,7 @@ extern double Pfa_cfar;
 extern int numGuardCells;
 extern int numRefCells;
 extern float cfar_db_offset;
+extern int rasterize_manage_enable;
 
 extern int clutter_map_enable;
 extern double Pfa_clutter_map;

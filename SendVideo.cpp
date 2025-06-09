@@ -98,6 +98,8 @@ void SendVideo::send(RadarParams* radar_params_) {
         int sec = dwTemp / 1000 % 60 + timeArray[wave_idx];
 
         rAzm = getAzi(wave_idx, radar_params_->lambda);
+        // rAzm = (getAzi(wave_idx, radar_params_->lambda) + 120);
+        // if (rAzm > 360) rAzm -= 360;
 
         // cout << ii << " " << rAzm << endl;
         dwTemp = UINT16(rAzm / 360.0f * 65536.0f);

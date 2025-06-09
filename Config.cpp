@@ -45,6 +45,7 @@ double forgetting_factor;
 double clutter_map_range;
 float cfar_db_offset;
 float clutter_db_offset;
+int rasterize_manage_enable;
 
 int azi_densify_enable;
 int azi_densify_plot_conv_method;
@@ -122,6 +123,7 @@ void loadConfig(const std::string& filename) {
     forgetting_factor = parseFraction(forgetting_factor_str);
     clutter_map_range = config["clutter_map_range"];
     cfar_db_offset = config["cfar_db_offset"];
+    rasterize_manage_enable = config["rasterize_manage_enable"];
     clutter_db_offset = config["clutter_db_offset"];
 
     azi_densify_enable = config["azi_densify_enable"];

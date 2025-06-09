@@ -6,8 +6,9 @@
 #include "Config.h"
 #include <chrono>
 #include <thread>
+#include <arpa/inet.h>
 
-DataSource::DataSource(std::atomic<bool>& running, SharedQueue* sharedQueue):
+ DataSource::DataSource(std::atomic<bool>& running, SharedQueue* sharedQueue):
     monitorWriterRunning(running), sharedQueue(sharedQueue) {
 
 }
@@ -70,6 +71,9 @@ XDMADataSource::XDMADataSource(std::atomic<bool>& running, SharedQueue* sharedQu
     initializeBuffers();
     setupEvents();
     writeXDMAUserByte(0x00008080, 0x02); // trigger ready signal
+//----------------------------------work mode---------------------------------------
+    writeXDMAUserByte(0x00005004,0x04);//default mode=4
+    writeXDMAUserByte(0x00005000,0x01);//triggrt flag
 }
 
 XDMADataSource::~XDMADataSource() {

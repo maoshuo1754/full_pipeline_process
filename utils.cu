@@ -282,3 +282,68 @@ float getAzi(int wave_idx, double lambda) {
         rAzm += 360.f;
     return rAzm;
 }
+
+// 函数：读取 CSV 文件并传输到显存
+// 返回值：指向显存中数据的指针 (double*)
+std::vector<double> readCSVToGPU(const std::string& filename, int& rows, int& cols) {
+    // 1. 读取 CSV 文件到 CPU 内存
+    std::vector<std::vector<double>> data;
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::string message = "Could not open file " + filename;
+        rows = 0;
+        cols = 0;
+        throw runtime_error(message);
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        std::vector<double> row;
+        std::stringstream ss(line);
+        std::string cell;
+        while (std::getline(ss, cell, ',')) {
+            row.push_back(std::stod(cell));
+        }
+        data.push_back(row);
+    }
+    file.close();
+
+    // 检查数据是否为空
+    if (data.empty()) {
+        std::string message = "Could not read file " + filename;
+        rows = 0;
+        cols = 0;
+        throw runtime_error(message);
+    }
+
+    // 获取矩阵维度
+    rows = data.size();
+    cols = data[0].size();
+
+    if (rows != WAVE_NUM || cols != NFFT) {
+        throw std::invalid_argument("Invalid number of rows or columns");
+    }
+
+    // 2. 将二维向量展平为一维数组（显存中通常使用一维连续内存）
+    std::vector<double> flat_data;
+    flat_data.reserve(rows * cols);
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            flat_data.push_back(data[i][j]);
+        }
+    }
+
+    return flat_data;
+
+    // // 3. 分配显存
+    // double* d_data = nullptr;
+    // size_t size = rows * cols * sizeof(double);
+    // cudaError_t err = cudaMalloc((void**)&d_data, size);
+    // checkCudaErrors(err);
+    //
+    // // 4. 将数据从 CPU 传输到显存
+    // err = cudaMemcpy(d_data, flat_data.data(), size, cudaMemcpyHostToDevice);
+    // checkCudaErrors(err);
+    //
+    // return d_data;
+}

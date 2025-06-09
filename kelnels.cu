@@ -47,13 +47,13 @@ __global__ void rowWiseMulKernel(cufftComplex *d_a, cufftComplex *d_b, int nrows
 
 __global__ void cmpKernel(  cufftComplex *d_data, cufftComplex *thresholds,
                             bool *d_clutterMap_masked_, int nrows, int ncols,
-                            int offset, int cfar_enable, double cfar_db_offset
+                            int offset, int cfar_enable, double* cfar_db_offset
                             ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < nrows * ncols) {
         if (d_clutterMap_masked_[idx] && idx % ncols < ncols - offset)
         {
-            if (d_data[idx].x < thresholds[idx + offset].x * powf(10, cfar_db_offset/10) && cfar_enable) { // 后面不在这改
+            if (d_data[idx].x < thresholds[idx + offset].x * powf(10, cfar_db_offset[idx % ncols]/10) && cfar_enable) { // 后面不在这改
                 d_data[idx].x = 0;
                 d_data[idx].y = 0;
             } else {
@@ -158,6 +158,39 @@ __global__ void maxKernel2D(cufftComplex *data, float *maxValues, int *speedChan
         // 只遍历传入的 row 索引
         for (int i = 0; i < num_rows; ++i) {
             int row = d_rows[i];
+            int ind = wave * nrows * ncols + row * ncols + col;
+            if (data[ind].x > maxVal) {
+                maxVal = data[ind].x;
+                maxChannel = row;
+            }
+        }
+
+        // 输出结果
+        int out_idx = wave * ncols + col;
+        maxValues[out_idx] = (maxChannel == -1) ? 0 : maxVal; // 如果没有有效值，返回 0
+        speedChannels[out_idx] = d_chnSpeeds[maxChannel];                  // 记录对应的通道索引
+    }
+}
+
+__global__ void maxKernel_rasterize(cufftComplex *data, float *maxValues, int *speedChannels, int *d_chnSpeeds,
+                           double* min_speed_idx, double* max_speed_idx, int nrows, int ncols, int nwaves) {
+    int col = blockIdx.x * blockDim.x + threadIdx.x;  // 列索引（range 维度）
+    int wave = blockIdx.y * blockDim.y + threadIdx.y; // 波索引（wave 维度）
+
+    if (col < ncols && wave < nwaves) {
+        float maxVal = -FLT_MAX;  // 初始化最大值为负无穷
+        int maxChannel = -1;      // 初始化通道索引为无效值
+
+        // 只遍历传入的 row 索引
+        for (int row = int(min_speed_idx[col]); row < max_speed_idx[col]; ++row) {
+            int ind = wave * nrows * ncols + row * ncols + col;
+            if (data[ind].x > maxVal) {
+                maxVal = data[ind].x;
+                maxChannel = row;
+            }
+        }
+
+        for (int row = int(nrows - max_speed_idx[col]); row < nrows - min_speed_idx[col]; ++row) {
             int ind = wave * nrows * ncols + row * ncols + col;
             if (data[ind].x > maxVal) {
                 maxVal = data[ind].x;
@@ -538,7 +571,10 @@ __global__ void compute_clutter_kernel(
 
 
 // CUDA Kernel：计算对数并更新杂波图
-__global__ void processClutterMapKernel(cufftComplex* d_data, float* d_clutter_map, bool* d_clutterMap_masked, size_t size, int range_num, float alpha, float forgetting_factor, float clutter_db_offset) {
+__global__ void processClutterMapKernel(cufftComplex* d_data, float* d_clutter_map, bool* d_clutterMap_masked,
+    size_t size, int range_num, float alpha, float forgetting_factor, float clutter_db_offset, double* d_rasterize_thresholds_wave
+
+    ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < size && idx % NFFT <= range_num) {
         // 计算幅值的平方
@@ -547,7 +583,7 @@ __global__ void processClutterMapKernel(cufftComplex* d_data, float* d_clutter_m
         float log_magnitude = 10 * log10f(magnitude_squared);
 
         // 计算阈值
-        float threshold = alpha + d_clutter_map[idx] + clutter_db_offset;
+        float threshold = alpha + d_clutter_map[idx] + clutter_db_offset + d_rasterize_thresholds_wave[idx % NFFT];
         if (log_magnitude > threshold) {
             d_clutterMap_masked[idx] = true;
         } else {

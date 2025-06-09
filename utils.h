@@ -45,6 +45,8 @@ double getClutterMapAlpha(double q, double P_fa);
 
 IppStatus save_ipp32fc_to_txt(const Ipp32fc* data, int length, const std::string& filename);
 
+std::vector<double> readCSVToGPU(const std::string& filename, int& rows, int& cols);
+
 double asind(double x);
 
 float getAzi(int wave_idx, double lambda);

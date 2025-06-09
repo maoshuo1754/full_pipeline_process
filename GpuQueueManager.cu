@@ -4,56 +4,7 @@
 
 #include "GpuQueueManager.cuh"
 #include "kelnels.cuh"
-#include "ipp.h"
 
-void GpuQueueManager::update_queues(const cufftComplex* d_frame, int wave_idx)
-{
-    std::lock_guard<std::mutex> lock(mutex_);
-    launch_update_kernel(d_frame, wave_idx);
-    update_count++;
-    if (update_count >= CLUTTER_QUEUE_SIZE) {
-        launch_clutter_kernel(wave_idx);
-    }
-    cudaDeviceSynchronize(); // Ensure kernel completion
-}
-
-void GpuQueueManager::launch_update_kernel(const cufftComplex* d_frame, int wave_idx)
-{
-    dim3 blockDim(16, 16);
-    dim3 gridDim(
-        1,
-        (NFFT + blockDim.y - 1) / blockDim.y
-    );
-
-    update_queues_kernel<<<gridDim, blockDim>>>(
-        d_frame + wave_idx * PULSE_NUM * NFFT,
-        d_queues + wave_idx * NFFT * CLUTTER_QUEUE_SIZE,
-        d_queues_speed + wave_idx * NFFT * SPEED_CHANNELS * CLUTTER_QUEUE_SIZE,
-        d_indices + wave_idx * NFFT,
-        PULSE_NUM,
-        NFFT,
-        CLUTTER_QUEUE_SIZE,
-        SPEED_CHANNELS
-    );
-}
-
-void GpuQueueManager::launch_clutter_kernel(int wave_idx)
-{
-    dim3 blockDim(16, 16);
-    dim3 gridDim(
-        1,
-        (NFFT + blockDim.y - 1) / blockDim.y
-    );
-    compute_clutter_kernel<<<gridDim, blockDim>>>(
-        d_queues + wave_idx * NFFT * CLUTTER_QUEUE_SIZE,
-        d_queues_speed + wave_idx * NFFT * SPEED_CHANNELS * CLUTTER_QUEUE_SIZE,
-        d_indices + wave_idx * NFFT,
-        d_clutter + wave_idx * NFFT,
-        NFFT,
-        CLUTTER_QUEUE_SIZE,
-        SPEED_CHANNELS
-    );
-}
 
 // 基于d_data(脉压后数据)计算距离多普勒每个点杂波图是否为杂波
 // 超过阈值的d_clutterMap_masked为true，否则为false
@@ -67,8 +18,23 @@ void GpuQueueManager::processClutterMap(cufftComplex* d_data, bool* d_clutterMap
     cufftComplex* d_data_wave = d_data + wave_idx * size;
     float* d_clutter_map_wave = d_clutter_map + wave_idx * size;
     bool* d_clutterMap_masked_wave = d_clutterMap_masked + wave_idx * size;
+    double* d_rasterize_thresholds_wave = d_rasterize_thresholds + wave_idx * NFFT; // 栅格化门限控制
     // 启动 kernel
     int blockSize = CUDA_BLOCK_SIZE;
     int gridSize = (size + blockSize - 1) / blockSize;
-    processClutterMapKernel<<<gridSize, blockSize>>>(d_data_wave, d_clutter_map_wave, d_clutterMap_masked_wave, size, clutterMap_range_num, alpha, forgetting_factor, clutter_db_offset);
+    processClutterMapKernel<<<gridSize, blockSize>>>(d_data_wave, d_clutter_map_wave, d_clutterMap_masked_wave,
+        size, clutterMap_range_num, alpha, forgetting_factor, clutter_db_offset, d_rasterize_thresholds_wave);
+
+}
+
+double* GpuQueueManager::wave_thresholds(int wave_idx) {
+    return d_rasterize_thresholds + wave_idx * NFFT;
+}
+
+double* GpuQueueManager::wave_min_speed(int wave_idx) {
+    return d_rasterize_min_speed + wave_idx * NFFT;
+}
+
+double* GpuQueueManager::wave_max_speed(int wave_idx) {
+    return d_rasterize_max_speed + wave_idx * NFFT;
 }

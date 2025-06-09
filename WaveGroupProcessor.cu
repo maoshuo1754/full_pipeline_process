@@ -11,7 +11,7 @@ WaveGroupProcessor::WaveGroupProcessor(int waveNum, int pulseNum, int rangeNum)
       pulse_num_(pulseNum),
       range_num_(rangeNum),
       coef_is_initialized_(false),
-ifft_processor_32(waveNum),
+      ifft_processor_32(waveNum),
       ifft_processor_8192(azi_densify_crow_num),
 
       gpu_manager(GpuQueueManager::getInstance())
@@ -306,6 +306,8 @@ void WaveGroupProcessor::processCFAR() {
     double alpha = numRefCells * 2 * (pow(Pfa_cfar, -1.0 / (numRefCells * 2)) - 1);
     thrust::transform(exec_policy_, thrust_cfar_, thrust_cfar_ + size, thrust_cfar_, ScaleFunctor(alpha/2.0/numRefCells));
 
+    double* d_rasterize_thresholds_wave = gpu_manager.wave_thresholds(cur_wave_);
+
     // 对比噪底选结果，(结果开根号)
     cmpKernel<<<gridSize, blockSize, 0, stream_>>>(
         wavePtr,                        // 原始数据
@@ -315,7 +317,7 @@ void WaveGroupProcessor::processCFAR() {
         range_num_,                     // 需要计算的距离单元数
         shift_offset,                   // 平移，抵消频域滤波偏移量
         cfar_enable,                    // cfar控制参数，0代表不做cfar
-        cfar_db_offset
+        d_rasterize_thresholds_wave     // 栅格化门限控制
     );
 }
 
@@ -352,17 +354,36 @@ void WaveGroupProcessor::processMaxSelection() {
         1
     );
 
-    maxKernel2D<<<gridDim_, blockDim_, 0, stream_>>>(
-        d_data_ + offset,           // 输入数据
-        d_max_results_ + offset2,    // 最大值输出
-        d_speed_channels_ + offset2, // 通道索引输出
-        d_chnSpeeds,
-        d_detect_rows_,    // 通道范围（row 索引数组）
-        detect_rows_num_,  // 通道数量
-        pulse_num_,        // 总行数
-        range_num_,        // 总列数
-        1                  // 总波束数
-    );
+    if (!rasterize_manage_enable) {
+        maxKernel2D<<<gridDim_, blockDim_, 0, stream_>>>(
+            d_data_ + offset,           // 输入数据
+            d_max_results_ + offset2,    // 最大值输出
+            d_speed_channels_ + offset2, // 通道索引输出
+            d_chnSpeeds,
+            d_detect_rows_,    // 通道范围（row 索引数组）
+            detect_rows_num_,  // 通道数量
+            pulse_num_,        // 总行数
+            range_num_,        // 总列数
+            1                  // 总波束数
+        );
+    }
+    else {
+        double* d_rasterize_min_speed = gpu_manager.wave_min_speed(cur_wave_);
+        double* d_rasterize_max_speed = gpu_manager.wave_max_speed(cur_wave_);
+
+        maxKernel_rasterize<<<gridDim_, blockDim_, 0, stream_>>>(
+            d_data_ + offset,           // 输入数据
+            d_max_results_ + offset2,    // 最大值输出
+            d_speed_channels_ + offset2, // 通道索引输出
+            d_chnSpeeds,
+            d_rasterize_min_speed,  // 栅格化速度最小索引
+            d_rasterize_max_speed,  // 栅格化速度最大索引
+            pulse_num_,        // 总行数
+            range_num_,        // 总列数
+            1                  // 总波束数
+        );
+    }
+
 }
 
 // 方位加密
@@ -434,7 +455,7 @@ void WaveGroupProcessor::getRadarParams() {
         auto freqPoint = packageArr[11] & 0x000000ff;
         radar_params_->lambda = c_speed / ((freqPoint * 10 + initCarryFreq) * 1e6);
         radar_params_->pulseWidth = (packageArr[13] & 0xfffff) / Fs_system; //5e-6
-        radar_params_->PRT = packageArr[14] / Fs_system;  //120e-6
+        radar_params_->PRT = packageArr[14] / Fs_system;  //125e-6
         auto fLFMStartWord = packageArr[16];
         radar_params_->bandWidth = (Fs_system - fLFMStartWord / pow(2.0f, 32) * Fs_system) * 2.0;
         radar_params_->distance_resolution = c_speed / Fs / 2;
