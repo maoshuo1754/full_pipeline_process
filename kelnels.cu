@@ -183,7 +183,7 @@ __global__ void maxKernel_rasterize(cufftComplex *data, float *maxValues, int *s
 
         // 只遍历传入的 row 索引
         for (int row = int(min_speed_idx[col]); row < max_speed_idx[col]; ++row) {
-            int ind = wave * nrows * ncols + row * ncols + col;
+            int ind = row * ncols + col;
             if (data[ind].x > maxVal) {
                 maxVal = data[ind].x;
                 maxChannel = row;
@@ -191,7 +191,7 @@ __global__ void maxKernel_rasterize(cufftComplex *data, float *maxValues, int *s
         }
 
         for (int row = int(nrows - max_speed_idx[col]); row < nrows - min_speed_idx[col]; ++row) {
-            int ind = wave * nrows * ncols + row * ncols + col;
+            int ind = row * ncols + col;
             if (data[ind].x > maxVal) {
                 maxVal = data[ind].x;
                 maxChannel = row;

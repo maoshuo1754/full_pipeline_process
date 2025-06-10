@@ -2,7 +2,7 @@
     "dataPath": "/backup2/data/caiji/20250525193945_150GB.dat",
 
   "0表示文件": "1表示Pcie",
-  "dataSource_type": 1,
+  "dataSource_type": 0,
 
   "THREADS_MEM_SIZE": 1073741824,
 
@@ -19,7 +19,7 @@
   "clutter_db_offset": 0,
 
   "x2": "cfar参数",
-  "cfar_enable": 1,
+  "cfar_enable": 0,
   "Pfa_cfar": 1e-7,
   "numGuardCells": 4,
   "numRefCells": 64,
@@ -43,7 +43,7 @@
   "azi_densify_d": 0.0135,
 
   "num_threads": 4,
-  "normFactor": 4,
+  "normFactor": 2,
 
   "local_video_ip": "192.168.6.35",
   "local_video_port": 0,

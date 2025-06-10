@@ -64,11 +64,11 @@ private:
 
         auto h_rasterize_min_speed = readCSVToGPU("/home/csic724/CLionProjects/PcieReader/matlab_simulate/栅格化生成/min_speed.csv", m, n);
         assert(m == WAVE_NUM && n == NFFT);
-        checkCudaErrors(cudaMemcpy(d_rasterize_min_speed, h_rasterize_thresholds.data(), size, cudaMemcpyHostToDevice));
+        checkCudaErrors(cudaMemcpy(d_rasterize_min_speed, h_rasterize_min_speed.data(), size, cudaMemcpyHostToDevice));
 
         auto h_rasterize_max_speed = readCSVToGPU("/home/csic724/CLionProjects/PcieReader/matlab_simulate/栅格化生成/max_speed.csv", m, n);
         assert(m == WAVE_NUM && n == NFFT);
-        checkCudaErrors(cudaMemcpy(d_rasterize_max_speed, h_rasterize_thresholds.data(), size, cudaMemcpyHostToDevice));
+        checkCudaErrors(cudaMemcpy(d_rasterize_max_speed, h_rasterize_max_speed.data(), size, cudaMemcpyHostToDevice));
 
         alpha = getClutterMapAlpha(forgetting_factor, Pfa_clutter_map);
     }

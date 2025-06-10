@@ -56,7 +56,8 @@ enum class DataType : int {
     COMPLEX = 0,
     INT = 1,
     FLOAT = 2,
-    BOOL = 3
+    BOOL = 3,
+    DOUBLE = 4
 };
 
 // 模板函数：将设备端数组写入二进制文件
@@ -84,6 +85,8 @@ void writeArrayToFile(T* d_data_, int rows_, int cols_, const std::string& filen
         dtype = DataType::FLOAT;
     } else if (std::is_same<T, bool>::value) {
         dtype = DataType::BOOL;
+    } else if (std::is_same<T, double>::value) {
+        dtype = DataType::DOUBLE;
     } else {
         std::cerr << "Unsupported data type!" << std::endl;
         outfile.close();
