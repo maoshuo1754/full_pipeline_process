@@ -19,18 +19,18 @@
   "clutter_db_offset": 0,
 
   "x2": "cfar参数",
-  "cfar_enable": 0,
+  "cfar_enable": 1,
   "Pfa_cfar": 1e-7,
   "numGuardCells": 4,
   "numRefCells": 64,
   "cfar_db_offset": 0,
 
   "x5": "栅格化管理",
-  "rasterize_manage_enable": 1,
+  "rasterize_manage_enable": 0,
 
   "x3": "方位加密参数",
-  "azi_densify_enable": 0,
-  "点迹凝聚方式": "0:选大， 1:质心",
+  "azi_densify_enable": 1,
+  "点迹凝聚方位方式": "0:选大， 1:质心",
   "azi_densify_plot_conv_method": 1,
   "azi_densify_crow_num": 8192,
   "azi_densify_EstSample_num": 512,
@@ -43,9 +43,9 @@
   "azi_densify_d": 0.0135,
 
   "num_threads": 4,
-  "normFactor": 2,
+  "normFactor": 4,
 
-  "local_video_ip": "192.168.6.35",
+  "local_video_ip": "127.0.0.1",
   "local_video_port": 0,
   "remote_video_ip": "224.168.6.189",
   "remote_video_port": 8192,

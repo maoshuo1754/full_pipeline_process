@@ -1149,15 +1149,15 @@ void Plot::DisDetCov(NRx8BitPulse *curPulse, NRx8BitPulse *curBaGAmp, NRx8BitPul
                     dSumSpeed += tmp_speed * dCurPulseData[idx3]; // 求和
                     dPowerSum += dCurPulseData[idx3]; // 功率求和
 
-                    if (azi_arr[idx3] == azi_densify_invalid_num) {
-                        dAziEstEnable = false;
+                    if (azi_arr[idx3] != azi_densify_invalid_num) {
+                        dAziEstAmpSum += azi_arr[idx3] * dCurPulseData[idx3]; // 加密方位求和
+                        if (dCurPulseData[idx3] > dMaxPower) {
+                            dMaxPower = dCurPulseData[idx3];
+                            dMaxSpeed = abs(tmp_speed); // 取大
+                            dAziEst = azi_arr[idx3]; // 方位取大
+                        }
                     }
-                    dAziEstAmpSum += azi_arr[idx3] * dCurPulseData[idx3]; // 加密方位求和
-                    if (dCurPulseData[idx3] > dMaxPower) {
-                        dMaxPower = dCurPulseData[idx3];
-                        dMaxSpeed = abs(tmp_speed); // 取大
-                        dAziEst = azi_arr[idx3]; // 方位取大
-                    }
+
 
                     if (curBaGAmp != nullptr) {
                         dSumBaGAmp += curBaGAmp->data[idx3];
@@ -1445,13 +1445,16 @@ void Plot::PlotsDetect(NRx8BitPulse *curPulse) {
                         if (dPlotAzi > 360.0) {
                             dPlotAzi = dPlotAzi - 360.0;
                         }
-                        if (PrePlotBuff_idx.dAziEstEnable && azi_densify_enable) {
+                        if (azi_densify_enable) {
                             if (azi_densify_plot_conv_method == 0) {
                                 dPlotAzi = PrePlotBuff_idx.dAziEst;
                             }
                             else {
                                 dPlotAzi = PrePlotBuff_idx.dAziEstAmpSum / PrePlotBuff_idx.dAmpSum;
                             }
+                            // if (!(dPlotAzi >= dPlotSAzi && dPlotAzi <= dPlotEAzi)) {
+                            //     dPlotAzi = PrePlotBuff_idx.dAziAmpSum / PrePlotBuff_idx.dAmpSum;
+                            // }
                         }
 
                         dPlotDis = PrePlotBuff_idx.dDisAmpSum / PrePlotBuff_idx.dAmpSum;
