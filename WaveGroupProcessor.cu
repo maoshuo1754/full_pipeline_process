@@ -395,6 +395,10 @@ void WaveGroupProcessor::processAziDensify() {
     // 先初始化
     ippsSet_32f(azi_densify_invalid_num, radar_params_->h_azi_densify_results_, WAVE_NUM * NFFT);
 
+    double max_amp = 0, tmp_amp;
+    double est_azi, est_range, est_doppler;
+    int wave_max_idx;
+
     for (int w = azi_densify_wave_start; w < azi_densify_wave_end; ++w) {
         size_t offset = w * range_num_;
         float* maxresPtr = radar_params_->h_max_results_ + offset;
@@ -411,37 +415,53 @@ void WaveGroupProcessor::processAziDensify() {
                 // Ipp32fc* tmp = new Ipp32fc[wave_num_];
                 for (int i = 0; i < wave_num_; i++) {
                     // 自动拷贝到fftshift之后的位置 + (i + wave_num_ / 2) % wave_num_
-                    *(h_azi_densify_buffer + i) = *reinterpret_cast<Ipp32fc*>(h_data_after_Integration + i * pulse_num_ * range_num_ + doppler_channel * range_num_ + idx);
+                    *(h_azi_densify_buffer + (i + wave_num_ / 2) % wave_num_) = *reinterpret_cast<Ipp32fc*>(h_data_after_Integration + i * pulse_num_ * range_num_ + doppler_channel * range_num_ + idx);
+                    if (i == w) {
+                        auto x = *(h_azi_densify_buffer + (i + wave_num_ / 2) % wave_num_);
+                        tmp_amp = sqrt(x.im * x.im + x.re * x.re);
+                    }
                 }
                 // save_ipp32fc_to_txt(h_azi_densify_buffer, wave_num_, "origin_data.txt");
 
                 ifft_processor_32.perform_ifft_inplace(h_azi_densify_buffer);  // 32点fft
 
-                ifft_processor_8192.perform_fft_inplace(h_azi_densify_buffer); // 8192点ifft
+                ifft_processor_8192.perform_ifft_inplace(h_azi_densify_buffer); // 8192点ifft
+
+                ifft_processor_8192.fftshift(h_azi_densify_buffer);  // 8192点fftshift
 
                 // save_ipp32fc_to_txt(h_azi_densify_buffer, azi_densify_crow_num, "data1.txt");
 
                 ippsMagnitude_32fc(h_azi_densify_buffer, h_azi_densify_abs_buffer, azi_densify_crow_num);  // 求模
 
                 ippsMaxIndx_32f(h_azi_densify_abs_buffer, azi_densify_crow_num, &maxAmp, &maxIdx);      // 选最大值
-
+                // cout << "maxIdx：" << maxIdx << endl;
                 int startIdx = max(maxIdx - azi_densify_EstSample_num, 0);
                 int endIdx = min(maxIdx + azi_densify_EstSample_num, azi_densify_crow_num);
                 for (int i = startIdx; i < endIdx; i++) {
-                    float tmp = h_azi_densify_abs_buffer[(i + azi_densify_crow_num/2) % azi_densify_crow_num];
+                    float tmp = h_azi_densify_abs_buffer[i];
                     targetAziEst += radar_params_->h_azi_theta[i] * tmp;
                     AmpSum += tmp;
                 }
-                radar_params_->h_azi_densify_results_[w * range_num_ + idx] = targetAziEst / AmpSum + 254.0;
+                radar_params_->h_azi_densify_results_[w * range_num_ + idx] = targetAziEst / AmpSum + 249.0;
 
                 float wave_azi = getAzi(w, radar_params_->lambda);
-                float AziEst = targetAziEst / AmpSum + 254.0;
+                float AziEst = targetAziEst / AmpSum + 249.0;
+
+                if (tmp_amp > max_amp) {
+                    est_doppler = doppler_channel;
+                    wave_max_idx = w;
+                    max_amp = tmp_amp;
+                    est_azi = AziEst;
+                    est_range = radar_params_->distance_resolution * (idx - idx_offset);
+                }
                 // cout << "wave_num:" << w << endl;
                 // cout << "range:" << radar_params_->distance_resolution * (idx - idx_offset) << endl;
                 // cout << "originAzi:" << wave_azi << " EstAzi:" << AziEst << " Diff:" << wave_azi - AziEst << endl;
             }
         }
     }
+    cout << endl;
+    cout << "wave:" << wave_max_idx << " est_range: " << est_range << " doppler:" << est_doppler << " azi: " << est_azi << endl;
 }
 
 

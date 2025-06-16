@@ -6,7 +6,7 @@
 
   "THREADS_MEM_SIZE": 1073741824,
 
-  "hamming_window_enable": 1,
+  "hamming_window_enable": 0,
 
   "MTI_enable": 0,
   "MTI_pulse_num": 2,
@@ -31,11 +31,11 @@
   "x3": "方位加密参数",
   "azi_densify_enable": 1,
   "点迹凝聚方位方式": "0:选大， 1:质心",
-  "azi_densify_plot_conv_method": 1,
+  "azi_densify_plot_conv_method": 0,
   "azi_densify_crow_num": 8192,
   "azi_densify_EstSample_num": 512,
   "azi_densify_group_num": 20,
-  "azi_densify_range_start": 1300,
+  "azi_densify_range_start": 1250,
   "azi_densify_range_end": 1550,
   "azi_densify_invalid_num": 99999,
   "azi_densify_wave_start": 8,
@@ -80,7 +80,7 @@
   "start_wave": 4,
   "end_wave": 28,
 
-  "file_data_delay": 0,
+  "file_data_delay": 20,
 
   "速度绝对值在v1和v2之间": "的通道才会参与选大",
   "v1": 0.3,

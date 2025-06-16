@@ -69,8 +69,9 @@ struct RadarParams
         }
 
         for (int i = 0; i < azi_densify_crow_num; i++) {
-            h_azi_theta[azi_densify_crow_num - i - 1] = asind((i - azi_densify_crow_num / 2) * lambda / azi_densify_crow_num / azi_densify_d);
-            // std::cout << i << " " << h_azi_theta[i] << std::endl;
+            // h_azi_theta[azi_densify_crow_num - i - 1] = asind((i - azi_densify_crow_num / 2) * lambda / azi_densify_crow_num / azi_densify_d);
+            h_azi_theta[i] = asind((i - azi_densify_crow_num / 2) * lambda / azi_densify_crow_num / azi_densify_d);
+            // std::cout << i + 1 << " " << h_azi_theta[i] << std::endl;
         }
 
     }
@@ -127,6 +128,28 @@ public:
         }
         // 归一化以匹配 MATLAB 的 ifft（除以 dim_）
         return ippsDivC_32fc_I((Ipp32fc){(float)dim_, 0}, buffer, dim_);
+    }
+
+    // fftshift 方法：将零频分量移到数组中心，匹配 MATLAB 的 fftshift
+    void fftshift(Ipp32fc* buffer) {
+        if (dim_ <= 1) return; // 如果维度小于等于1，无需移位
+
+        int half_dim = dim_ / 2;
+        Ipp32fc* temp = (Ipp32fc*)ippMalloc(half_dim * sizeof(Ipp32fc));
+        if (!temp) {
+            throw std::runtime_error("fftshift 内存分配失败");
+        }
+
+        // 将前半部分复制到临时缓冲区
+        ippsCopy_32fc(buffer, temp, half_dim);
+
+        // 将后半部分移到前半部分
+        ippsCopy_32fc(buffer + half_dim, buffer, dim_ - half_dim);
+
+        // 将临时缓冲区的前半部分复制到后半部分
+        ippsCopy_32fc(temp, buffer + (dim_ - half_dim), half_dim);
+
+        ippFree(temp);
     }
 
 private:
