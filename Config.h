@@ -62,7 +62,6 @@ extern int azi_densify_enable;
 extern int azi_densify_plot_conv_method;
 extern int azi_densify_crow_num;
 extern int azi_densify_EstSample_num;
-extern int azi_densify_group_num;
 extern double azi_densify_range_start;
 extern double azi_densify_range_end;
 extern float azi_densify_invalid_num;

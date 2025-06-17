@@ -1452,9 +1452,9 @@ void Plot::PlotsDetect(NRx8BitPulse *curPulse) {
                             else {
                                 dPlotAzi = PrePlotBuff_idx.dAziEstAmpSum / PrePlotBuff_idx.dAmpSum;
                             }
-                            // if (!(dPlotAzi >= dPlotSAzi && dPlotAzi <= dPlotEAzi)) {
-                            //     dPlotAzi = PrePlotBuff_idx.dAziAmpSum / PrePlotBuff_idx.dAmpSum;
-                            // }
+                            if (!(dPlotAzi >= dPlotSAzi && dPlotAzi <= dPlotEAzi)) {
+                                dPlotAzi = PrePlotBuff_idx.dAziAmpSum / PrePlotBuff_idx.dAmpSum;
+                            }
                         }
 
                         dPlotDis = PrePlotBuff_idx.dDisAmpSum / PrePlotBuff_idx.dAmpSum;

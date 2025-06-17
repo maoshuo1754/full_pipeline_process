@@ -34,7 +34,6 @@
   "azi_densify_plot_conv_method": 0,
   "azi_densify_crow_num": 8192,
   "azi_densify_EstSample_num": 512,
-  "azi_densify_group_num": 20,
   "azi_densify_range_start": 1250,
   "azi_densify_range_end": 1550,
   "azi_densify_invalid_num": 99999,
@@ -80,7 +79,7 @@
   "start_wave": 4,
   "end_wave": 28,
 
-  "file_data_delay": 20,
+  "file_data_delay": 0,
 
   "速度绝对值在v1和v2之间": "的通道才会参与选大",
   "v1": 0.3,
