@@ -2,7 +2,7 @@
     "dataPath": "/backup2/data/caiji/20250525193945_150GB.dat",
 
   "0表示文件": "1表示Pcie",
-  "dataSource_type": 0,
+  "dataSource_type": 1,
 
   "THREADS_MEM_SIZE": 1073741824,
 
@@ -29,22 +29,22 @@
   "rasterize_manage_enable": 0,
 
   "x3": "方位加密参数",
-  "azi_densify_enable": 1,
+  "azi_densify_enable": 0,
   "点迹凝聚方位方式": "0:选大， 1:质心",
   "azi_densify_plot_conv_method": 0,
   "azi_densify_crow_num": 8192,
   "azi_densify_EstSample_num": 512,
-  "azi_densify_range_start": 1250,
-  "azi_densify_range_end": 1550,
+  "azi_densify_range_start": 300,
+  "azi_densify_range_end": 1250,
   "azi_densify_invalid_num": 99999,
   "azi_densify_wave_start": 8,
-  "azi_densify_wave_end": 14,
+  "azi_densify_wave_end": 28,
   "azi_densify_d": 0.0135,
 
   "num_threads": 4,
-  "normFactor": 4,
+  "normFactor": 8,
 
-  "local_video_ip": "127.0.0.1",
+  "local_video_ip": "192.168.6.35",
   "local_video_port": 0,
   "remote_video_ip": "224.168.6.189",
   "remote_video_port": 8192,
@@ -82,7 +82,7 @@
   "file_data_delay": 0,
 
   "速度绝对值在v1和v2之间": "的通道才会参与选大",
-  "v1": 0.3,
+  "v1": 2,
   "v2": 18,
 
   "0表示质心法": "1表示选大",

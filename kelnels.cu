@@ -19,7 +19,7 @@ __global__ void unpackKernel3D(unsigned char *threadsMemory, cufftComplex *pComp
     int waveIdx = blockIdx.x;  // 每个block.x处理一个波束
 
     // 检查索引是否越界
-    if (pulseIdx < pulseNum && rangeIdx < RANGE_NUM && waveIdx < WAVE_NUM) {
+    if (pulseIdx < pulseNum && rangeIdx < RANGE_NUM - 300 && waveIdx < WAVE_NUM) {
         // 计算头位置的起始地址
         int headOffset = headPositions[pulseIdx];
         unsigned char *blockIQstartAddr = threadsMemory + headOffset + DATA_OFFSET;
