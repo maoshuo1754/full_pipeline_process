@@ -29,7 +29,7 @@
   "rasterize_manage_enable": 0,
 
   "x3": "方位加密参数",
-  "azi_densify_enable": 0,
+  "azi_densify_enable": 1,
   "点迹凝聚方位方式": "0:选大， 1:质心",
   "azi_densify_plot_conv_method": 0,
   "azi_densify_crow_num": 8192,
