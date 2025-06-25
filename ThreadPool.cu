@@ -32,12 +32,17 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue) :
     if (debug_mode) {
         string input_file_name = dataPath.substr(dataPath.rfind('/') + 1, dataPath.rfind('.') - dataPath.rfind('/') - 1);
 
-        string debug_file_path =  input_file_name +
+        debug_folder_path =  input_file_name +
         "_frame_" + to_string(start_frame) + "_" + to_string(end_frame) +
         "_wave_" + to_string(start_wave) + "_" + to_string(end_wave) +
         "_" + to_string(PULSE_NUM) + "x" + to_string(NFFT);
 
-        debugFile.open(debug_file_path, std::ios::binary);
+        if (debug_mode == 1) {
+            debugFile.open(debug_folder_path, std::ios::binary);
+        }
+        else if (debug_mode == 2 && !std::filesystem::exists(debug_folder_path)) {
+            std::filesystem::create_directories(debug_folder_path);
+        }
     }
     // logFile = ofstream("error_log.txt", ios_base::app);
     logFile = ofstream("error_log.txt");
@@ -123,7 +128,13 @@ void ThreadPool::processData(std::unique_ptr<WaveGroupProcessor>& waveGroupProce
 
     waveGroupProcessor->getRadarParams();
     waveGroupProcessor->unpackData(headPositions[threadID].data());
-    waveGroupProcessor->saveToDebugFile(taskId, debugFile);
+    if (debug_mode == 1) {
+        waveGroupProcessor->saveToDebugFile(taskId, debugFile);
+    }
+    else if (debug_mode == 2) {
+        waveGroupProcessor->saveToDebugFile_new(taskId, debug_folder_path);
+    }
+
     waveGroupProcessor->fullPipelineProcess();
     waveGroupProcessor->getResult();
 

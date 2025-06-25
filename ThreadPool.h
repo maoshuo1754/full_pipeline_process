@@ -47,6 +47,7 @@ private:
     uint64_t uint64Pattern;
 
     ofstream debugFile;
+    string debug_folder_path;
     char timebuf[100];
     ofstream logFile;
     DataRateTracker dataRateTracker;

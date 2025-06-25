@@ -192,6 +192,7 @@ public:
     void processAziDensify();
     void getRadarParams();
     void saveToDebugFile(int frame, std::ofstream& debugFile);
+    void saveToDebugFile_new(int frame, std::string debug_folder_path);
     void getCoef();
     void resetAddr();
 

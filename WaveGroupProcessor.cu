@@ -5,6 +5,7 @@
 #include "kelnels.cuh"
 #include "nlohmann/json.hpp"
 #include "ThreadPool.h"
+#include <matio.h>
 
 WaveGroupProcessor::WaveGroupProcessor(int waveNum, int pulseNum, int rangeNum)
     : wave_num_(waveNum),
@@ -598,4 +599,125 @@ void WaveGroupProcessor::saveToDebugFile(int frame, ofstream& debugFile)
         save_cv.notify_all();  // 通知等待的线程
     }
 
+}
+
+
+void WaveGroupProcessor::saveToDebugFile_new(int frame, std::string debug_folder_path)
+{
+    if (!debug_mode || frame < start_frame)
+    {
+        return;
+    }
+    static ofstream debugFile;
+    if (frame >= end_frame) {
+        debugFile.close();
+    }
+
+    static bool firstCall = true;  // 静态变量，标记是否为第一次调用
+    string message_string = debug_folder_path + "/message.bin";
+
+
+    if (firstCall)
+    {
+        firstCall = false; // 标记首次写入已完成
+        debugFile.open(message_string, std::ios::binary);
+        int pulseNum = PULSE_NUM;
+        int nfft = NFFT;
+
+        // 写入double类型的参数
+        debugFile.write(reinterpret_cast<char*>(&radar_params_->bandWidth), sizeof(double));
+        debugFile.write(reinterpret_cast<char*>(&radar_params_->pulseWidth), sizeof(double));
+        debugFile.write(reinterpret_cast<char*>(&Fs), sizeof(double));
+        debugFile.write(reinterpret_cast<char*>(&radar_params_->lambda), sizeof(double));
+        debugFile.write(reinterpret_cast<char*>(&radar_params_->PRT), sizeof(double));
+
+        // 写入start_frame和end_frame
+        debugFile.write(reinterpret_cast<char*>(&start_frame), sizeof(int));
+        debugFile.write(reinterpret_cast<char*>(&end_frame), sizeof(int));
+
+        // 写入start_wave和end_wave
+        debugFile.write(reinterpret_cast<char*>(&start_wave), sizeof(int));
+        debugFile.write(reinterpret_cast<char*>(&end_wave), sizeof(int));
+
+        // 写入矩阵大小
+        debugFile.write(reinterpret_cast<char*>(&pulseNum), sizeof(int));
+        debugFile.write(reinterpret_cast<char*>(&nfft), sizeof(int));
+
+        // 计算并保存32个波束的方位
+        std::vector<double> azi(wave_num_);
+        for (int ii = 0; ii < wave_num_; ++ii)
+        {
+            int nAzmCode = (azi_table[ii] & 0xffff);
+            if (nAzmCode > 32768)
+                nAzmCode -= 65536;
+            double rAzm = 249.0633 + asin((nAzmCode * radar_params_->lambda) / (65536 * d)) / 3.1415926 * 180.0;
+            if (rAzm < 0)
+                rAzm += 360.0;
+            azi[wave_num_ - 1 - ii] = rAzm;
+        }
+        debugFile.write(reinterpret_cast<char*>(azi.data()), 32 * sizeof(double));
+    }
+
+
+
+    size_t pulse_num = pulse_num_;
+    size_t range_num = range_num_;
+    size_t wave_num = end_wave - start_wave;
+
+
+    size_t oneWaveSize = pulse_num * range_num;
+    auto* startAddr = d_data_ + start_wave * oneWaveSize;
+    size_t copy_size = wave_num * oneWaveSize;
+
+    auto* h_data = new cufftComplex[copy_size];  // 在主机上分配内存
+
+    // 从显存复制数据到主机内存
+    cudaMemcpy(h_data, startAddr, copy_size * sizeof(cufftComplex), cudaMemcpyDeviceToHost);
+
+    // 写入时间和数据
+    auto rawMsg = reinterpret_cast<uint32_t*>(radar_params_->rawMessage);
+    auto time = rawMsg[6] / 10 + 8 * 60 * 60 * 1000;  // FPGA时间，0.1ms转为1ms并加8小时
+    debugFile.write(reinterpret_cast<char*>(&time), 4);  // 写入时间（4字节）
+
+    string cur_mat_path = debug_folder_path + "/frame_" + to_string(frame) + ".mat";
+    size_t dims[3] = {pulse_num, range_num, wave_num}; // matlab 读取 的size
+
+    // Allocate arrays for real and imaginary parts
+    double* real_data = new double[copy_size];
+    double* imag_data = new double[copy_size];
+
+    // Rearrange data into MATLAB column-major order
+    size_t idx = 0;
+    for (size_t w = 0; w < wave_num; ++w) {
+        for (size_t r = 0; r < range_num; ++r) {
+            for (size_t p = 0; p < pulse_num; ++p) {
+                size_t original_idx = w * oneWaveSize + p * range_num + r; // Original order
+                real_data[idx] = static_cast<double>(h_data[original_idx].x);
+                imag_data[idx] = static_cast<double>(h_data[original_idx].y);
+                idx++;
+            }
+        }
+    }
+
+    // Create .mat file
+    mat_t* matfp = Mat_CreateVer(cur_mat_path.c_str(), nullptr, MAT_FT_DEFAULT);
+
+    // Set up complex data structure
+    mat_complex_split_t complex_data;
+    complex_data.Re = real_data;
+    complex_data.Im = imag_data;
+
+    // Create matvar_t structure
+    matvar_t* matvar = Mat_VarCreate("data", MAT_C_DOUBLE, MAT_T_DOUBLE, 3, dims, &complex_data, MAT_F_COMPLEX);
+
+    // Write to .mat file
+    Mat_VarWrite(matfp, matvar, MAT_COMPRESSION_NONE);
+
+    // Clean up
+    Mat_VarFree(matvar);
+    Mat_Close(matfp);
+    delete[] real_data;
+    delete[] imag_data;
+    delete[] h_data;  // 释放主机内存
+    std::cout << "save " << cur_mat_path << " success" << std::endl;
 }

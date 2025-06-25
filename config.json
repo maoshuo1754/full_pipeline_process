@@ -1,8 +1,8 @@
 {
-    "dataPath": "/backup2/data/caiji/20250525193945_150GB.dat",
+  "dataPath": "/backup2/data/Fang_data/20250425154422_256GB.dat",
 
   "0表示文件": "1表示Pcie",
-  "dataSource_type": 1,
+  "dataSource_type": 0,
 
   "THREADS_MEM_SIZE": 1073741824,
 
@@ -29,7 +29,7 @@
   "rasterize_manage_enable": 0,
 
   "x3": "方位加密参数",
-  "azi_densify_enable": 1,
+  "azi_densify_enable": 0,
   "点迹凝聚方位方式": "0:选大， 1:质心",
   "azi_densify_plot_conv_method": 0,
   "azi_densify_crow_num": 8192,
@@ -73,11 +73,11 @@
   "system_delay": 25,
   "initCarryFreq": 8080,
 
-  "debug_mode": 0,
+  "debug_mode": 2,
   "start_frame": 1,
-  "end_frame": 10,
-  "start_wave": 4,
-  "end_wave": 28,
+  "end_frame": 2,
+  "start_wave": 10,
+  "end_wave": 25,
 
   "file_data_delay": 0,
 
