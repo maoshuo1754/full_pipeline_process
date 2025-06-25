@@ -38,7 +38,7 @@ ThreadPool::ThreadPool(size_t numThreads, SharedQueue *sharedQueue) :
         "_" + to_string(PULSE_NUM) + "x" + to_string(NFFT);
 
         if (debug_mode == 1) {
-            debugFile.open(debug_folder_path, std::ios::binary);
+            debugFile.open(debug_folder_path + ".bin", std::ios::binary);
         }
         else if (debug_mode == 2 && !std::filesystem::exists(debug_folder_path)) {
             std::filesystem::create_directories(debug_folder_path);

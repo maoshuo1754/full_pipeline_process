@@ -611,6 +611,7 @@ void WaveGroupProcessor::saveToDebugFile_new(int frame, std::string debug_folder
     static ofstream debugFile;
     if (frame >= end_frame) {
         debugFile.close();
+        return;
     }
 
     static bool firstCall = true;  // 静态变量，标记是否为第一次调用
@@ -683,8 +684,8 @@ void WaveGroupProcessor::saveToDebugFile_new(int frame, std::string debug_folder
     size_t dims[3] = {pulse_num, range_num, wave_num}; // matlab 读取 的size
 
     // Allocate arrays for real and imaginary parts
-    double* real_data = new double[copy_size];
-    double* imag_data = new double[copy_size];
+    float* real_data = new float[copy_size];
+    float* imag_data = new float[copy_size];
 
     // Rearrange data into MATLAB column-major order
     size_t idx = 0;
@@ -692,8 +693,8 @@ void WaveGroupProcessor::saveToDebugFile_new(int frame, std::string debug_folder
         for (size_t r = 0; r < range_num; ++r) {
             for (size_t p = 0; p < pulse_num; ++p) {
                 size_t original_idx = w * oneWaveSize + p * range_num + r; // Original order
-                real_data[idx] = static_cast<double>(h_data[original_idx].x);
-                imag_data[idx] = static_cast<double>(h_data[original_idx].y);
+                real_data[idx] = static_cast<float>(h_data[original_idx].x);
+                imag_data[idx] = static_cast<float>(h_data[original_idx].y);
                 idx++;
             }
         }
@@ -708,7 +709,7 @@ void WaveGroupProcessor::saveToDebugFile_new(int frame, std::string debug_folder
     complex_data.Im = imag_data;
 
     // Create matvar_t structure
-    matvar_t* matvar = Mat_VarCreate("data", MAT_C_DOUBLE, MAT_T_DOUBLE, 3, dims, &complex_data, MAT_F_COMPLEX);
+    matvar_t* matvar = Mat_VarCreate("data", MAT_C_SINGLE, MAT_T_SINGLE, 3, dims, &complex_data, MAT_F_COMPLEX);
 
     // Write to .mat file
     Mat_VarWrite(matfp, matvar, MAT_COMPRESSION_NONE);

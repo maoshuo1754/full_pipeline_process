@@ -75,11 +75,11 @@
 
   "debug_mode": 2,
   "start_frame": 1,
-  "end_frame": 2,
+  "end_frame": 121,
   "start_wave": 10,
   "end_wave": 25,
 
-  "file_data_delay": 0,
+  "file_data_delay": 500,
 
   "速度绝对值在v1和v2之间": "的通道才会参与选大",
   "v1": 2,
